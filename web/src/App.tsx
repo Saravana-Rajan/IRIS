@@ -4317,6 +4317,14 @@ export function App() {
     else if (navProject) goStep(id, navProject.id);
   };
   const rail = !compact && (onPage ? rails.pages : rails.workspace);
+  // The workspace's width changes with the sidebar (its width eases over 180 ms): dockview lays its panels out again on
+  // a window resize, not on its box's (a side bar that kept its width stayed drawn where it was), so the page says so
+  // once the sidebar has settled. The 3D view and the classic layout follow their own boxes.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") return;
+    const t = window.setTimeout(() => window.dispatchEvent(new Event("resize")), 240);
+    return () => window.clearTimeout(t);
+  }, [rail]);
   const toggleRail = () => {
     const where = onPage ? "pages" : "workspace", next = !rail;
     setRails((r) => ({ ...r, [where]: next }));
