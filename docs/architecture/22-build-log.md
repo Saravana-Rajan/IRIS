@@ -1023,3 +1023,34 @@ their items into `drawings/` on attach and save and ingest them again on open. C
 (reportlab sheets: word boxes against the rendered ink, title fields, a scan, the caps, refusals, every route with the
 reader and comparison stubbed and once with the real reader's `FakeReader` and the real comparison, eviction, a
 project round trip), `test_docs_map.py` and the full server suite.
+
+**Nov 22 (2026-11-22), the review queue: prepared fixes, one clash at a time, before and after in place**
+([docs/review-queue.md](../review-queue.md); [04](04-server-code-map.md), [07](07-fixes-and-edits.md),
+[09](09-agent-workflows.md), [10](10-http-api-and-streams.md), [12](12-web-app.md), [13](13-3d-viewer.md),
+[15](15-requirements-settings-and-config.md), [16](16-security-caps-and-cost.md), [18](18-testing-and-evals.md),
+[19](19-demo-data.md)). The owner asked for human review of each clash with the fix and a before/after view in the same
+place, made automatically. **Prepare fixes** (`POST /api/scenes/{scene_id}/prepare/stream`, `prepare.run`) runs the
+existing fix loop (`agent.resolve` through `plans._resolve_items`, 4 at a time, 2 rounds, at most 8 pairs, one proposal
+per pair prepared live) on the ticked clashes, else triage's real ones, else the deepest (`prepare.deepest`), and
+streams `prepare_start`, `item`, `prepared` and `done`; only options the geometry passed count as ready, and a pair with
+none says why. **Saved results** for the unedited sample (`samples/prepared/*.json`, `IRIS_PREPARED_DIR`) hold the
+model's replies, never its results: keyed by `prepare.VERSION`, the files' sha256s, revision 0, no requirements, the
+default clearance, rounds, options kept, the model id and thinking level and the prompt's hash, each reply used only
+for the exact question it answered, and replayed through `agent.resolve` so every option is checked again; labelled
+"Saved AI proposals for this sample (model, date)". `evals/prepare_saved.py` makes the set; it was NOT run on Gemini
+(the owner approves that spend first): its dry run counts 16 calls at most (8 pairs × 2 rounds), about 44,000 input
+and 32,000 output tokens, about $0.31 on the configured proposal model. A free run with `prepare.ScriptedModel` made a
+scripted set (6 ready, 2 failed; scripted results, not Gemini's) and a fresh process replayed it with no model call.
+**Web:** `ReviewFixesEntry` (the one entry point on Clash review: "Prepare fixes (8)" → "Preparing fixes: 3 of 8" →
+"Review fixes (n ready)") and `ReviewQueue` (two panes: the clash with its red distance badge, the verified card with
+its evidence, the reviewer, Accept / Reject with a reason / Request another, auto-advance, A / R / arrow keys; the one
+3D viewer moved in with the new `Viewer.mountIn`, Before | After | Both). Accept goes through `fix/apply` → `plans.apply`
+(tried again first); reject and request-another through `/decisions`; nothing is kept without Accept. App.tsx gained one
+import, an open flag, the entry and the overlay with its `onKept`. Checked: `server/tests/test_prepare.py` (10), the full
+server suite (1351 passed; the 2 pango PDF tests fail locally), `web/tests/review-queue.test.mjs` (20) and
+`viewer-mount.test.mjs` (5), `npm test`, `tsc`, `npm run build`, and a headless Chromium click-through on a local
+one-origin server with the scripted model only (sample building → Prepare fixes → the saved scripted set replayed →
+Before / After / Both → accept one, reject one with a reason → a failed clash shown with its why → phone width with no
+horizontal scroll → close), the keep and both decisions read back from the edit log with the reviewer and clash key.
+Found on the way: a whole-run raise of the supply air main by 0.40 m no longer passes (the move now carries its joints,
+and the tee, branch and damper hit secondary beams); its offset does.

@@ -28,6 +28,10 @@ export interface ReviewViewer {
   showOption(opt: { kind: string; moved: string[]; deltaM: number[]; pieces: Piece[] | null; before: Piece[] | null }, mode: Mode, color: string): void;
   preview(moves: { globalIds: string[]; deltaM: number[] }[]): void;
   mountIn?(el: HTMLElement | null): void;
+  /** The camera as it was when the queue opened, put back when it closes; the clash marker cleared. */
+  pose?(): unknown;
+  applyPose?(pose: never, animate?: boolean): void;
+  setMarker?(point: null): void;
 }
 
 /** The prepare state for this scene and clash list (empty for another one). */
@@ -151,8 +155,13 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
   useEffect(() => {
     const v = viewer;
     if (!v) return;
+    const was = v.pose?.();
     v.mountIn?.(view.current);
-    return () => { v.preview([]); v.setFocus({ a: null, b: null }); v.mountIn?.(null); };
+    return () => {
+      v.preview([]); v.setFocus({ a: null, b: null }); v.setMarker?.(null);
+      v.mountIn?.(null);
+      if (was !== undefined) v.applyPose?.(was as never, false);
+    };
   }, [viewer]);
   // Each clash: its pair in focus, the camera at it.
   useEffect(() => {
@@ -160,6 +169,13 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
     viewer.setFocus({ a, b });
     viewer.focusClash([a, b], null, label);
   }, [viewer, key, a, b]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // The page's own effects run after the queue's (a parent's after its child's) and set the viewer's focus to the
+  // page's clash, say after a keep patched the model. After every render, once they have run, the queue's pair again.
+  useEffect(() => {
+    if (!viewer || !a || !b) return;
+    const t = setTimeout(() => viewer.setFocus({ a, b }), 0);
+    return () => clearTimeout(t);
+  });
   // Its fix, previewed only (Before | After | Both): nothing is applied but through Accept. A kept fix is in the model.
   useEffect(() => {
     if (!viewer) return;
@@ -381,7 +397,7 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
       body = (
         <div className="rq-failed">
           <h3>No verified fix found</h3>
-          <p>{item.why}</p>
+          {(item.why ?? "").split("\n").filter(Boolean).map((line, k) => <p key={k}>{line}</p>)}
           {item.understanding && <p className="rq-source">{`Iris read it as: ${item.understanding}`}</p>}
           {item.note && <p className="rq-error" role="alert">{item.note}</p>}
           <div className="rq-actions">{anotherButton(item)}</div>

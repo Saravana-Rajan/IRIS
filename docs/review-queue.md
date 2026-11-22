@@ -135,7 +135,25 @@ Layout (two panes, light only):
 - **Left:** the clash title with a red distance badge; the proposal card (AI-proposed: holo edge; Geometry-validated ✓
   in green; what moves, how far, the evidence: clash gone, clearance, nothing new hit); the reviewer's name; Accept
   (ink), Reject with a reason (outline), Request another (text). It moves to the next clash after a decision.
-- **Right:** the 3D view at the clash with a segmented "Before | After | Both" control.
-- **Keys:** A accept, R reject, → next, ← previous (not while typing).
+- **Right:** the 3D view at the clash with a segmented "Before | After | Both" control. It is the page's one viewer,
+  moved into the pane with `Viewer.mountIn` while the queue is open; the queue holds its pair in focus even after the
+  page's own effects (a keep patches the model and the page sets its focus again), and closing puts the viewer back
+  with the camera where it was and no clash marker left.
+- **Keys:** A accept, R reject, → next, ← previous (not while typing); Escape closes (or cancels the reason).
+
+### Mounting it in `App.tsx`
+
+The page wiring is kept small so it can move with the app shell:
+
+1. `import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";` (and both names plus `"./ReviewQueue"` in the stub
+   lists of `web/tests/app-host.mjs` and `web/tests/app-replacement.test.mjs`).
+2. `const [reviewOpen, setReviewOpen] = useState(false);`, closed again when the scene or the clash list changes.
+3. `<ReviewFixesEntry sceneId reportId reportTitle clashes triage={listTriage} ticked={checked}
+   fixed={[...fixed ids, ...reviewed ids]} onOpen={() => setReviewOpen(true)} />` on Clash review, in the clash
+   list's head (today `ReportList`'s `status` slot).
+4. `{reviewOpen && sceneId && report && <ReviewQueue … viewer={viewer.current} reviewer onReviewer={setReviewer}
+   onDecisions={(d) => noteDecisions(d, true)} onClose={() => setReviewOpen(false)} onKept={…} />}` with the overlays.
+   `onKept` does what `accept()` does after its keep request (note the decisions, `applyToViewer`, `setEdits`,
+   `markFixed`, `setRemeasure`); it never makes a keep request of its own.
 
 Nothing is applied without Accept.

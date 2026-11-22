@@ -137,11 +137,12 @@ const press = (key, target = { tagName: "BODY" }, extra = {}) => {
 
 let scene = 0;
 /** A queue open on a run the shared store has prepared (each test its own scene, so the store starts again). */
-async function openQueue({ events = runEvents(), routes = {}, reviewer = "Asha Rao", onKept } = {}) {
+async function openQueue({ events = runEvents(), routes = {}, reviewer = "Asha Rao", onKept, extra = {} } = {}) {
   const sceneId = `scene${++scene}`;
   const calls = server({ "/prepare/stream": () => ndjson(events), ...routes });
   await M.prepareStore.start(sceneId, { report_id: "rep", clash_ids: ["c1", "c2", "c3"], pick: "ids", fixed: [] });
-  const { viewer, calls: seen } = fakeViewer();
+  const { viewer: base, calls: seen } = fakeViewer();
+  const viewer = { ...base, ...Object.fromEntries(Object.entries(extra).map(([k, fn]) => [k, (...a) => { seen.push([k, ...a]); return fn(...a); }])) };
   const kept = [], decisions = [], names = [];
   let closed = 0;
   const host = mount(Q.ReviewQueue, { sceneId, reportId: "rep", reportTitle: "Coordination check", clashes, viewer, reviewer,
@@ -524,4 +525,18 @@ test("App: the entry sits in the clash list's head, opens the queue, and a kept 
   host.component("ReviewQueue").props.onClose(); host.render();
   assert.equal(host.component("ReviewQueue"), undefined);
   host.unmount();
+});
+
+test("queue: closing puts the camera back where it was and clears the clash marker; the pair is held after the page's effects", async () => {
+  const q = await openQueue({ extra: { pose: () => "pose-at-open", applyPose: () => undefined, setMarker: () => undefined } });
+  const { host, seen } = q;
+  assert.deepEqual(seen[0], ["pose"], "the camera is read before the view moves into the queue");
+  // The page sets its own focus after the queue's effects (say after a keep): the queue's pair comes back once they ran.
+  seen.length = 0;
+  host.render();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(seen.filter(([k]) => k === "setFocus").at(-1), ["setFocus", { a: "duct", b: "girder" }]);
+  host.unmount();
+  assert.deepEqual(seen.slice(-5), [["preview", []], ["setFocus", { a: null, b: null }], ["setMarker", null], ["mountIn", null],
+    ["applyPose", "pose-at-open", false]], "the view goes back as it was");
 });
