@@ -1,5 +1,5 @@
 import { ArrowRight, Save, Upload } from "lucide-react";
-import { useId, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { CountUp, EmptyState } from "./Holo";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { ownClick, stepLabel, type Step } from "./projectRoute";
@@ -10,6 +10,53 @@ import {
 import "./projects.css";
 
 type Known = ReturnType<typeof knownCounts>;
+
+/** How long "Saved ✓" (and a failed save's "Not saved") stays on the button before it reads "Save" again. */
+export const SAVED_MS = 2000;
+const NOT_SAVED_MS = 5000;
+
+/**
+ * The project's Save button (the overview's header, the workspace's header). It says how the save went: "Saving…"
+ * while it runs, "Saved ✓" for about two seconds after, or "Not saved" (the reason in its tip) when `onSave` resolves
+ * `false` or throws.
+ */
+export function SaveButton({ onSave, saving = false, disabled = false, tip }: {
+  onSave(): Promise<boolean | void> | boolean | void;
+  saving?: boolean;          // a save started elsewhere (App's project work)
+  disabled?: boolean;
+  tip: string;
+}) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | { error: string }>("idle");
+  const timer = useRef(0);
+  useEffect(() => () => { window.clearTimeout(timer.current); }, []);
+  async function save() {
+    window.clearTimeout(timer.current);
+    setState("saving");
+    let next: "saved" | { error: string };
+    try { next = (await onSave()) === false ? { error: "The project was not saved: see the message, then try again." } : "saved"; }
+    catch (e) { next = { error: `The project was not saved: ${(e as Error).message}` }; }
+    setState(next);
+    timer.current = window.setTimeout(() => setState("idle"), next === "saved" ? SAVED_MS : NOT_SAVED_MS);
+  }
+  const busy = saving || state === "saving";
+  const failed = typeof state === "object" ? state.error : null;
+  return (
+    <button type="button" className={`btn small${failed ? " danger" : ""}`} onClick={() => void save()} disabled={busy || disabled}
+      data-tip={failed ?? tip} data-tip-side="bottom" aria-live="polite">
+      {busy ? <><span className="spinner" aria-hidden /> Saving…</>
+        : state === "saved" ? <>Saved <span className="ok" aria-hidden>✓</span></>
+        : failed ? "Not saved"
+        : <><Save size={14} aria-hidden /> Save</>}
+    </button>
+  );
+}
+
+/** The share closed, never rounded to a claim that isn't true: "<1% closed" for 1 of 464, ">99% closed" short of all.
+ *  (Local until projectsApi's own `closedText` arrives with the release merge.) */
+function closedText(closed: number, total: number): string {
+  const pct = total > 0 ? Math.round((100 * closed) / total) : 0;
+  return `${closed > 0 && pct === 0 ? "<1" : closed < total && pct === 100 ? ">99" : pct}% closed`;
+}
 
 /**
  * One project (`/projects/<pid>/<step>`), inside the app shell: the shell's sidebar holds the steps and its top bar the
@@ -29,7 +76,8 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   activity?: ActivityItem[];
   onImport(): void;
   onOpenWorkspace(): void;
-  onSave(): void;
+  /** Resolves `false` (or throws) when the project was not saved: the button then says so. */
+  onSave(): Promise<boolean | void> | boolean | void;
   saving?: boolean;
   onProjects?(): void;
   /** More for the step shown, after its own body (App: drawings, building a report, the decisions, the edit log). */
@@ -51,20 +99,17 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
     ...(overview ? [] : [{ label: stepLabel(step) }]),
   ];
   const sub = (
-    <span className="proj-meta">
+    <span className="proj-meta"><span className="proj-meta-in">
       <span title={fullTime(project.created)}>Created {whenText(project.created)}</span>
       <span title={fullTime(project.updated)}>Updated {whenText(project.updated)}</span>
       {saved
         ? <span title={fullTime(saved.at)}>Saved state {saved.n}, {whenText(saved.at)} ({plural(saved.edits, "edit")})</span>
         : <span>Not saved yet</span>}
-    </span>
+    </span></span>
   );
   const actions = (
-    <button type="button" className="btn" onClick={onSave} disabled={saving || !hasModels}
-      data-tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"}
-      data-tip-side="bottom">
-      {saving ? <span className="spinner" aria-hidden /> : <Save size={15} aria-hidden />} {saving ? "Saving…" : "Save"}
-    </button>
+    <SaveButton onSave={onSave} saving={saving} disabled={!hasModels}
+      tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"} />
   );
   const toStep = (s: Step) => ({ href: stepHref?.(s), go: () => onStep(s) });
 
@@ -74,7 +119,7 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
         <div className="proj-body">
           <PageHeader crumbs={crumbs} title={overview ? name : stepLabel(step)} sub={sub} actions={actions} />
 
-          {overview && <>
+          {overview && <div className="proj-overview">
             <StatCards project={project} known={known} />
             <div className="proj-grid">
               <div className="proj-col">
@@ -89,7 +134,7 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
                 {reports.length > 0 && <ReportsCard pid={project.id} reports={reports} limit={4} all={toStep("reports")} />}
               </div>
             </div>
-          </>}
+          </div>}
 
           {step === "models" && <ModelsCard project={project} onImport={onImport} />}
 
@@ -265,7 +310,7 @@ function Tally({ known }: { known: Known }) {
         {c.open > 0 && <span className="open" style={{ width: pct(c.open) }} />}
       </div>
       <p className="proj-sub">
-        {Math.round((100 * closed) / total)}% closed · {known.live ? "from the open session" : "last known, as of the last session"}
+        {closedText(closed, total)} · {known.live ? "from the open session" : "last known, as of the last session"}
       </p>
     </div>
   );

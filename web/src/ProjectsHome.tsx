@@ -108,12 +108,14 @@ export function ProjectsHome({ projects, loading, error, onNew, onOpen, onRename
             <div className="proj-loading" aria-live="polite"><span className="spinner" aria-hidden /> Loading projects…</div>
           )}
 
-          {sorted.length > 0 && <>
-            <FilterTabs projects={sorted} filter={filter} onFilter={setFilter} />
-            <ProjectTable projects={sorted.filter(FILTERS.find((f) => f.id === filter)!.test)} filter={filter}
-              onOpen={onOpen} onRename={onRename} onRemove={onRemove} hrefOf={hrefOf} />
-            <p className="proj-foot-note">Projects are kept by an unguessable id in this browser; there are no accounts yet.</p>
-          </>}
+          {sorted.length > 0 && (
+            <div className="proj-home">
+              <FilterTabs projects={sorted} filter={filter} onFilter={setFilter} />
+              <ProjectTable projects={sorted.filter(FILTERS.find((f) => f.id === filter)!.test)} filter={filter}
+                onOpen={onOpen} onRename={onRename} onRemove={onRemove} hrefOf={hrefOf} />
+              <p className="proj-foot-note">Projects are kept by an unguessable id in this browser; there are no accounts yet.</p>
+            </div>
+          )}
 
           {empty && (
             <div className="proj-empty">

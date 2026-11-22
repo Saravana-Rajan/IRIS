@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement as h } from "react";
-import { compiled } from "./app-host.mjs";
+import { compiled, flush } from "./app-host.mjs";
 
 const apiUrl = await compiled("../src/api.ts");
 const { ApiError } = await import(apiUrl);
@@ -340,7 +340,8 @@ test("the overview header: breadcrumb, the project's name, its dates and Save; n
     assert.match(text(renderToStaticMarkup(h(ProjectOverview, overview({ step, saving: true })))), /Saving…/, step);
   }
   const none = renderToStaticMarkup(h(ProjectOverview, overview({ project: project({ files: [] }) })));
-  assert.match(none, /<button type="button" class="btn" disabled=""[^>]*>.*Save<\/button>/, "nothing to save without models");
+  assert.match(none, /<button type="button" class="btn small" disabled=""[^>]*data-tip="Import models first"[^>]*>.*Save<\/button>/,
+    "nothing to save without models");
 });
 
 test("the stat cards show the known numbers and where they come from, and a dash (never 0) when not known", () => {
@@ -381,4 +382,54 @@ test("empty states: no models, no reports, no activity", () => {
   assert.match(activity, /No activity yet .*Saved states 2/);
   const kids = renderToStaticMarkup(h(ProjectOverview, overview({ step: "drawings" }), h("section", { className: "proj-card" }, "Drawings card")));
   assert.match(kids, /<section class="proj-card">Drawings card<\/section>/, "App's cards follow the step's body");
+});
+
+test("the share closed is never rounded to a claim that isn't true", () => {
+  const closed = (c) => text(renderToStaticMarkup(h(ProjectOverview, overview({ counts: c })))).replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .match(/\S+% closed/)?.[0];
+  assert.equal(closed({ clashes: 464, open: 463, resolved: 1, reviewed: 0 }), "<1% closed", "1 of 464 is not 0% closed");
+  assert.equal(closed({ clashes: 464, open: 464, resolved: 0, reviewed: 0 }), "0% closed");
+  assert.equal(closed({ clashes: 464, open: 0, resolved: 464, reviewed: 0 }), "100% closed");
+  assert.equal(closed({ clashes: 464, open: 1, resolved: 460, reviewed: 3 }), ">99% closed", "463 of 464 is not 100% closed");
+  assert.equal(closed({ clashes: 12, open: 5, resolved: 4, reviewed: 3 }), "58% closed");
+});
+
+test("Save says \"Saved ✓\" for about two seconds, and \"Not saved\" with the reason when it fails", async () => {
+  // SaveButton driven as a page would: its own hooks kept between renders, its real click handler, the window's timers.
+  const fake = `const h=()=>globalThis.__saveHost; export const useState=(v)=>h().useState(v), useRef=(v)=>h().useRef(v), useEffect=()=>{}, useId=()=>"id";`;
+  const { SaveButton, SAVED_MS } = await import(await module("../src/ProjectOverview.tsx",
+    { ...pages, react: `data:text/javascript;base64,${Buffer.from(fake).toString("base64")}` }));
+  const win = globalThis.window;
+  let slots = [], i = 0, timers = [];
+  globalThis.__saveHost = {
+    useState: (v) => { const k = i++; if (!(k in slots)) slots[k] = v; return [slots[k], (n) => { slots[k] = typeof n === "function" ? n(slots[k]) : n; }]; },
+    useRef: (v) => { const k = i++; return (slots[k] ??= { current: v }); },
+  };
+  globalThis.window = { setTimeout: (fn, ms) => timers.push({ fn, ms }), clearTimeout: () => {} };
+  const mount = (props) => { slots = []; timers = []; return () => { i = 0; return SaveButton(props); }; };
+  const face = (el) => ({ t: text(renderToStaticMarkup(el)).trim(), tip: el.props["data-tip"], cls: el.props.className, off: !!el.props.disabled });
+  try {
+    let resolve;
+    const ok = mount({ onSave: () => new Promise((r) => { resolve = r; }), tip: "Save the project" });
+    ok().props.onClick();
+    assert.deepEqual(face(ok()), { t: "Saving…", tip: "Save the project", cls: "btn small", off: true });
+    resolve(true); await flush();
+    assert.equal(face(ok()).t, "Saved ✓");
+    assert.equal(timers.at(-1).ms, SAVED_MS);
+    assert.ok(SAVED_MS >= 1500 && SAVED_MS <= 3000, "about two seconds");
+    timers.at(-1).fn();
+    assert.equal(face(ok()).t, "Save", "back to Save after");
+
+    const thrown = mount({ onSave: async () => { throw new Error("Server unreachable"); }, tip: "Save the project" });
+    thrown().props.onClick(); await flush();
+    const bad = face(thrown());
+    assert.equal(bad.t, "Not saved");
+    assert.match(bad.tip, /not saved: Server unreachable/);
+    assert.match(bad.cls, /danger/);
+    assert.equal(bad.off, false, "can try again");
+
+    const refused = mount({ onSave: async () => false, tip: "Save the project" });
+    refused().props.onClick(); await flush();
+    assert.equal(face(refused()).t, "Not saved", "App's save resolves false when it failed");
+  } finally { globalThis.window = win; delete globalThis.__saveHost; }
 });

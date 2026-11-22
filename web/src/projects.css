@@ -6,7 +6,7 @@
 .proj-page { height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--bg, #fff); color: var(--ink);
   font-size: 14px; font-variant-numeric: tabular-nums; }
 .proj-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.proj-body { max-width: 1200px; margin: 0 auto; padding: 28px 32px 56px; display: flex; flex-direction: column; gap: 20px; }
+.proj-body { width: 100%; max-width: 1200px; margin: 0 auto; padding: 28px 32px 56px; display: flex; flex-direction: column; gap: 20px; }
 .proj-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .proj-num { font-variant-numeric: tabular-nums; font-weight: 500; }
 .proj-sub { color: var(--muted); font-size: 12.5px; font-weight: 400; }
@@ -21,9 +21,12 @@
 .proj-kind { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; font-family: var(--mono);
   font-size: 11px; font-weight: 500; color: var(--muted); background: var(--panel, #f2f2f2); white-space: nowrap; }
 
-/* The page header's meta line (PageHeader's subtitle): dates separated by a middle dot */
-.proj-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 0; }
-.proj-meta > span + span::before { content: "·"; margin: 0 8px; color: var(--line); color: color-mix(in srgb, var(--muted) 45%, transparent); }
+/* The page header's meta line (PageHeader's subtitle): dates separated by a middle dot. Every part has its dot; the
+   row is shifted left by one dot and clipped, so no line (the first, or one after a wrap) starts with a dot. */
+.proj-meta { display: block; overflow: hidden; }
+.proj-meta-in { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; margin-left: -18px; }
+.proj-meta-in > span::before { content: "·"; display: inline-block; width: 18px; text-align: center;
+  color: color-mix(in srgb, var(--muted) 55%, transparent); }
 
 .proj-alert { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--fail) 30%, transparent);
   border-radius: 10px; background: var(--fail-soft); color: var(--fail); font-size: 13.5px; }
@@ -222,24 +225,33 @@
 .proj-when { flex: none; color: var(--muted); font-size: 12px; text-align: right; min-width: 72px; }
 .proj-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--accent, #b07af2); opacity: .7; }
 
-@media (max-width: 1100px) {
-  .proj-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Widths follow the page's own panel (beside the sidebar), not the window: container queries on the projects list
+   (.proj-home) and the overview (.proj-overview). They hold no fixed-position content (containment would trap it). */
+.proj-home { container: proj-home / inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.proj-overview { container: proj-overview / inline-size; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+@container proj-overview (max-width: 760px) {
+  .proj-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 }
-@media (max-width: 980px) {
+@container proj-overview (max-width: 840px) {
   .proj-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container proj-overview (max-width: 440px) {
+  .proj-stat { padding: 14px 16px; }
+  .proj-stat-value { font-size: 26px; }
+  .proj-tally-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proj-hash { display: none; }
+}
+
+@container proj-home (max-width: 900px) {
   .proj-table th, .proj-table td { padding-left: 12px; padding-right: 12px; }
   .proj-kinds { display: none; }
 }
 
-/* Phones: 16 px gutters; each project a stacked card, nothing scrolls sideways */
-@media (max-width: 760px) {
-  .proj-body { padding: 16px 16px 40px; gap: 16px; }
-  .proj-stats { gap: 12px; }
-  .proj-stat { padding: 14px 16px; }
-  .proj-stat-value { font-size: 26px; }
-  .proj-card { padding: 16px; }
-  .proj-tally-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .proj-tabs { align-self: stretch; }
+/* A narrow panel (phones): each project a stacked card, nothing scrolls sideways */
+@container proj-home (max-width: 640px) {
+  .proj-tabs { align-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proj-tab { justify-content: center; }
   .proj-tablewrap { border: 0; background: transparent; }
   .proj-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .proj-table, .proj-table tbody { display: flex; flex-direction: column; gap: 12px; width: 100%; }
@@ -251,14 +263,18 @@
   .proj-table td[data-label]:not(.proj-c-name) { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px;
     min-height: 24px; }
   .proj-table td[data-label]:not(.proj-c-name)::before { content: attr(data-label); flex: none; font-size: 12.5px; color: var(--muted); }
-  .proj-table tr.proj-confirm-row { display: block; padding: 0; border: 0; background: transparent; margin-top: -8px; }
+  .proj-table tr.proj-confirm-row { display: block; padding: 0; border: 0; background: transparent; margin-top: -4px; }
   .proj-table tr.proj-confirm-row td { display: block; background: transparent; }
-  .proj-table tr.proj-none-row { display: block; text-align: center; }
-  .proj-table tr.proj-none-row td { display: block; text-align: center; }
+  .proj-table tr.proj-none-row, .proj-table tr.proj-none-row td { display: block; text-align: center; }
   .proj-kinds { display: inline-flex; }
   .proj-name, .proj-rename { max-width: 100%; }
+}
+
+/* Phones: 16 px gutters */
+@media (max-width: 760px) {
+  .proj-body { padding: 16px 16px 40px; gap: 16px; }
+  .proj-card { padding: 16px; }
   .proj-file { width: 100%; }
-  .proj-hash { display: none; }
   .proj-dialog { padding: 20px; }
   .proj-dialog-actions .btn { flex: 1; }
 }
