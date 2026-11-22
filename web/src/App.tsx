@@ -1720,7 +1720,7 @@ export function App() {
   }
   /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
    * again), opened on its Clash review. Opening and checking it call no model. */
-  async function trySample() {
+  async function trySample(step: ProjectStep = "clash") {
     const names = demos.find((d) => d.tour === "northbank")?.files ?? demos[0]?.files ?? [];
     if (busy || projectBusy || !names.length) return;
     setProjectBusy("Opening the sample building…"); setError(null);
@@ -1728,10 +1728,10 @@ export function App() {
     try {
       const got = await sampleProject();
       p = got.p;
-      if (!got.made) { setProject(p); goStep("clash", p.id); return; }   // its models open on the step (the effect above)
+      if (!got.made) { setProject(p); goStep(step, p.id); return; }   // its models open on the step (the effect above)
       autoOpened.current = p.id;
       setProject(p);
-      goStep("clash", p.id);
+      goStep(step, p.id);
     } catch (e) { setError(`Could not open the sample building: ${(e as Error).message}`); return; }
     finally { setProjectBusy(null); }
     if (p) await samplesInto(p, names);
@@ -4286,6 +4286,7 @@ export function App() {
       <StartScreen name={reviewer} onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
         onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
         onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
+        onSampleStep={sampleSet.length ? (st) => void trySample(st) : undefined}
         recent={projects} recentLoading={projectsLoading} onOpenProject={(id) => goStep("overview", id)} projectHref={(id) => projectPath(id)}
         resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
           agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
