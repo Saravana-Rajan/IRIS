@@ -1,0 +1,232 @@
+/* The workspace, decluttered (docs/architecture/12-web-app.md): the 3D toolbar, the clash list, the clash header and
+   panel, and the Activity bar. Light only, on index.css's tokens (with fallbacks while they land).
+   Imported by dock.tsx, which App loads before main.tsx loads index.css: index.css comes later in the cascade, so every
+   rule here is more specific than the index.css rule it overrides (`nav.rail .rail-group`, `.report .clash-row`, …).
+   Never a bare `.rail`: the app shell's sidebar is `.shell.rail`. */
+
+/* ---- 3D toolbar (ViewerToolbar.tsx) ---- */
+/* One light glass column of the six core tools, then More tools: a two-column menu with the rest by name. */
+nav.rail:not(.compact) { gap: 8px; }
+nav.rail .rail-group { gap: 2px; padding: 4px; border-radius: 12px; border: 1px solid var(--line, #e6e6e6);
+  background: rgba(255, 255, 255, .82); -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-soft, 0 1px 2px rgba(16, 24, 40, .04), 0 6px 20px rgba(16, 24, 40, .08)); }
+nav.rail .rail-group .ibtn { width: 34px; height: 34px; border-radius: 8px; color: var(--muted, #6a6a6a); transition: background .15s ease, color .15s ease; }
+nav.rail .rail-group .ibtn:hover:not(:disabled) { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+nav.rail .rail-group .ibtn.on, nav.rail .rail-group .pop.open > .ibtn { background: var(--accent-soft, #f3ebfd); color: var(--accent-ink, #7a3fc7); }
+nav.rail .rail-group .ibtn:disabled { opacity: .4; }
+nav.rail .rail-group .rail-more { margin-top: 2px; padding-top: 4px; border-top: 1px solid var(--line-soft, #efefef); }
+
+/* The menus the rail opens (Visibility, More tools): white, hairline, a soft shadow; never dark. */
+nav.rail .pop-menu { background: var(--surface, #fff); border: 1px solid var(--line, #e6e6e6); border-radius: 12px; padding: 8px;
+  box-shadow: var(--shadow-soft, 0 1px 2px rgba(16, 24, 40, .04), 0 12px 32px rgba(16, 24, 40, .12)); min-width: 260px; }
+nav.rail .pop-menu .pop-title { margin: 10px 6px 4px; font-size: 11.5px; font-weight: 500; color: var(--muted, #6a6a6a);
+  text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+nav.rail .pop-menu .pop-title:first-child { margin-top: 2px; }
+nav.rail .pop-menu .pop-title kbd { font: 10.5px var(--mono); text-transform: none; letter-spacing: 0; border: 1px solid var(--line, #e6e6e6);
+  border-radius: 4px; padding: 0 4px; }
+nav.rail .pop-menu .pop-item { font-size: 13px; padding: 6px 8px; border-radius: 8px; color: var(--ink, #1a1a1a); }
+nav.rail .pop-menu .pop-item:hover { background: var(--panel, #f2f2f2); }
+nav.rail .pop-menu .pop-item.on { color: var(--accent-ink, #7a3fc7); background: var(--accent-soft, #f3ebfd); }
+nav.rail .pop-menu .pop-item svg { flex: none; color: var(--muted, #6a6a6a); }
+nav.rail .pop-menu .pop-item.on svg { color: var(--accent-ink, #7a3fc7); }
+nav.rail .pop-menu .pop-item kbd { margin-left: auto; }
+nav.rail .pop-menu .pop-item .tick + kbd { margin-left: 6px; }
+nav.rail .pop-menu .pop-item .tick { margin-left: auto; color: var(--accent-ink, #7a3fc7); }
+nav.rail .pop-menu .pop-item > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+nav.rail .pop-menu .pop-item b { font-weight: 500; }
+nav.rail .more-menu { display: flex; flex-direction: column; gap: 2px; }
+nav.rail .more-menu.two { display: grid; grid-template-columns: repeat(2, minmax(250px, 1fr)); gap: 0 14px; }
+nav.rail .more-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+nav.rail .more-col + .more-col { padding-left: 14px; border-left: 1px solid var(--line-soft, #efefef); }
+nav.rail .more-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 4px 4px; }
+nav.rail .pop-menu .btn.small { height: 30px; padding: 0 10px; border-radius: 8px; font-weight: 500; background: var(--surface, #fff);
+  border: 1px solid var(--line, #e6e6e6); color: var(--ink, #1a1a1a); }
+nav.rail .pop-menu .btn.small:hover:not(:disabled) { background: var(--panel, #f2f2f2); }
+nav.rail .pop-menu .btn.small.on { background: var(--accent-soft, #f3ebfd); border-color: var(--accent, #b07af2); color: var(--accent-ink, #7a3fc7); }
+nav.rail .more-views { grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 2px 4px 4px; }
+nav.rail .more-views .btn.small { gap: 4px; padding: 0 6px; }
+nav.rail .more-views kbd { font: 10px var(--mono); color: var(--muted, #6a6a6a); }
+@media (max-width: 1100px) { nav.rail .more-menu.two { grid-template-columns: minmax(250px, 1fr); }
+  nav.rail .more-col + .more-col { padding-left: 0; border-left: 0; border-top: 1px solid var(--line-soft, #efefef); margin-top: 6px; } }
+@media (prefers-reduced-motion: reduce) { nav.rail .rail-group .ibtn { transition: none; } }
+
+/* ---- clash list (ReportList.tsx) ---- */
+/* Where the clashes stand: segmented tabs with counts on a soft grey track; the active one a white pill */
+.report .status-tabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--panel, #f2f2f2); }
+.report .status-tabs button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px;
+  padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: var(--muted, #6a6a6a); font: 500 12.5px var(--body);
+  cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.report .status-tabs button .n { font-size: 11px; color: inherit; opacity: .85; }
+.report .status-tabs button:hover:not(:disabled) { color: var(--ink, #1a1a1a); }
+.report .status-tabs button.on { background: var(--surface, #fff); color: var(--ink, #1a1a1a);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 0 0 1px var(--line, #e6e6e6); }
+.report .status-tabs button.on .n { color: var(--accent-ink, #7a3fc7); opacity: 1; }
+.report .status-tabs button:disabled { opacity: .45; cursor: default; }
+.report .status-tabs button:focus-visible { outline: 2px solid var(--accent, #b07af2); outline-offset: 1px; }
+.report .list-head { gap: 8px; }
+.report .list-head .search-box { border-radius: 8px; height: 34px; background: var(--surface, #fff); }
+
+/* A row: the number (mono) and the title, then the distance badge and a pill when there is something to say */
+.report .clash-row { gap: 8px; padding: 0 6px; border-radius: 8px; min-height: 44px; transition: background .15s ease; }
+.report .clash-row:hover { background: var(--raised, #fafafa); }
+.report .clash-row.pick { background: var(--accent-soft, #f3ebfd); box-shadow: inset 2px 0 var(--accent, #b07af2); }
+.report .clash-row .clash-main { display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 3px; min-width: 0;
+  padding: 6px 0; font-size: 13px; }
+.report .cm-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; line-height: 1.3; }
+.report .cm-title > i { flex: none; width: 10px; text-align: center; }
+.report .cm-title .clash-name { flex: none; font: 500 12px var(--mono); color: var(--muted, #6a6a6a); }
+.report .cm-title .clash-pair { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink, #1a1a1a); }
+.report .cm-meta { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; padding-left: 16px; }
+.report .clash-row.fixed .cm-title .clash-name { color: var(--ok, #2fb153); }
+.report .clash-row.noclash .cm-title .clash-pair { opacity: .7; }
+.report .dist-badge { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 6px; font-size: 11px;
+  font-weight: 500; color: var(--red, #e0473f); background: color-mix(in srgb, var(--red, #e0473f) 10%, #fff); }
+.report .dist-badge.gap { color: #a8650a; background: color-mix(in srgb, var(--amber, #f5a623) 14%, #fff); }
+.report .dist-badge.none { color: var(--muted, #6a6a6a); background: var(--panel, #f2f2f2); }
+.report .clash-row.fixed .dist-badge, .report .clash-row.reviewed .dist-badge { color: var(--muted, #6a6a6a); background: var(--panel, #f2f2f2); }
+.report .cm-meta .pill, .report .cm-meta .tv { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px;
+  border-radius: 999px; font-size: 11px; font-weight: 500; background: var(--panel, #f2f2f2); color: var(--muted, #6a6a6a); }
+.report .cm-meta .tv.bad { background: color-mix(in srgb, var(--red, #e0473f) 9%, #fff); color: var(--fail, #b8352a); }
+.report .cm-meta .tv.warn { background: color-mix(in srgb, var(--amber, #f5a623) 14%, #fff); color: #8a5a00; }
+.report .cm-meta .fixed-label { color: var(--ok, #1d7f47); background: color-mix(in srgb, var(--green, #2fb153) 12%, #fff); }
+.report .cm-meta .fixed-label::before { content: "✓"; font-weight: 700; }
+.report .cm-meta .review-label.author { color: #8a5a00; background: color-mix(in srgb, var(--amber, #f5a623) 14%, #fff); }
+.report .cm-meta .row-status.ok { color: var(--ok, #1d7f47); background: color-mix(in srgb, var(--green, #2fb153) 12%, #fff); }
+.report .cm-meta .row-status.run { color: var(--accent-ink, #7a3fc7); background: var(--accent-soft, #f3ebfd); }
+.report .cm-meta .row-status .spinner { width: 9px; height: 9px; }
+
+/* Thumbnails on a light ground (never a dark square) */
+.report .row-thumb { width: 34px; height: 34px; border-radius: 6px; background: var(--panel, #f2f2f2); }
+.report .row-thumb.none { background: var(--raised, #fafafa); }
+
+/* A row's actions: off the row until hover or keyboard focus (not on the selected row: that was for touch, which has
+   the ⋮ now), then icons at its end over a fade */
+.report .groups .clash-row .row-actions { display: none; }
+.report .groups .clash-row .row-acts { display: contents; }
+.report .groups .clash-row .row-more, .report .groups .clash-row .ra-label { display: none; }
+@media (hover: hover) {
+  .report .groups .clash-row:hover .row-actions, .report .groups .clash-row:focus-within .row-actions { display: flex; padding-left: 24px;
+    background: linear-gradient(to right, transparent, var(--raised, #fafafa) 22px); }
+  .report .groups .clash-row.pick:hover .row-actions, .report .groups .clash-row.pick:focus-within .row-actions {
+    background: linear-gradient(to right, transparent, var(--accent-soft, #f3ebfd) 22px); }
+}
+/* No hover (touch): the ⋮ is always there, and opens the actions as a small labelled menu under it */
+@media (hover: none) {
+  .report .groups .clash-row .row-actions { display: flex; position: static; padding: 0; background: none; flex: none; }
+  .report .groups .clash-row .row-more { display: inline-grid; width: 36px; height: 36px; color: var(--muted, #6a6a6a); }
+  .report .groups .clash-row .row-actions:not(.open) .row-acts { display: none; }
+  .report .groups .clash-row .row-actions.open .row-acts { display: flex; flex-direction: column; align-items: stretch; gap: 2px; position: absolute;
+    right: 4px; top: calc(100% - 4px); z-index: 30; min-width: 200px; padding: 6px; border-radius: 12px; background: var(--surface, #fff);
+    border: 1px solid var(--line, #e6e6e6); box-shadow: var(--shadow-soft, 0 1px 2px rgba(16, 24, 40, .04), 0 12px 32px rgba(16, 24, 40, .12)); }
+  .report .groups .clash-row .row-actions.open .row-acts .ibtn, .report .groups .clash-row .row-actions.open .row-acts .row-view { width: auto;
+    height: 40px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 10px; margin: 0; border-radius: 8px;
+    color: var(--ink, #1a1a1a); font-size: 13.5px; font-weight: 400; }
+  .report .groups .clash-row .row-actions.open .ra-label { display: inline; }
+}
+
+/* "N selected · Fix N together": a light floating bar (the button in it is the dark thing) */
+.report .selbar { background: rgba(255, 255, 255, .92); color: var(--ink, #1a1a1a); border: 1px solid var(--line, #e6e6e6); border-radius: 12px;
+  -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-soft, 0 1px 2px rgba(16, 24, 40, .04), 0 12px 32px rgba(16, 24, 40, .12)); }
+.report .selbar .ibtn { color: var(--muted, #6a6a6a); }
+.report .selbar .ibtn:hover { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+@media (prefers-reduced-motion: reduce) { .report .status-tabs button, .report .clash-row { transition: none; } }
+
+/* ---- clash header and panel (ClashHeader.tsx, ClashPanel.tsx) ---- */
+/* The header: the clash's details, once and compact (Propose fixes stays on screen under the panel at 805 px tall) */
+header.clash-head { gap: 6px; }
+header.clash-head .clash-head-top { gap: 6px; min-height: 28px; }
+header.clash-head .clash-head-num { font: 500 14px var(--mono); color: var(--ink, #1a1a1a); }
+header.clash-head .clash-head-id { font-size: 11px; color: var(--muted, #6a6a6a); }
+header.clash-head .clash-head-nav { gap: 0; }
+header.clash-head .clash-head-nav .ibtn { width: 28px; height: 28px; border-radius: 7px; color: var(--muted, #6a6a6a); }
+header.clash-head .clash-head-nav .ibtn:hover:not(:disabled) { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+header.clash-head .clash-head-nav .clash-head-focus { margin-left: 2px; color: var(--accent-ink, #7a3fc7); }
+header.clash-head .clash-head-title { font-size: 16px; font-weight: 500; line-height: 1.3; letter-spacing: -.005em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+header.clash-head .clash-head-test { margin-top: -3px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header.clash-head .clash-head-chips { gap: 4px; }
+header.clash-head .clash-head-chips .chip { height: 22px; padding: 0 8px; font-weight: 500; }
+/* The measure as one line: the distance a red badge, the limit and where it is beside it */
+header.clash-head .clash-head-measure { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 0; background: none; border: 0; }
+header.clash-head .clash-head-measure > div { flex-direction: row; align-items: baseline; gap: 5px; }
+header.clash-head .clash-head-measure dt { font-size: 11.5px; }
+header.clash-head .clash-head-measure dd { font-size: 12.5px; font-weight: 500; }
+header.clash-head .clash-head-dist dd { padding: 1px 7px; border-radius: 6px; background: var(--panel, #f2f2f2); }
+header.clash-head .clash-head-dist dd.bad { color: var(--red, #e0473f); background: color-mix(in srgb, var(--red, #e0473f) 10%, #fff); }
+header.clash-head .clash-head-dist dd.gap { color: #a8650a; background: color-mix(in srgb, var(--amber, #f5a623) 14%, #fff); }
+/* A and B side by side, each beside its swatch: class and GlobalId, the name, then file · level · system in one line */
+header.clash-head .clash-head-sides { gap: 6px; }
+header.clash-head .clash-head-side { gap: 2px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-soft, #efefef);
+  background: var(--surface, #fff); min-width: 0; }
+header.clash-head .clash-head-side-top { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.5px; }
+header.clash-head .clash-head-side-top b { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+header.clash-head .clash-head-side-top .clash-head-gid { flex: 0 1 auto; max-width: 48%; font-size: 10.5px; }
+header.clash-head .clash-head-name { font-size: 12.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+header.clash-head .clash-head-facts { display: flex; flex-wrap: wrap; gap: 0 4px; font-size: 11px; color: var(--muted, #6a6a6a); }
+header.clash-head .clash-head-facts > div { display: inline; }
+header.clash-head .clash-head-facts > div + div::before { content: "·"; margin-right: 4px; }
+header.clash-head .clash-head-facts dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+header.clash-head .clash-head-facts dd { display: inline; }
+
+/* The panel: what the header does not show, in a few short lines */
+section.clash-panel { gap: 6px; margin-top: 8px; }
+section.clash-panel .fixed-line { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 13px;
+  color: var(--ok, #1d7f47); background: color-mix(in srgb, var(--green, #2fb153) 9%, #fff); border: 1px solid color-mix(in srgb, var(--green, #2fb153) 25%, #fff); }
+section.clash-panel .fixed-line svg { color: var(--green, #2fb153); flex: none; }
+section.clash-panel .fixed-line b { font-weight: 500; }
+section.clash-panel .fixed-line .fixed-what { color: var(--ink, #1a1a1a); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+section.clash-panel .fixed-line .fixed-what::before { content: "· "; color: var(--muted, #6a6a6a); }
+section.clash-panel .clash-glance { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* The A/B/C pictures: one row of small squares on a light ground, the letter on a white chip */
+section.clash-panel .thumbs { display: flex; gap: 6px; flex: none; }
+section.clash-panel .thumbs .thumb { width: 60px; height: 60px; border-radius: 8px; background: var(--panel, #f2f2f2); border: 1px solid var(--line-soft, #efefef); }
+section.clash-panel .thumbs .thumb .clash-thumb { display: block; width: 100%; height: 100%; }
+section.clash-panel .thumbs .thumb span { left: 3px; top: 3px; padding: 0 4px; font: 500 10px var(--mono); color: var(--ink, #1a1a1a);
+  background: rgba(255, 255, 255, .85); border-radius: 4px; }
+section.clash-panel .clash-now { flex: 1 1 auto; min-width: 0; gap: 3px 8px; font-size: 12px; }
+section.clash-panel .clash-now dd { min-width: 0; }
+section.clash-panel .clash-match { display: flex; flex-wrap: wrap; gap: 3px; }
+section.clash-panel .clash-match .chip { gap: 4px; font-weight: 500; }
+/* The triage reading, folded to one line: its verdict, who and why, and the first words of what it read */
+section.clash-panel .triage-note { display: block; padding: 0; border-radius: 8px; background: var(--raised, #fafafa); border: 1px solid var(--line-soft, #efefef); }
+section.clash-panel .triage-note > summary { display: flex; align-items: center; gap: 4px; padding: 6px 8px; cursor: pointer; list-style: none;
+  min-width: 0; font-size: 12px; }
+section.clash-panel .triage-note > summary::-webkit-details-marker { display: none; }
+section.clash-panel .triage-note > summary::after { content: "›"; margin-left: auto; padding-left: 6px; color: var(--muted, #6a6a6a); transition: transform .15s ease; }
+section.clash-panel .triage-note[open] > summary::after { transform: rotate(90deg); }
+section.clash-panel .triage-note .tn-basis { flex: none; font-size: 11.5px; }
+section.clash-panel .triage-note .tn-line { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink, #1a1a1a); }
+section.clash-panel .triage-note[open] .tn-line { display: none; }
+section.clash-panel .triage-note > :not(summary) { margin: 0 8px 6px; font-size: 12.5px; line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { section.clash-panel .triage-note > summary::after { transition: none; } }
+
+/* ---- Activity and the dock (Activity.tsx, dock.tsx) ---- */
+/* Activity starts collapsed (dockLayout.DEFAULT_COLLAPSED): a slim light strip along the bottom with its tab, the one
+   calm status line App passes the tab (ActivityLine) and the button that opens it. Only the bottom bar's strip has its
+   tabs on top while collapsed (the side bars' run down their outer edge). */
+.dockview-theme-iris .dv-groupview.dv-edge-collapsed.dv-groupview-header-top { --dv-tabs-and-actions-container-height: 34px;
+  background: var(--surface, #fff); }
+.dockview-theme-iris .dv-groupview.dv-edge-collapsed.dv-groupview-header-top > .dv-tabs-and-actions-container {
+  border-top: 1px solid var(--line, #e6e6e6); border-bottom: 0; background: var(--surface, #fff); }
+.dockview-theme-iris .dv-groupview.dv-edge-collapsed.dv-groupview-header-top .dv-tab.dv-active-tab { box-shadow: none; }
+.dockview-theme-iris .dock-tab.strip { font-weight: 500; font-size: 12.5px; color: var(--muted, #6a6a6a); gap: 8px; cursor: pointer; }
+.dockview-theme-iris .dock-tab.strip:hover { color: var(--ink, #1a1a1a); }
+.dockview-theme-iris .dv-edge-collapsed.dv-groupview-header-top .dock-actions .ibtn { width: 26px; height: 26px; color: var(--muted, #6a6a6a); }
+
+/* The status line: on the strip only (an open bar says it in its own head) */
+.dockview-theme-iris .dock-tab:not(.strip) .activity-line { display: none; }
+.dockview-theme-iris .dock-tab .activity-line { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 60vw;
+  padding-left: 8px; border-left: 1px solid var(--line, #e6e6e6); font-size: 12px; font-weight: 400; color: var(--muted, #6a6a6a); }
+.dockview-theme-iris .dock-tab .activity-line .activity-line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dockview-theme-iris .dock-tab .activity-line .spinner { width: 10px; height: 10px; }
+.dockview-theme-iris .dock-tab .activity-line.live { color: var(--ink, #1a1a1a); }
+
+/* The open bar's head: calm, light, one line */
+.slot .activity .activity-head { gap: 10px; align-items: center; font-size: 12.5px; color: var(--muted, #6a6a6a); }
+.slot .activity .activity-head > b { font-weight: 500; color: var(--ink, #1a1a1a); }
+.slot .activity .activity-head .live { color: var(--ink, #1a1a1a); }
+.slot .activity .activity-head .seg { border-radius: 8px; background: var(--panel, #f2f2f2); border-color: transparent; padding: 2px; }
+.slot .activity .activity-head .seg button { background: transparent; border: 0; border-radius: 6px; font-weight: 500; color: var(--muted, #6a6a6a); }
+.slot .activity .activity-head .seg button.on { background: var(--surface, #fff); color: var(--ink, #1a1a1a);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .08); }

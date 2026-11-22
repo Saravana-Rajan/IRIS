@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type Matches, type Measure, type ReportClash, type ReportElement, type TriageVerdict } from "./api";
+import { Check } from "lucide-react";
+import { api, type Matches, type Measure, type ReportClash, type TriageVerdict } from "./api";
 import { mm } from "./ReportList";
 import { oneElement, sameWhy } from "./noClash";
 import { drawOverlay, focusSquare, readClashImage, type Box, type ClashRead } from "./clashImage";
@@ -8,18 +9,9 @@ import { aiName } from "./aiNames";
 
 const VIEW_NAMES: Record<string, string> = { A: "A · pair", B: "B · context", C: "C · second angle" };
 
-function Side({ colour, label, e, found, how }: {
-  colour: "red" | "green"; label: string; e: ReportElement; found: string | null | undefined; how: string | null | undefined;
-}) {
-  return (
-    <div className="side">
-      <div className="row"><b><i className={`sw ${colour}`} />{label} · {e.ifc_class ?? "?"}</b>
-        {found !== undefined && <span className={`chip ${found ? "ok" : "warn"}`}>{found ? (how === "name" ? "in model, by name" : "in model") : "not in model"}</span>}
-      </div>
-      <div>{e.name}{e.part_of ? <span className="why"> · part of {e.part_of}</span> : null}</div>
-      <div className="why">{[e.level, e.file, e.system].filter(Boolean).join(" · ")}</div>
-    </div>
-  );
+/** Whether the open model has an element, and how it was found (by GlobalId, or by name). */
+function inModel(found: string | null | undefined, how: string | null | undefined) {
+  return found ? (how === "name" ? "in model, by name" : "in model") : "not in model";
 }
 
 const BASIS: Record<NonNullable<TriageVerdict["basis"]>, string> = {
@@ -28,23 +20,61 @@ const BASIS: Record<NonNullable<TriageVerdict["basis"]>, string> = {
   requirement: "settled: by a requirements rule", strictness: "kept by strictness",
 };
 
+/** What the clash header (ClashHeader.tsx) does not show: the A/B/C pictures, the distance Iris measures now, whether
+ * the open model has each element, the "one element" note and the triage reading (folded to one line). The number,
+ * title, status, the report's distance and A and B are the header's, shown once. Compact, so Propose fixes stays on
+ * screen; a fixed clash says so in one calm line. */
 export function ClashPanel({ reportId, clash, match, measure, onImage, fix, triage, origin = "navisworks", capturing = false }: {
   reportId: string; clash: ReportClash; match: Matches[string] | undefined; measure: Measure | null | "busy";
   onImage: (index: number) => void; fix?: string; triage?: TriageVerdict; origin?: "navisworks" | "iris";
   capturing?: boolean;  // the A/B/C views of a clash Iris found are being taken
 }) {
   const found = origin === "iris";  // Iris detected it: its depth is how far one must move to clear the other
+  const now = measure === "busy" ? "measuring…"
+    : !measure ? "open the models to measure"
+      : !measure.matched ? "not in the open model"
+        : measure.physical === false ? "not a physical element"
+          : measure.distance_m == null ? "no overlap here" : mm(measure.distance_m);
+  // A disputed rule or a failed reading is worth seeing at once: the note opens for those.
+  const alert = !!triage && (triage.audit === "disputed" || !!triage.error);
   return (
     <section className="clash-panel">
-      <div className="row"><h2><span className="num">#{clash.number}</span> {clash.title ?? clash.name}</h2>{fix ? <span className="chip ok">✓ fixed</span> : clash.status && <span className="chip">{clash.status}</span>}</div>
-      <p className="hint">{clash.title ? `${clash.name} · ` : ""}{clash.test}{clash.ref ? ` · imported from Navisworks, ${clash.ref}` : ""}</p>
-      {fix && <p className="fixed-note">Fixed in this session: {fix}. The {found ? "views show the clash as found" : "Navisworks images show the clash as reported"}.</p>}
+      {fix && <p className="fixed-line" role="status"
+        data-tip={`Fixed in this session. The ${found ? "views show the clash as found" : "Navisworks images show the clash as reported"}.`}>
+        <Check size={14} strokeWidth={2.4} aria-hidden /><b>Fixed</b><span className="fixed-what">{fix}</span></p>}
+      <div className="clash-glance">
+        {clash.images.length > 0 && (
+          <div className={`thumbs n${clash.images.length}`}>
+            {clash.images.map((label, i) => (
+              <button key={label} className="thumb" onClick={() => onImage(i)} title={`Open ${VIEW_NAMES[label] ?? label}`}>
+                <ClashThumb url={api.imageUrl(reportId, clash.id, i)} alt={`#${clash.number}, view ${label}`} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <dl className="kv clash-now">
+          <dt>{found ? "Now" : "Iris measures"}</dt><dd className="mono">{now}</dd>
+          {!found && clash.status && <><dt>In the report</dt><dd>{clash.status}</dd></>}
+          {match && <><dt>Open model</dt><dd className="clash-match">
+            <span className={`chip small ${match.a ? "ok" : "warn"}`}><i className="sw red" />A {inModel(match.a, match.how[0])}</span>
+            <span className={`chip small ${match.b ? "ok" : "warn"}`}><i className="sw green" />B {inModel(match.b, match.how[1])}</span>
+          </dd></>}
+        </dl>
+      </div>
+      {capturing && <p className="hint small">Taking the A/B/C views of this clash…</p>}
+      {oneElement(match) && (
+        <p className="hint"><i className="sw purple" />A and B are one element in this model, drawn purple: Navisworks
+          clashed {sameWhy(clash)}.</p>
+      )}
       {triage && (
-        <div className="triage-note">
-          <span className={`chip small ${TRIAGE[triage.verdict].cls}`}>{TRIAGE[triage.verdict].label}</span>
-          {triage.severity && triage.severity !== "none" && <span className="chip small">{triage.severity}</span>}
-          {triage.responsible && triage.responsible !== "none" && <span className="chip small">{triage.responsible}</span>}
-          <span className="why">{triage.basis ? BASIS[triage.basis] : triage.source === "rule" ? "by rule" : "triage model"}</span>
+        <details className="triage-note" open={alert || undefined}>
+          <summary>
+            <span className={`chip small ${TRIAGE[triage.verdict].cls}`}>{TRIAGE[triage.verdict].label}</span>
+            {triage.responsible && triage.responsible !== "none" && <span className="chip small">{triage.responsible}</span>}
+            <span className="why tn-basis">{triage.basis ? BASIS[triage.basis] : triage.source === "rule" ? "by rule" : "triage model"}</span>
+            {triage.understanding && <span className="tn-line">{triage.understanding}</span>}
+          </summary>
           {triage.understanding && <p>{triage.understanding}</p>}
           {triage.fix_hint && <p className="why">{triage.action === "exclude_with_rule" ? "Stop it coming back: " : "Fix: "}{triage.fix_hint}</p>}
           {triage.model_reading && <p className="why small">The triage model read it as {triage.model_reading}</p>}
@@ -57,35 +87,8 @@ export function ClashPanel({ reportId, clash, match, measure, onImage, fix, tria
             <p>{triage.reasoning}</p>
           </details>}
           {triage.error && <p className="bad small">{triage.error}</p>}
-        </div>
+        </details>
       )}
-      {capturing && <p className="hint small">Taking the A/B/C views of this clash…</p>}
-      {clash.images.length > 0 && (
-        <div className={`thumbs n${clash.images.length}`}>
-          {clash.images.map((label, i) => (
-            <button key={label} className="thumb" onClick={() => onImage(i)} title={`Open ${VIEW_NAMES[label] ?? label}`}>
-              <ClashThumb url={api.imageUrl(reportId, clash.id, i)} alt={`#${clash.number}, view ${label}`} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <dl className="kv">
-        <dt>{found ? "Found by Iris" : "Navisworks"}</dt><dd className="mono">{mm(clash.distance_m)}{clash.tolerance_m ? ` (${clash.test_type === "clearance" ? "clearance" : "tolerance"} ${mm(clash.tolerance_m)})` : ""}</dd>
-        <dt>{found ? "Now" : "Iris"}</dt><dd className="mono">{
-          measure === "busy" ? "measuring…"
-            : !measure ? "open the models to measure"
-              : !measure.matched ? "not in the open model"
-                : measure.physical === false ? "not a physical element"
-                  : measure.distance_m == null ? "no overlap here" : mm(measure.distance_m)}</dd>
-        {clash.grid && <><dt>Grid</dt><dd>{clash.grid}</dd></>}
-      </dl>
-      {oneElement(match) && (
-        <p className="hint"><i className="sw purple" />A and B are one element in this model, drawn purple: Navisworks
-          clashed {sameWhy(clash)}.</p>
-      )}
-      <Side colour="red" label="A" e={clash.a} found={match ? match.a : undefined} how={match?.how[0]} />
-      <Side colour="green" label="B" e={clash.b} found={match ? match.b : undefined} how={match?.how[1]} />
     </section>
   );
 }
