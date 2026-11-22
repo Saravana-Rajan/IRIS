@@ -1180,3 +1180,33 @@ Android and maskable icons, the pinned tab and a white manifest theme; the boot 
 the shell: Review fixes is Clash review's primary action at the right of the top bar, with Export beside it as a
 secondary, and the queue covers the shell's body, so the sidebar and the top bar stay
 ([docs/review-queue.md](../review-queue.md), "Mounting it in `App.tsx`").
+
+**Nov 22 (2026-11-22), demo videos on Home** ([12](12-web-app.md), [19](19-demo-data.md), [18](18-testing-and-evals.md)).
+Home gains three narrated demo videos, each played in a light lightbox. `web/src/DemoVideo.tsx`, with its own
+`demoVideo.css`, holds `DEMO_VIDEOS` (`3d` "Fix clashes in your building models", `2d` "Check drawings against the
+model", `full` "Iris: does AI truly see?"; files `web/public/demos/iris-<id>-demo.mp4` with a `.vtt` and a `.webp`
+poster; the durations 2:36, 1:54 and 4:19 are the narrated timeline's lengths; captions in the player are styled
+like the burned-in ones, ink on a white card in Plex, through `video::cue`), `DemoVideo` (a white
+card in a native modal `<dialog>` that is itself the frosted white scrim, never a dark overlay, portalled to
+`document.body`; a 16:9 `<video>` with `preload="none"`, its poster and English captions on by default; nothing
+rendered or fetched while closed; it plays on open; "The video couldn't load." on a missing or broken file; focus on
+Close, focus guards that keep Tab inside and still reach the video's own controls, Escape and the scrim closing it,
+focus given back to the Watch button, the body's scroll locked, no zoom-in under reduced motion, a 16 px gutter on a
+phone) and `WatchDemoButton` (a play icon, the label and the duration in mono, keeping its own open state).
+`StartScreen.tsx` wraps the two sample tiles in `div.home-tile-wrap` (`home.css`) with a Watch the demo button laid
+over each tile's foot as the tile's sibling (the 3D video on the building tile, the 2D on the drawings tile; the
+tile's click unchanged; Tab goes to the tile, then its button), and puts Watch the full demo (holo edge) under the
+hero's tagline; StartScreen stays hook-free and `App.tsx` is untouched. Found on the way: with focus inside a
+`<video>`'s own controls, Chrome sends the page no key event for Escape, so a plain overlay could not close on it;
+the native dialog gets the close request as `cancel`, so Escape is caught both on the document (stopped there, before
+App's own) and as `cancel`. The videos are to be recorded from the sample building with its saved checks, saved
+drawing readings and saved prepared proposals (no live Gemini call), narrated with Gemini TTS, with WebVTT captions;
+none is in the repo yet, so each opens on "The video couldn't load." until it is. Checked: `web/tests/demoVideo.test.mjs`
+(10, new) and `start-screen.test.mjs` (25), the full web suite (539 passing under an en-US locale; under en-IN,
+`uploads.test.mjs`'s "137,181" reads "1,37,181", a locale assumption that predates this work), `tsc` and
+`vite build` (with f3b1bbb's `appShell.css` fix, which this branch's base lacks), `test_docs_map.py`, and headless
+Chromium against `vite preview` at 1440×900 and 390×844 with the API and a test clip routed by Playwright: nothing under
+`/demos/iris-*` fetched before a click, Tab from the tile reaches its Watch button, Enter opens with focus on Close,
+twelve Tab and Shift+Tab presses stay inside, captions showing, Escape closes from Close, the video and inside its
+controls, focus back on the Watch button, a 404 shows the error line, the scrim closes it, no sideways scroll, no
+overlap with the tiles' text.

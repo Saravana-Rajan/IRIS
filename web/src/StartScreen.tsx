@@ -2,6 +2,7 @@ import { Building2, CircleCheck, FileText, FolderKanban, History, Plus } from "l
 import type { CSSProperties, MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
 import { DemoClips } from "./DemoClips";
+import { WatchDemoButton } from "./DemoVideo";
 import { HoloRibbon, TextReveal } from "./Holo";
 import { PROJECT_FLOW } from "./ProjectsHome";
 import { ownClick, projectPath } from "./projectRoute";
@@ -86,6 +87,7 @@ export function StartScreen({
             <h1 className="home-greeting"><TextReveal text={hello} once="home-greeting" step={90} /></h1>
             <p className="home-tagline">
               <TextReveal text={tagline} once="home-tagline" delay={90 * hello.split(/\s+/).length + 180} step={70} /></p>
+            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero holo-edge" />
             <p className="home-what">Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked,
               and report what was decided.</p>
             {resume && (
@@ -113,19 +115,25 @@ export function StartScreen({
               <span className="home-tile-line">Import your IFC or STEP models and check them for clashes.</span></span>
           </button>
           {onSample && (
-            <button type="button" className="home-tile" data-start="sample" disabled={anyBusy} aria-busy={sampleBusy || undefined}
-              onClick={onSample}>
-              <span className="home-tile-icon" aria-hidden>{sampleBusy ? <i className="spinner" /> : <Building2 size={20} />}</span>
-              <span className="home-tile-text"><span className="home-tile-title">Try the sample building</span>
-                <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
-            </button>)}
+            <div className="home-tile-wrap">
+              <button type="button" className="home-tile" data-start="sample" disabled={anyBusy} aria-busy={sampleBusy || undefined}
+                onClick={onSample}>
+                <span className="home-tile-icon" aria-hidden>{sampleBusy ? <i className="spinner" /> : <Building2 size={20} />}</span>
+                <span className="home-tile-text"><span className="home-tile-title">Try the sample building</span>
+                  <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
+              </button>
+              <WatchDemoButton id="3d" />
+            </div>)}
           {onSampleDrawings && (
-            <button type="button" className="home-tile holo-edge" data-start="sample-drawings" disabled={anyBusy}
-              aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
-              <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
-              <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>
-                <span className="home-tile-line">Its PDF sheets, read by AI and compared with the 3D model.</span></span>
-            </button>)}
+            <div className="home-tile-wrap">
+              <button type="button" className="home-tile holo-edge" data-start="sample-drawings" disabled={anyBusy}
+                aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
+                <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
+                <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>
+                  <span className="home-tile-line">Its PDF sheets, read by AI and compared with the 3D model.</span></span>
+              </button>
+              <WatchDemoButton id="2d" />
+            </div>)}
         </section>
 
         <section className="home-section" aria-labelledby="home-recent-title" aria-busy={recentLoading || undefined}>
