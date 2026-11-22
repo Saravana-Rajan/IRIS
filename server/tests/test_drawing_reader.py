@@ -205,6 +205,53 @@ def test_a_misread_size_is_ai_only_and_shows_what_is_printed():
     assert "size not found" in it["evidence"]["why"]
 
 
+def test_a_label_listing_several_tags_is_one_item_per_tag_sharing_its_one_size():
+    """Short pieces of one run share a label: their tags one per line, the size once under them. The model gives the
+    label as one item whose tag has line breaks."""
+    words = label("SA-BR-1", 100, 100) + label("SA-BR-2", 100, 122) + label("SA-BR-3", 100, 144) + label("300x200", 105, 166)
+    whole = dr.Tile(1, "whole sheet", 0.0, 0.0, 1600.0, 1000.0)
+    reply = {"items": [{"image": 1, "tag": "SA-BR-1\nSA-BR-2\nSA-BR-3", "kind": "duct", "size": "300x200",
+                        "box_2d": dr.to_tile(box(words), whole)}]}
+    ai_items, dropped = dr._ai_items(reply, [whole])
+    assert dropped == 0 and [i["tag"] for i in ai_items] == ["SA-BR-1", "SA-BR-2", "SA-BR-3"]
+    assert ai_items[0]["box"][1] < ai_items[1]["box"][1] < ai_items[2]["box"][1]     # each on its own line
+    out = dr.reconcile(ai_items, words, width=1600, height=1000)
+    assert [(i["tag"], i["size"], i["status"]) for i in out] == [
+        ("SA-BR-1", "300x200", "confirmed"), ("SA-BR-2", "300x200", "confirmed"), ("SA-BR-3", "300x200", "confirmed")]
+    assert all(i["evidence"]["label_tags"] == 3 for i in out)                       # no text-only leftovers either
+
+
+def test_a_size_printed_on_the_label_beside_is_not_the_items():
+    """A tag's size is the one on its own label: a size printed just beside it belongs to another label."""
+    words = label("CW-R-9", 300, 100) + label("Ø54", 310, 122) + label("Ø150", 236, 122)
+    out = dr.reconcile([ai("CW-R-9", "Ø150", box(label("CW-R-9", 300, 100)), kind="pipe")], words,
+                       width=1600, height=1000)
+    it = out[0]
+    assert it["status"] == "ai_only" and "tag" in it["evidence"] and "size" not in it["evidence"]
+    assert it["evidence"]["why"] == "size not found on the item's label in the text layer"
+    assert it["evidence"]["text_says"]["size"]["text"] == "Ø54"
+    assert [(i["size"], i["status"]) for i in out[1:]] == [("Ø150", "text_only")]   # the other label's size, unread
+    assert [b for b in dr.label_blocks(words)].count(dr.label_blocks(words)[0]) == 2   # CW-R-9 and Ø54: one label
+
+
+def test_an_image_whose_boxes_are_all_shifted_the_same_way_is_moved_back(tmp_path):
+    """Seen once on a quarter: every box half a quarter too low. Tags printed once on the page measure the shift."""
+    p = big_page(tmp_path)
+    found = dr.scan_text(p.words, radius=dr.radius_px(p.width_px, p.height_px))
+    items = [ai(f["tag"], f["size"], [f["box"][0], f["box"][1] + 600, f["box"][2], f["box"][3] + 600], image=4)
+             for f in found if f["tag"] and f["tag"] != "M-201"]
+    out = dr.reconcile(items, p.words, width=p.width_px, height=p.height_px)
+    read = [i for i in out if i["source"] == "ai"]
+    assert read and all(i["status"] == "confirmed" for i in read)
+    assert {(i["evidence"]["box_shift"]["dx"], i["evidence"]["box_shift"]["dy"]) for i in read} == {(0.0, -600.0)}
+    assert all(i["evidence"]["box_shift"]["anchors"] == len(items) for i in read)
+    # One box far off on its own is not a shift: it stays where it was read, and is not confirmed there.
+    lone = dr.reconcile(items[:1] + [ai(f["tag"], f["size"], f["box"], image=2) for f in found[1:3] if f["tag"]],
+                        p.words, width=p.width_px, height=p.height_px)
+    [far] = [i for i in lone if i["source"] == "ai" and i["tag"] == items[0]["tag"]]
+    assert far["status"] == "ai_only" and far["box"] == items[0]["box"] and "box_shift" not in far["evidence"]
+
+
 def test_text_beyond_the_radius_does_not_confirm():
     words = label("SA-101", 100, 100)
     far = [1000, 700, 1060, 720]
@@ -336,6 +383,84 @@ def test_no_cache_when_asked(tmp_path):
     run(d, tmp_path, model=reader, cache_dir=False)
     run(d, tmp_path, model=reader, cache_dir=False)
     assert reader.calls == 2 and not (tmp_path / "cache").exists()
+
+
+# ------------------------------------------------------------------------------------------------- saved readings
+
+def saved_reading_of(d, tmp_path, model: str = "gemini-3.8-flash"):
+    """A saved reading of `d`, made as evals/save_drawing_readings.py makes one (a read, then write_saved): its events,
+    and the file's path."""
+    events = run(d, tmp_path, model=dr.FakeReader(model=model), saved=False)
+    path = dr.write_saved(d, tmp_path / "saved" / "sheet.reading.json", model=model, cache_dir=tmp_path / "cache")
+    return events, path
+
+
+def without(items, *keys):
+    return [dict(i, evidence={k: v for k, v in i["evidence"].items() if k not in keys}) for i in items]
+
+
+def test_model_ids_read_as_names_with_their_version():
+    assert dr.model_name("gemini-3.8-flash") == "Gemini 3.8 Flash"
+    assert dr.model_name("gemini-3.5-flash-lite") == "Gemini 3.5 Flash Lite"
+    assert dr.model_name("") == ""
+
+
+def test_a_saved_reading_is_replayed_with_no_model_call_and_says_so(tmp_path, monkeypatch):
+    d = drawing(tmp_path, big_page(tmp_path, 0), small_page(tmp_path, 1))
+    made, path = saved_reading_of(d, tmp_path)
+    data = json.loads(path.read_text())
+    assert data["drawing_sha256"] == d.sha256 and data["prompt_hash"] == dr.prompt_hash()
+    assert data["model"] == "gemini-3.8-flash" and [p["page"] for p in data["pages"]] == [0, 1]
+    assert all({"tiles", "reply", "usage", "at"} <= set(p) for p in data["pages"])
+
+    monkeypatch.setattr(dr, "SAVED", tmp_path / "saved")          # where the server looks by default
+    live = dr.FakeReader(usd_per_call=1.0)                       # a cap of 0.5 would refuse it, were it called
+    events = run(d, tmp_path, model=live, cache_dir=False, budget=0.5)
+    assert live.calls == 0
+    pages = [e for e in events if e["type"] == "page"]
+    assert [(e["index"], e["saved"], e["cached"]) for e in pages] == [(0, True, True), (1, True, True)]
+    done = events[-1]
+    assert done["cost_usd"] == 0 and done["errors"] == {}
+    assert done["saved"] == {"model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "at": data["pages"][0]["at"],
+                             "pages": [0, 1]}
+    ai = [i for i in done["items"] if i["source"] == "ai"]
+    assert ai and all(i["evidence"]["saved_reading"] == {"model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash",
+                                                         "at": data["pages"][0]["at"]} for i in ai)
+    # The same items, statuses and boxes as the read that was saved: the reply is checked against the text layer again.
+    assert without(done["items"], "cached", "saved_reading") == without(made[-1]["items"], "cached", "saved_reading")
+    assert dr.saved_info(d) == {"model": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "at": data["at"]}
+    assert not run(d, tmp_path, model=live, cache_dir=False, saved=False, budget=5)[0]["saved"]   # saved=False: live
+    assert live.calls == 2
+
+
+def test_a_saved_reading_of_another_file_prompt_or_page_size_falls_through_to_the_model(tmp_path, monkeypatch):
+    d = drawing(tmp_path, small_page(tmp_path, 1))
+    saved_reading_of(d, tmp_path)
+    where = tmp_path / "saved"
+    reader = dr.FakeReader()
+
+    other = drawing(tmp_path, small_page(tmp_path, 1), sha="cd" * 32)   # another PDF: its hash is not the saved one
+    events = run(other, tmp_path, model=reader, cache_dir=False, saved=where)
+    assert reader.calls == 1 and events[0]["saved"] is False and events[-1]["saved"] is None
+    assert dr.saved_info(other, folder=where) is None
+    assert not any("saved_reading" in i["evidence"] for i in events[-1]["items"])
+
+    version = dr.VERSION
+    monkeypatch.setattr(dr, "VERSION", "test-changed")              # the prompt changed: the saved reply is stale
+    events = run(d, tmp_path, model=reader, cache_dir=False, saved=where)
+    assert reader.calls == 2 and events[-1]["saved"] is None and dr.saved_info(d, folder=where) is None
+    monkeypatch.setattr(dr, "VERSION", version)
+    assert dr.saved_info(d, folder=where) is not None
+
+    resized = drawing(tmp_path, page(tmp_path, 1, 600, 400, label("AHU-1 Ø400", 50, 50)))   # same file, other size
+    events = run(resized, tmp_path, model=reader, cache_dir=False, saved=where)
+    assert reader.calls == 3 and events[-1]["saved"] is None
+
+
+def test_a_saved_reading_needs_the_page_read_first(tmp_path):
+    d = drawing(tmp_path, small_page(tmp_path, 1))
+    with pytest.raises(ValueError, match="has not been read"):
+        dr.write_saved(d, tmp_path / "x.reading.json", model="gemini-3.8-flash", cache_dir=tmp_path / "cache")
 
 
 # ------------------------------------------------------------------------------------------------- the budget

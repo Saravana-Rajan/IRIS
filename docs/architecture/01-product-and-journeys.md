@@ -6,12 +6,14 @@
 > `web/src/Chat.tsx`, `web/src/Requirements.tsx`, `web/src/ReportDoc.tsx`, `web/src/Agent.tsx`, `web/src/Owner.tsx`,
 > `web/src/Sheet.tsx`, `web/src/layout.ts`, `web/src/ViewerToolbar.tsx`, `web/src/Brand.tsx`, and the engineer workflow's
 > `web/src/ProjectsHome.tsx`, `web/src/ProjectOverview.tsx`, `web/src/ImportPanel.tsx`, `web/src/ModelSummary.tsx`,
-> `web/src/CoordinationOverview.tsx`, `web/src/ClashHeader.tsx`, `web/src/ProposalCard.tsx`, `server/iris/projects.py` ·
-> **Checked against code:** re-branded on 2026-11-11; the coordination round in a project on 2026-11-22 · **Deeper design:**
+> `web/src/CoordinationOverview.tsx`, `web/src/ClashHeader.tsx`, `web/src/ProposalCard.tsx`, `web/src/StartScreen.tsx`,
+> `web/src/DrawingsPanel.tsx`, `server/iris/projects.py` · **Checked against code:** re-branded on 2026-11-11; the
+> coordination round in a project on 2026-11-22; "Every way in"'s first screen and the sample drawings on 2026-11-22 ·
+> **Deeper design:**
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/mobile.md](../mobile.md), [docs/detection.md](../detection.md),
 > [docs/edits.md](../edits.md), [docs/requirements.md](../requirements.md), [docs/escalation.md](../escalation.md),
 > [docs/show-it-built.md](../show-it-built.md), [docs/voice.md](../voice.md), [docs/mcp.md](../mcp.md),
-> [docs/step.md](../step.md), [docs/uploads.md](../uploads.md)
+> [docs/step.md](../step.md), [docs/uploads.md](../uploads.md), [docs/drawings.md](../drawings.md)
 
 Iris, by Techjays, is an AI design coordinator for 3D models. It checks the
 models several teams make against each other, finds where they clash, sorts what matters from what doesn't, and
@@ -70,18 +72,24 @@ second try) and the Gemini image model (`GEMINI_IMAGE_MODEL`: Show it built). Na
 ## Every way in
 
 `App` decides what the page is from three things: `stats` (models drawn in the viewer), `report` (a clash list open)
-and `blank` (a blank project started). `landing = !stats && !report && !blank`: until something opens, the page is the
-landing, with no panes or dock (`.app.landing`). `starting = blank && !stats && !report`: the blank project's drop
-zone has the whole stage.
+and `blank` (a blank project started, or a project's workspace step). `landing = !stats && !report && !blankish`: until
+something opens, the page has no panes or dock (`.app.landing`), and its first screen is `StartScreen` (`/home`,
+[12](12-web-app.md)). `starting = blankish && !stats && !report`: the blank project's drop zone has the whole stage.
+The landing page (`About.tsx` with `landing/`), whose hero, header, demo cards and resume card the golden path, demo,
+tour and pick-a-demo rows below name, is not mounted by `App` at HEAD (checked 2026-11-22); on a tablet the empty
+landing keeps a button that starts the golden path.
 
 | Way in | Control | What it calls | What happens |
 |---|---|---|---|
+| **Projects** | First screen **Open projects** (a link to `/projects`) | `goProjects` | `ProjectsHome`: the projects this browser knows, Create project, the sample building ([12](12-web-app.md), "Engineer workflow"). |
+| **Sample building** | First screen **Try the sample building** | `trySample` | The Northbank sample as a project of this browser's (made once, found again by name), opened on Clash review and checked; no model call. |
+| **Sample drawings** | First screen **Try the sample drawings**, beside it (shown when the server lists sample drawings) | `trySampleDrawings` → `addSampleDrawings` (`POST /api/scenes/{scene_id}/drawings/samples`) | The same sample project opened on its Drawings step (`/projects/<pid>/drawings`) with Northbank's two sample sheets attached (`Northbank-M-201.pdf` and `Northbank-M-201-mismatch.pdf`, the same sheet with planted mismatches), then checked. Each sheet ships with a reading Gemini made once; reading it replays that at no cost, and the page says "Saved AI reading of this sample (…): replayed at no cost, not read live." ([docs/drawings.md](../drawings.md)). |
 | **Golden path** | Landing hero **Watch Iris fix a clash** (`data-tour=golden`); also at the landing's top right | `startGolden` → `openDemo()` | Opens the default demo models, runs the check, then picks the duct through the girder and proposes (below). |
 | **Northbank demo** | Demo card **Open the Northbank demo** (`data-tour=demo`) | `openDemo()` → `open(picked)` → `runDetect(null, id)` | Opens the default pick and checks it. The label is "Open the models" when the pick holds no Northbank file (`startLabel`). |
 | **Machine cell demo** | Demo card **Open the machine cell** (`data-tour=cell`) | `openDemo([cellSample])` | Opens `PC-03-Palletising-Cell-RevA.step` from `samples/` (`cellSample`, matched by name), converts it and checks it. The card shows only when that file is there. |
 | **Guided tours** | **Take the guided tour** / **Take the cell tour** on the cards; **Menu** › **Take the guided tour** once something is open | `startTour("northbank" \| "cell")` | `Tour` walks the real app (below). |
 | **Pick a demo** | Hero link, or **Demos** in the landing's header | scrolls to `#demos` | The two `DemoCard`s: a recorded fix playing in the 3D view (`Clip`; its last frame for people who ask for less motion), what it is, what it shows, measured chips, Open and Tour. Higher up, "How it works" shows the loop's steps as tabs beside one frame playing each step's recorded run (`Loop`): the check, Gemini Pro reading the clash, Workings, the fix kept. It moves on as each clip ends, until the visitor picks a step. |
-| **Resume** | **Pick up where you left off** card (`ResumeCard`), shown while the server still holds the session | `resumeSession` | Reopens the saved scene (`open(files, existing)`), its report, the fixes, and the agent link. **Start fresh** forgets it and revokes the link (`startFresh`). The session is kept in `localStorage` (`iris.session`). |
+| **Resume** | First screen: a line naming the session with **Resume** and **Start fresh** (the landing's **Pick up where you left off** card, `ResumeCard`), shown while the server still holds the session | `resumeSession` | Reopens the saved scene (`open(files, existing)`), its report, the fixes, and the agent link. **Start fresh** forgets it and revokes the link (`startFresh`). The session is kept in `localStorage` (`iris.session`). |
 | **Blank project** | Hero **Use your own models** (`data-tour=blank`) | `setBlank(true)` → `ProjectStart` | A drop zone or **Choose files** for IFC/STEP (→ `openDemo(files)`: upload, open, check), **Import a report folder**, **Back to the demos**. |
 | **Models menu** | **Menu** › Models (the model's top right corner on a desktop) | `open()` / `openDemo(files)` | Tick sample files and **Open n models**, or **Upload models (IFC or STEP)…**. The default pick is the samples matching `(structure\|mep\|architecture\|site).ifc`. |
 | **Coordinate menu** | **Menu** › Coordinate | `runDetect(null)` / `loadReport` / `upload` | **Check the open models** first; then **Or import a Navisworks clash report (XML)**: a sample folder from `samples/reports/`, **Upload an export folder…** (not on iOS), **Upload XML files…**. |
@@ -91,7 +99,13 @@ zone has the whole stage.
 
 ```mermaid
 flowchart TD
-  visit["Visitor opens Iris"] --> landing["Landing page: About"]
+  visit["Visitor opens Iris"] --> start["First screen: StartScreen"]
+  start -->|"Try the sample building"| sampleNb["Sample project: Clash review"]
+  start -->|"Try the sample drawings"| sampleDwg["Sample project: Drawings, sample sheets attached"]
+  start -->|"Open projects"| projects["Projects home"]
+  sampleNb --> check
+  sampleDwg --> readDwg["Read: saved reading replayed, compared with the models"]
+  visit -.->|"not mounted at HEAD"| landing["Landing page: About"]
   landing -->|"Watch Iris fix a clash"| golden["Golden path"]
   landing -->|"Open the Northbank demo"| openNb["Open 4 Northbank models"]
   landing -->|"Open the machine cell"| openCell["Open the cell STEP, convert"]
@@ -159,8 +173,11 @@ reviewer's name and reason. Opening a project reopens its newest saved state; th
 (`/workspace`, the golden path above) still works as before. **2D PDF drawings** are read on the project's
 Drawings step (`/projects/<pid>/drawings`, `DrawingsPanel.tsx`; [docs/drawings.md](../drawings.md)): a PDF chosen in the
 import goes there, not to the models; the sheets are read with AI, each tag and size checked against the PDF's own text
-layer and compared with the models' data, and the engineer decides what to fix (nothing is changed for them). DWG and
-DXF are still refused at the import row. There are no accounts: a project is private by its unguessable id, which the
+layer and compared with the models' data, and the engineer decides what to fix (nothing is changed for them). A
+visitor with no drawings tries it on Northbank's two sample sheets (**Try the sample drawings** on the first screen,
+or **Add the sample drawings** on the step with the sample building open): each ships with a reading Gemini made
+once, replayed at no cost and labelled as a saved reading, never as a live one. DWG and DXF are still refused at the
+import row. There are no accounts: a project is private by its unguessable id, which the
 browser keeps.
 
 ```mermaid

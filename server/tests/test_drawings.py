@@ -502,6 +502,143 @@ def test_prune_forgets_the_drawings_of_scenes_no_longer_open(tmp_path, store):
     assert store.list("aaaa") == [] and not (store.base / "aaaa").exists()
 
 
+# ---------------------------------------------------------------------------------------------------- sample drawings
+
+SAMPLE_SHEETS = Path(__file__).resolve().parents[2] / "samples" / "drawings"
+
+
+def test_the_sample_building_lists_its_sample_drawings():
+    from iris import demos
+    northbank = ["Northbank-Architecture.ifc", "Northbank-MEP.ifc", "Northbank-Site.ifc", "Northbank-Structure.ifc"]
+    [listed] = demos.listing(northbank, ["northbank-m-201.pdf", "Other.pdf"])
+    assert listed["id"] == "northbank" and listed["drawings"] == ["northbank-m-201.pdf"]   # those there are, as named
+    assert demos.drawings_for(["Northbank-MEP.ifc"]) == ("Northbank-M-201.pdf", "Northbank-M-201-mismatch.pdf")
+    assert demos.drawings_for(["Clash.ifc"]) == () and demos.drawings_for([]) == ()
+    assert {"Northbank-M-201.pdf", "Northbank-M-201-mismatch.pdf"} <= set(drawings.sample_names(SAMPLE_SHEETS.parent))
+
+
+def test_the_shipped_sample_sheets_have_current_saved_readings(tmp_path):
+    """Each sample sheet's saved reading is of that very PDF, with the reader's prompt as it is now, at its page size:
+    a visitor's read replays it for nothing. A prompt change makes them stale (the read would call the model for every
+    visitor): make them again with evals/save_drawing_readings.py."""
+    from iris import drawing_reader as dr
+    from iris import demos
+    for name in demos.drawings_for(["Northbank-MEP.ifc"]):
+        d = drawings.ingest((SAMPLE_SHEETS / name).read_bytes(), name, tmp_path)
+        info = dr.saved_info(d)
+        assert info is not None, f"{name}: no current saved reading (cd server && uv run python ../evals/save_drawing_readings.py)"
+        assert info["label"].startswith("Gemini")
+
+
+@pytest.fixture
+def sample_scene(tmp_path, monkeypatch, store):
+    """A scene the sample building's set names (a small fixture model saved as Northbank-MEP.ifc), the two sample
+    sheets in its samples folder, and a saved reading of each (made with the offline reader) where the server looks."""
+    import shutil as sh
+    from iris import drawing_reader as dr
+    samples = tmp_path / "samples"
+    (samples / "drawings").mkdir(parents=True)
+    for name in ("Northbank-M-201.pdf", "Northbank-M-201-mismatch.pdf"):
+        sh.copy(SAMPLE_SHEETS / name, samples / "drawings" / name)
+        d = drawings.ingest((SAMPLE_SHEETS / name).read_bytes(), name, tmp_path / "made")
+        list(dr.read_drawing(d, model=dr.FakeReader(model="gemini-3.8-flash"), cache_dir=tmp_path / "cache",
+                             folder=drawings.folder_of(d), saved=False))
+        dr.write_saved(d, tmp_path / "saved" / f"{Path(name).stem}.reading.json", model="gemini-3.8-flash",
+                       cache_dir=tmp_path / "cache")
+    monkeypatch.setattr(dr, "SAVED", tmp_path / "saved")
+    ws = Workspace(samples)
+    monkeypatch.setattr(app_module, "ws", ws)
+    sid = ws.open_paths([build_clash_fixture(tmp_path / "Northbank-MEP.ifc")])
+    return TestClient(app_module.app), ws, sid
+
+
+def test_the_sample_drawings_attach_once_and_read_from_their_saved_reading_with_no_model_call(sample_scene,
+                                                                                               monkeypatch):
+    from iris import drawing_reader as dr
+
+    def no_model(*a, **kw):
+        raise AssertionError("the model was called")
+    monkeypatch.setattr(dr.GeminiReader, "read", no_model)
+    monkeypatch.setattr(dr.model_client, "make_client", no_model)
+    client, ws, sid = sample_scene
+    r = client.post(f"/api/scenes/{sid}/drawings/samples")
+    assert r.status_code == 200, r.text
+    attached = r.json()
+    assert [d["name"] for d in attached] == ["Northbank-M-201.pdf", "Northbank-M-201-mismatch.pdf"]
+    assert all(d["title"]["sheet"] == "M-201" and len(d["pages"]) == 1 for d in attached)
+    assert all(d["saved_reading"]["label"] == "Gemini 3.8 Flash" for d in attached)
+    again = client.post(f"/api/scenes/{sid}/drawings/samples").json()     # held already: not attached twice
+    assert [d["id"] for d in again] == [d["id"] for d in attached]
+    listed = client.get(f"/api/scenes/{sid}/drawings").json()
+    assert [d["id"] for d in listed] == [d["id"] for d in attached] and listed[0]["saved_reading"]
+    assert client.get(f"/api/drawings/{attached[1]['id']}/pages/0.png").status_code == 200
+
+    events = ndjson(client.post(f"/api/drawings/{attached[1]['id']}/read", json={},
+                                headers={"Accept-Encoding": "gzip, deflate, br, zstd"}))
+    assert events[0]["type"] == "page" and events[0]["saved"] is True
+    done = events[-1]
+    assert done["type"] == "done" and done["cost_usd"] == 0 and done["saved"]["label"] == "Gemini 3.8 Flash"
+    items = client.get(f"/api/drawings/{attached[1]['id']}/items").json()
+    assert items and all("saved_reading" in i["evidence"] for i in items if i["source"] == "ai")
+
+
+def test_sample_drawings_only_go_with_the_sample_building(sample_scene, tmp_path):
+    client, ws, sid = sample_scene
+    other = ws.open_paths([build_clash_fixture(tmp_path / "Clash.ifc")])
+    r = client.post(f"/api/scenes/{other}/drawings/samples")
+    assert r.status_code == 409 and "sample building" in r.json()["detail"]
+    assert client.get(f"/api/scenes/{other}/drawings").json() == []
+    assert client.post("/api/scenes/nope/drawings/samples").status_code == 404
+
+
+def test_an_uploaded_drawing_has_no_saved_reading_unless_it_is_a_sample_sheet(sample_scene, tmp_path, monkeypatch):
+    from iris import drawing_reader as dr
+    client, ws, sid = sample_scene
+    [plain] = upload(client, sid, ("plan.pdf", plan_pdf())).json()
+    assert plain["saved_reading"] is None
+    [same] = upload(client, sid, ("copy.pdf", (SAMPLE_SHEETS / "Northbank-M-201.pdf").read_bytes())).json()
+    assert same["saved_reading"]["model"] == "gemini-3.8-flash"     # the very same file: its saved reading is honest
+
+    # A read of the plain upload goes to the model (no saved reading to replay), and nothing says "saved".
+    calls = []
+
+    def live(self, page, images, system, text, schema):
+        calls.append(page.index)
+        return {"items": [], "title": None}, {"model": self.model, "usd": 0.0}
+    monkeypatch.setattr(dr.GeminiReader, "read", live)
+    monkeypatch.setattr(dr, "CACHE", tmp_path / "live-cache")       # no reply cached by an earlier run
+    events = ndjson(client.post(f"/api/drawings/{plain['id']}/read", json={},
+                                headers={"Accept-Encoding": "gzip, deflate, br, zstd"}))
+    assert calls == [0]
+    assert events[0]["type"] == "page" and events[0]["saved"] is False
+    done = events[-1]
+    assert done["type"] == "done" and done["saved"] is None
+    assert not any("saved_reading" in i["evidence"] for i in client.get(f"/api/drawings/{plain['id']}/items").json())
+
+
+def test_two_issues_of_one_sheet_are_each_compared_whole():
+    """An element left out of one drawing is not missing when another sheet shows it; when the other drawing is the
+    same sheet (its sheet number), it is still missing from this one."""
+    def held(*sheets):
+        return [drawings.Drawing(id=f"d{i}", name=f"{i}.pdf", sha256=str(i), pages=[], title=t)
+                for i, t in enumerate(sheets)]
+
+    def compare(scene, items, storey=None, index=None):
+        if items[0] == "shows":
+            return {"matches": [{"item": "i1", "element": "GID", "by": "tag"}], "mismatches": []}
+        return {"matches": [], "mismatches": [{"kind": "missing_in_drawing", "item": None, "element": "GID",
+                                               "drawing_value": None, "model_value": "SA-1", "evidence": {}}]}
+    items = {"d0": ["shows"], "d1": ["leaves out"]}.get
+
+    def missing(sheets):
+        out = drawings.compare_scene(None, held(*sheets), items, compare)
+        return [(m["kind"], m["drawing"]) for m in out["mismatches"]]
+    assert missing([{"sheet": "M-201"}, {"sheet": "M 201"}]) == [("missing_in_drawing", "d1")]   # one sheet, twice
+    assert missing([{"sheet": "M-201"}, {"sheet": "M-202"}]) == []                                # another sheet
+    assert missing([{}, {}]) == []                                                                # no numbers
+    assert missing([{"drawing_no": "NB-1"}, {"drawing_no": "nb-1"}]) == [("missing_in_drawing", "d1")]
+
+
 # ---------------------------------------------------------------------------------------------------- projects
 
 def test_a_project_keeps_its_drawings_and_their_items_and_brings_them_back(scene, tmp_path, monkeypatch):

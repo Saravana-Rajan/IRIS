@@ -446,6 +446,8 @@ export interface ReqScale { levels: ReqLevel[]; strictness: ReqStep[]; format: s
 /** A demo among the samples (server: demos.listing): its default files, the start button's words and its tour. */
 export interface Demo {
   id: string; name: string; label: string; kind: Domain; files: string[]; context: string[]; tour: string | null;
+  /** The sample PDF drawings that go with it (samples/drawings/), attached by POST .../drawings/samples. */
+  drawings?: string[];
 }
 export interface Inventory {
   files: { file: string; team: string; elements: number; classes: Record<string, number> }[];

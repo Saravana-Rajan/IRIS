@@ -1,0 +1,992 @@
+{
+ "about": "The drawing reader's saved reply for this sample sheet (evals/save_drawing_readings.py), replayed instead of a model call when this PDF is read with this prompt (drawing_reader.saved_reading).",
+ "pdf": "Northbank-M-201.pdf",
+ "drawing_sha256": "50485049b3d7a7df4d0a11c2ab6a1ccf065bd39d0eb64d32be1deb3b2f038d51",
+ "version": "1",
+ "prompt_hash": "f7df67f7d1e33a7855d9b6c43b2a7ffec3e68d60d035edf523f536cadcb6d5dd",
+ "model": "gemini-3.8-flash",
+ "settings": {
+  "thinking_level": "low",
+  "max_output_tokens": 18000,
+  "timeout_s": 300.0
+ },
+ "at": "2026-11-22T10:03:28Z",
+ "pages": [
+  {
+   "page": 0,
+   "at": "2026-11-22T10:03:28Z",
+   "tiles": [
+    {
+     "index": 1,
+     "name": "whole sheet",
+     "x0": 0.0,
+     "y0": 0.0,
+     "x1": 4967.0,
+     "y1": 3508.0
+    },
+    {
+     "index": 2,
+     "name": "top left quarter",
+     "x0": 0.0,
+     "y0": 0.0,
+     "x1": 2731.85,
+     "y1": 1929.4
+    },
+    {
+     "index": 3,
+     "name": "top right quarter",
+     "x0": 2235.15,
+     "y0": 0.0,
+     "x1": 4967.0,
+     "y1": 1929.4
+    },
+    {
+     "index": 4,
+     "name": "bottom left quarter",
+     "x0": 0.0,
+     "y0": 1578.6,
+     "x1": 2731.85,
+     "y1": 3508.0
+    },
+    {
+     "index": 5,
+     "name": "bottom right quarter",
+     "x0": 2235.15,
+     "y0": 1578.6,
+     "x1": 4967.0,
+     "y1": 3508.0
+    }
+   ],
+   "reply": {
+    "items": [
+     {
+      "image": 2,
+      "tag": "SA-BR-L02-N1-1\nSA-BR-L02-N1-2\nSA-BR-L02-N1-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       566,
+       520,
+       606,
+       572
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       503,
+       495,
+       513,
+       521
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-BR-L02-N2-1\nSA-BR-L02-N2-2\nSA-BR-L02-N2-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       565,
+       668,
+       606,
+       719
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       504,
+       643,
+       513,
+       668
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-BR-L02-N3-1\nSA-BR-L02-N3-2\nSA-BR-L02-N3-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       565,
+       806,
+       606,
+       856
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       504,
+       781,
+       513,
+       807
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "SA-BR-L02-N4-1\nSA-BR-L02-N4-2\nSA-BR-L02-N4-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       565,
+       161,
+       605,
+       212
+      ]
+     },
+     {
+      "image": 3,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       504,
+       136,
+       514,
+       161
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "SA-BR-L02-N5-1\nSA-BR-L02-N5-2\nSA-BR-L02-N5-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       565,
+       265,
+       606,
+       315
+      ]
+     },
+     {
+      "image": 3,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       504,
+       240,
+       513,
+       265
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-MAIN-L02-14",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       637,
+       431,
+       657,
+       481
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-MAIN-L02-13",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       637,
+       558,
+       657,
+       608
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-MAIN-L02-12",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       637,
+       700,
+       657,
+       750
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-MAIN-L02-11",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       637,
+       856,
+       657,
+       905
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "SA-MAIN-L02-9\nSA-MAIN-L02-10",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       627,
+       176,
+       657,
+       226
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "SA-MAIN-L02-8",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       820,
+       324,
+       840,
+       370
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "LV-DBC-L02-1\nLV-DBC-L02-2\nLV-DBC-L02-3",
+      "kind": "pipe",
+      "size": "Ø50",
+      "box_2d": [
+       820,
+       321,
+       860,
+       365
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "LV-R-3",
+      "kind": "tray",
+      "size": "300x100",
+      "box_2d": [
+       820,
+       388,
+       839,
+       414
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "HW-R-7\nHW-R-8",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       811,
+       418,
+       839,
+       444
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "SA-R-3",
+      "kind": "duct",
+      "size": "600x400",
+      "box_2d": [
+       820,
+       455,
+       839,
+       480
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-MAIN-L02-1\nRA-MAIN-L02-2",
+      "kind": "duct",
+      "size": "500x250",
+      "box_2d": [
+       769,
+       452,
+       798,
+       498
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-R-3",
+      "kind": "duct",
+      "size": "500x400",
+      "box_2d": [
+       791,
+       513,
+       809,
+       537
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       830,
+       542,
+       840,
+       566
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-SP-L02-1-1\nRA-SP-L02-1-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       800,
+       582,
+       829,
+       626
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       800,
+       678,
+       810,
+       703
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-SP-L02-2-1\nRA-SP-L02-2-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       811,
+       712,
+       839,
+       756
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "LV-TRAY-L02-1",
+      "kind": "tray",
+      "size": "300x100",
+      "box_2d": [
+       820,
+       759,
+       839,
+       804
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       800,
+       807,
+       810,
+       832
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-SP-L02-3-1\nRA-SP-L02-3-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       811,
+       840,
+       839,
+       884
+      ]
+     },
+     {
+      "image": 2,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       800,
+       928,
+       810,
+       954
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-SP-L02-4-1\nRA-SP-L02-4-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       811,
+       963,
+       839,
+       1000
+      ]
+     },
+     {
+      "image": 3,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       800,
+       111,
+       810,
+       135
+      ]
+     },
+     {
+      "image": 3,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       800,
+       197,
+       810,
+       222
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "RA-SP-L02-4-1\nRA-SP-L02-4-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       811,
+       144,
+       839,
+       189
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "RA-SP-L02-5-1\nRA-SP-L02-5-2",
+      "kind": "duct",
+      "size": "Ø250",
+      "box_2d": [
+       769,
+       226,
+       798,
+       270
+      ]
+     },
+     {
+      "image": 3,
+      "tag": "RA-MAIN-L02-6\nRA-MAIN-L02-7",
+      "kind": "duct",
+      "size": "500x250",
+      "box_2d": [
+       811,
+       237,
+       839,
+       283
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-MAIN-L02-3",
+      "kind": "duct",
+      "size": "500x250",
+      "box_2d": [
+       891,
+       585,
+       911,
+       631
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-MAIN-L02-4",
+      "kind": "duct",
+      "size": "500x250",
+      "box_2d": [
+       891,
+       732,
+       911,
+       778
+      ]
+     },
+     {
+      "image": 2,
+      "tag": "RA-MAIN-L02-5",
+      "kind": "duct",
+      "size": "500x250",
+      "box_2d": [
+       891,
+       856,
+       911,
+       903
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "DB-L02",
+      "kind": "equipment",
+      "size": null,
+      "box_2d": [
+       86,
+       381,
+       94,
+       404
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "TEX-R-2",
+      "kind": "duct",
+      "size": "Ø200",
+      "box_2d": [
+       105,
+       386,
+       124,
+       411
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "HW-MAIN-L02-1",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       95,
+       317,
+       114,
+       363
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SVP-5\nSVP-6",
+      "kind": "pipe",
+      "size": "Ø110",
+      "box_2d": [
+       126,
+       351,
+       154,
+       371
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SAN-WC-L02-1",
+      "kind": "pipe",
+      "size": "Ø110",
+      "box_2d": [
+       166,
+       329,
+       186,
+       372
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "TEX-BR-L02-1",
+      "kind": "duct",
+      "size": "Ø125",
+      "box_2d": [
+       197,
+       332,
+       215,
+       373
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "CW-R-9\nCW-R-10\nCW-R-11",
+      "kind": "pipe",
+      "size": "Ø150 Ø54",
+      "box_2d": [
+       238,
+       327,
+       273,
+       373
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "TEX-BR-L02-2\nTEX-BR-L02-3",
+      "kind": "duct",
+      "size": "Ø125",
+      "box_2d": [
+       300,
+       334,
+       328,
+       379
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "CW-WC-L02-1\nCW-WC-L02-2\nCW-WC-L02-3",
+      "kind": "pipe",
+      "size": "Ø22",
+      "box_2d": [
+       247,
+       387,
+       287,
+       430
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "CW-MAIN-L02-1",
+      "kind": "pipe",
+      "size": "Ø54",
+      "box_2d": [
+       309,
+       399,
+       328,
+       444
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SAN-BS-L02-1\nSAN-BS-L02-2\nSAN-BS-L02-3",
+      "kind": "pipe",
+      "size": "Ø40",
+      "box_2d": [
+       198,
+       439,
+       237,
+       483
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "CW-BS-L02-1\nCW-BS-L02-2\nCW-BS-L02-3",
+      "kind": "pipe",
+      "size": "Ø22",
+      "box_2d": [
+       247,
+       438,
+       287,
+       477
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "HW-BS-L02-1\nHW-BS-L02-2\nHW-BS-L02-3",
+      "kind": "pipe",
+      "size": "Ø22",
+      "box_2d": [
+       176,
+       529,
+       215,
+       570
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "HW-MAIN-L02-2",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       176,
+       582,
+       196,
+       629
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-MAIN-L02-1\nSA-MAIN-L02-2",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       227,
+       528,
+       257,
+       574
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-BR-L02-S1-1\nSA-BR-L02-S1-2\nSA-BR-L02-S1-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       267,
+       524,
+       307,
+       574
+      ]
+     },
+     {
+      "image": 4,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       496,
+       277,
+       522
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-MAIN-L02-3",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       126,
+       559,
+       146,
+       605
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-MAIN-L02-4",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       126,
+       702,
+       146,
+       748
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-MAIN-L02-5",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       126,
+       858,
+       146,
+       904
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-BR-L02-S2-1\nSA-BR-L02-S2-2\nSA-BR-L02-S2-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       186,
+       675,
+       226,
+       725
+      ]
+     },
+     {
+      "image": 4,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       644,
+       277,
+       668
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "CW-MAIN-L02-2",
+      "kind": "pipe",
+      "size": "Ø54",
+      "box_2d": [
+       176,
+       888,
+       196,
+       935
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "SA-BR-L02-S3-1\nSA-BR-L02-S3-2\nSA-BR-L02-S3-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       186,
+       813,
+       226,
+       864
+      ]
+     },
+     {
+      "image": 4,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       781,
+       277,
+       807
+      ]
+     },
+     {
+      "image": 4,
+      "tag": "HW-MAIN-L02-3\nHW-MAIN-L02-4\nHW-MAIN-L02-5",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       207,
+       876,
+       246,
+       924
+      ]
+     },
+     {
+      "image": 4,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       955,
+       277,
+       980
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "SA-MAIN-L02-6\nSA-MAIN-L02-7",
+      "kind": "duct",
+      "size": "600x300",
+      "box_2d": [
+       116,
+       178,
+       146,
+       224
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "SA-BR-L02-S4-1\nSA-BR-L02-S4-2\nSA-BR-L02-S4-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       186,
+       169,
+       226,
+       219
+      ]
+     },
+     {
+      "image": 5,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       137,
+       277,
+       162
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "HW-MAIN-L02-6",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       176,
+       270,
+       196,
+       316
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "HW-MAIN-L02-7",
+      "kind": "pipe",
+      "size": "Ø42",
+      "box_2d": [
+       146,
+       345,
+       165,
+       391
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "CW-MAIN-L02-3",
+      "kind": "pipe",
+      "size": "Ø54",
+      "box_2d": [
+       176,
+       352,
+       196,
+       399
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "KS-4",
+      "kind": "pipe",
+      "size": "Ø110",
+      "box_2d": [
+       198,
+       321,
+       217,
+       342
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "SAN-SK-L02-1\nSAN-SK-L02-2\nSAN-SK-L02-3",
+      "kind": "pipe",
+      "size": "Ø40",
+      "box_2d": [
+       207,
+       346,
+       246,
+       389
+      ]
+     },
+     {
+      "image": 5,
+      "tag": "SA-BR-L02-S5-1\nSA-BR-L02-S5-2\nSA-BR-L02-S5-3",
+      "kind": "diffuser",
+      "size": "300x200",
+      "box_2d": [
+       227,
+       269,
+       267,
+       319
+      ]
+     },
+     {
+      "image": 5,
+      "tag": null,
+      "kind": "diffuser",
+      "size": "600x600",
+      "box_2d": [
+       267,
+       240,
+       277,
+       265
+      ]
+     }
+    ],
+    "title": {
+     "sheet": "M-201",
+     "scale": "1:50 @ A1",
+     "title": "Level 02 — Mechanical services"
+    }
+   },
+   "usage": {
+    "model": "gemini-3.8-flash",
+    "model_version": "gemini-3.8-flash",
+    "input_tokens": 6528,
+    "output_tokens": 6529,
+    "reasoning_tokens": 0,
+    "usd": 0.05876,
+    "finish_reason": "STOP"
+   }
+  }
+ ]
+}

@@ -66,7 +66,8 @@ import { ProjectOverview, ProjectSteps, SaveButton } from "./ProjectOverview";
 import { PROJECT_STEPS, PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, ownClick, projectPath, showPath, showProjectRoute, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { addReport, attachScene, createProject, getProject, listProjects, myProjectIds, openProject, patchProject, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { DrawingsPanel } from "./DrawingsPanel";
-import { compareDrawings, drawingItems, listDrawings, readDrawing, uploadDrawings, type Comparison, type Drawing, type Item as DrawingItem } from "./drawingsApi";
+import { addSampleDrawings, compareDrawings, drawingItems, listDrawings, readDrawing, uploadDrawings, type Comparison, type Drawing, type Item as DrawingItem } from "./drawingsApi";
+import { demoOfFiles, openSampleDrawings, SAMPLE_DRAWINGS_BUSY } from "./sampleDrawings";
 import type * as THREE from "three";
 
 type Stats = { elements: number; triangles: number; parseMs: number };
@@ -1652,17 +1653,21 @@ export function App() {
     await runDetect(null, id);
   }
   /** Open the project: its last saved state (else its original models) as a new scene, adopted as a resumed session
-   * is; its clashes come back numbered and titled as before once checked. */
-  async function openProjectScene(p: Project) {
-    if (busy || projectBusy) return;
+   * is; its clashes come back numbered and titled as before once checked. `opened`: what the caller came for, done
+   * with the new scene once its kept list is read and before any check (the sample drawings); when it says it failed
+   * (false), no check runs, so its error stays on screen (the Clash step's setup card checks later). Resolves with the
+   * scene id. */
+  async function openProjectScene(p: Project, opened?: (sid: string) => Promise<boolean>): Promise<string | null> {
+    if (busy || projectBusy) return null;
     autoOpened.current = p.id;
     setProjectBusy("Opening the project…"); setError(null);
+    let id: string | null = null;
     try {
       const o = await openProject(p.id);
       setProject(o.project);
       const info = o.scene ?? await api.sceneInfo(o.scene_id);
-      const id = await open(info.files, { id: o.scene_id, files: info.files, step: info.step, revision: info.revision, layout: info.layout });
-      if (!id) return;
+      id = await open(info.files, { id: o.scene_id, files: info.files, step: info.step, revision: info.revision, layout: info.layout }) ?? null;
+      if (!id) return null;
       sceneUploaded.current = true;   // the project's own files: opened again from the project, never by a sample's name
       if (info.report_id) {
         const rep = await loadReport(() => api.report(info.report_id!), "the project's clashes");
@@ -1671,8 +1676,11 @@ export function App() {
           setChecks(info.checks ?? []); setRanCheck(null); setViewCheck(null);
           lastTests.current = (info.checks ?? []).find((c) => c.key === "models")?.tests ?? null;
         }
-      } else await runDetect(null, id);
+      }
+      const done = opened ? await opened(id) : true;
+      if (!info.report_id && done) await runDetect(null, id);
     } catch (e) { setError(`Could not open the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
+    return id;
   }
   /** Save: the edited models, the edit log and the decisions as the project's next saved state. Whether it saved, for
    * the Save button ("Saved ✓" or "Not saved"). */
@@ -1683,6 +1691,16 @@ export function App() {
     try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); return true; }
     catch (e) { setError(`Could not save the project: ${(e as Error).message}`); return false; } finally { setProjectBusy(null); }
   }
+  /** The sample building's project of this browser's: found again by name (one holding models), else made now
+   * (`made`) and its id kept in this browser. */
+  async function sampleProject(): Promise<{ p: Project; made: boolean }> {
+    const mine = await listProjects(myProjectIds()).catch(() => [] as Project[]);
+    const found = mine.find((x) => x.name === SAMPLE_PROJECT && x.files.length > 0);
+    if (found) return { p: found, made: false };
+    const p = await createProject(SAMPLE_PROJECT);
+    rememberProject(p.id);
+    return { p, made: true };
+  }
   /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
    * again), opened on its Clash review. Opening and checking it call no model. */
   async function trySample() {
@@ -1691,17 +1709,35 @@ export function App() {
     setProjectBusy("Opening the sample building…"); setError(null);
     let p: Project | null = null;
     try {
-      const mine = await listProjects(myProjectIds()).catch(() => [] as Project[]);
-      p = mine.find((x) => x.name === SAMPLE_PROJECT && x.files.length > 0) ?? null;
-      if (p) { setProject(p); goStep("clash", p.id); return; }   // its models open on the step (the effect above)
-      p = await createProject(SAMPLE_PROJECT);
-      rememberProject(p.id);
+      const got = await sampleProject();
+      p = got.p;
+      if (!got.made) { setProject(p); goStep("clash", p.id); return; }   // its models open on the step (the effect above)
       autoOpened.current = p.id;
       setProject(p);
       goStep("clash", p.id);
     } catch (e) { setError(`Could not open the sample building: ${(e as Error).message}`); return; }
     finally { setProjectBusy(null); }
     if (p) await samplesInto(p, names);
+  }
+  /** The first screen's "Try the sample drawings": the same sample project, on its Drawings step with the sample PDF
+   * sheets attached; each has a saved Gemini reading the server replays, so trying them calls no model. The steps and
+   * their order are `openSampleDrawings`'s (sampleDrawings.ts): the sheets first, the clash check after them. */
+  async function trySampleDrawings() {
+    const demo = demos.find((d) => d.tour === "northbank");
+    if (busy || projectBusy || !demo?.files.length || !demo.drawings?.length) return;
+    setError(null);
+    await openSampleDrawings(demo.files, {
+      sampleProject, sceneId,
+      show: (p) => { autoOpened.current = p.id; setProject(p); goStep("drawings", p.id); },
+      open: async (names) => (await open(names)) ?? null,
+      openProject: openProjectScene,
+      attach: addSampleDrawings,
+      keep: keepModels,
+      check: (sid) => runDetect(null, sid),
+      listed: () => setDrawingsTry((n) => n + 1),
+      busy: setProjectBusy,
+      fail: setError,
+    });
   }
   /** Create a project, keep its id in this browser and open its overview. */
   async function newProject(name: string) {
@@ -4051,6 +4087,8 @@ export function App() {
   /** On the Coordination step the overview leads the Clashes tab, above triage. */
   const withCoord = (card: React.ReactNode) => (projStep === "coordination" && coordCard ? <>{coordCard}{card}</> : card);
   const sampleSet = demos.find((d) => d.tour === "northbank")?.files ?? demos[0]?.files ?? [];
+  /** The sample building has sample PDF drawings (GET /api/samples lists them): the first screen offers them. */
+  const sampleDrawings = !!demos.find((d) => d.tour === "northbank")?.drawings?.length;
   // A project's Models step (left pane): import with per-file rows, the models open and the model summary.
   const modelsStep = projectHere && (
     <div className="proj-work">
@@ -4105,6 +4143,8 @@ export function App() {
   const decisionsList = journal?.decisions ?? [];
   // GlobalId → name for the Drawings step's model side (the open models' own names).
   const drawingNames = projStep === "drawings" ? Object.fromEntries(Object.entries(sceneClasses.current?.map ?? {}).map(([g, cn]) => [g, cn[1]])) : {};
+  // The open models are a demo's set with sample drawings: the Drawings step offers them (POST .../drawings/samples).
+  const sceneSampleDrawings = projStep === "drawings" && !!demoOfFiles(sceneFiles, demos)?.drawings?.length;
   // The project pages (the projects home, and a project's Overview, Reports and Activity) over the workspace.
   const projectPage = route?.view === "projects" ? (
     <div className="proj-shell" role="region" aria-label="Projects">
@@ -4133,14 +4173,17 @@ export function App() {
                 names={drawingNames} error={drawingsError} onRetry={() => setDrawingsTry((n) => n + 1)}
                 onUpload={(files, progress) => uploadDrawings(sceneId, files, progress).then((r) => { setDrawingsTry((n) => n + 1); return r; })}
                 onRead={(did, onEvent) => readDrawing(did, { onEvent }).then((r) => { setDrawingsTry((n) => n + 1); return r; })}
+                onSamples={sceneSampleDrawings ? () => addSampleDrawings(sceneId).then((r) => { setDrawingsTry((n) => n + 1); return r; }) : undefined}
                 onFocusElement={(gid) => { goStep("models"); setSelected({ globalId: gid, info: null }); isolateNow([gid]); }} />
             </section>
           ) : (
             <section className="proj-card" aria-label="Drawings">
               <div className="proj-card-head"><h2>Drawings</h2></div>
-              <p className="proj-text proj-empty-line">{projectHere.files.length
-                ? "Open the project's models first: each PDF drawing is read against the open models."
-                : "Import the models first: each PDF drawing is read against them."}</p>
+              {busy || projectBusy
+                ? <p className="live-line" data-drawings="opening" role="status"><i className="spinner" aria-hidden /> {projectBusy ?? busy}</p>
+                : <p className="proj-text proj-empty-line">{projectHere.files.length
+                  ? "Open the project's models first: each PDF drawing is read against the open models."
+                  : "Import the models first: each PDF drawing is read against them."}</p>}
               {projectHere.files.length > 0 && <div className="proj-card-foot"><button type="button" className="btn small primary"
                 disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>Open the project's models</button></div>}
             </section>))}
@@ -4338,7 +4381,8 @@ export function App() {
         )}
         {!stats && !busy && !blankish && (
           <StartScreen onProjects={goProjects} projectsHref={PROJECTS_PATH}
-            onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy}
+            onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
+            onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
             resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
               agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
               onResume: () => void resumeSession(), onFresh: startFresh } : undefined} />

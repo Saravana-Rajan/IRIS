@@ -3,7 +3,8 @@
 > **Covers:** `server/tests/`, `server/iris/fixtures.py`, `web/tests/`, `evals/`, `spikes/`, `web/spikes/`,
 > `web/scripts/capture-demos.cjs`, `evals/big_models_browser.cjs`, `assets/brand/iris/` checks,
 > `.github/workflows/ci.yml` and `deploy.yml`'s smoke test · **Checked against code:** re-branded 2026-11-11; CI,
-> `test_origins.py` and the voice relay's origin test checked 2026-11-22 ·
+> `test_origins.py`, the voice relay's origin test, the 2D drawing test files and `evals/save_drawing_readings.py`
+> checked 2026-11-22 ·
 > **Deeper detail:** [evals/README.md](../../evals/README.md) (the eval log)
 
 Iris's promise is that no fix reaches a person unverified, so the project checks itself at five levels: fast server
@@ -84,8 +85,8 @@ gives an element a rectangular extrusion and is reused by tests that build their
 
 ### Every test file
 
-Counts are tests collected at `104fda9` (parametrised cases counted separately), except `test_origins.py` and the
-voice relay's origin test, counted on 2026-11-22.
+Counts are tests collected at `104fda9` (parametrised cases counted separately), except `test_origins.py`, the
+voice relay's origin test and the 2D drawing files, counted on 2026-11-22.
 
 **Geometry, the check and detection** ([06](06-geometry-and-detection.md))
 
@@ -178,6 +179,15 @@ voice relay's origin test, counted on 2026-11-22.
 |---|---|---|
 | `test_mcp.py` | 12 | `mcp_server.py` and `agents.py`: the tools and their `readOnlyHint`s, 401 without a live token, an agent finds, checks, proposes, applies and exports, the page answers for pictures and follows `set_view`, `set_filters` and `clear_filters`, a person's filter shared with the link checked by name, link expiry (sliding, 24 h at most) and caps, long proposals become jobs, stdio on its own session, a closed page |
 | `test_voice_live.py` | 14 | `voice_live.py` with transcription scripted: hold to talk transcribes the clip once on release (an empty clip calls nothing), hands-free sends each RMS segment when the speaker pauses and ignores a click, the time limit (flushing a segment in progress), non-microphone audio refused, a failed or missing model said in words, other origins refused, the web app's own origin let in only when it is in `IRIS_ALLOWED_ORIGINS`, the page leaving ends the session, the loudness measure, one voice cap use per session |
+
+**2D drawings** ([docs/drawings.md](../drawings.md), [14](14-files-in-and-out.md))
+
+| File | Tests | What it covers |
+|---|---|---|
+| `test_drawings.py` | 27 | `drawings.py` and its routes: pages rendered and every word placed in pixels, the title block as printed (never guessed), a scan has no text layer, tags on the sample sheets read whole (dense, turned, upside down), the page and size caps, refusals in words that keep nothing, an upload is one model upload; reading streams the reader's events and keeps its items, the comparison gets every read item, the real reader and comparison offline through the routes, drawings go with their scene; the sample drawings: listed with Northbank (`demos.listing`, `drawings_for`, `sample_names`), attached once by `POST .../drawings/samples` and read from their saved reading with no model call, 409 for any other models, an upload of the very same PDF has its saved reading and any other has none; two issues of one sheet (`sheet_key`) each compared whole; a project keeps its drawings and items |
+| `test_drawing_reader.py` | 67 | `drawing_reader.py` with `FakeReader`: a large page sent whole and as four quarters, boxes mapped back, sizes and tags parsed, `reconcile` (confirmed, AI only, text only, one label one item, the radius, no text layer), the event stream, some pages only, a page read once per model and prompt; saved readings (`model_name`; replayed with no call, `cost_usd` 0 and a cap that would refuse a live read, the same items as the read that was saved, `saved_info`; another PDF, a changed `VERSION` or another page size falls through to the model; `write_saved` needs the page read first); the day's budget and a run's cap; the Gemini request, a reply that is not JSON, the strict schema, the prompt |
+| `test_drawing_compare.py` | 47 | `drawing_compare.py`: the model's index (families, identifiers, sizes, storey; a shared tag is no element's own), matching by tag, Name or `Mark`, a split run, sizes within the tolerance either way round, type differences, what is missing in the model or the drawing on its storey and families, AI-only results flagged; the sample sheets give exactly their planted mismatches; Northbank services carry their tags and sections |
+| `test_make_drawings.py` | 11 | `evals/make_drawings.py`: a clean and a mismatch sheet, every truth tag and size in the text layer inside its box, page size, title block, labels apart and off the title strip, the clean sheet is the model, the mismatch sheet differs by exactly `PLANTED`, `drawing_compare` agrees, output is deterministic, and the generator's files in `samples/drawings/` are up to date |
 
 **The docs map**
 
@@ -327,11 +337,14 @@ Where results go:
 | `properties_complete.py` | Whether the Properties panel shows every value the model gives: an independent count from the raw relationships (sets on the object and its type, IFC4 sets of sets, complex parts, predefined sets) against `properties.Reader.read`, per object; and that the hidden note never shows | `$DEMO_MODELS/northbank/IFC` or `samples/` (all six Northbank files), or any IFC paths | no arguments, or paths | console | Oct 31: complete; 5,666 objects, 16,303 values, 2.2 s for all six files |
 | `big_models.py` | How big a model the server takes: `make --mb N --out F` writes a synthetic IFC4 of a realistic mix; `server F` times open, boxes and detection with peak RSS | none (generated) | see the script's docstring | numbers in `evals/README.md` | Oct 29: 150 MB 5/37/5 s, 1.4 GB; 500 MB 17/174/18 s, 2.8 GB |
 | `big_models_browser.cjs` | The browser half: uploads a file through **Use your own models** and times each stage the page shows, then the JS heap | a file from `big_models.py make`; server with the web built | `node ../evals/big_models_browser.cjs http://localhost:8000 /tmp/big-150.ifc` | console | Oct 29: 150 MB 123 s end to end, 500 MB 484 s |
+| `make_drawings.py` | Not a measure: draws the 2D drawing reader's sample sheets from the model (M-201 and its mismatch issue) with their truth files, no AI ([19](19-demo-data.md)) | `samples/` Northbank Structure, MEP and Grids | `--out`, `--samples`, `--scale`, `--preview <png>` | `samples/drawings/*.pdf`, `*.truth.json` | Deterministic: the same models give the same bytes |
+| `save_drawing_readings.py` | Not a measure: the drawing reader's Gemini reading of each sample sheet, saved once so the server replays it at no cost ([19](19-demo-data.md), "Saved readings"). Each PDF is taken in as an upload is (`drawings.ingest`), read by the real reader on the fast model (`read_drawing`, the reader's own prompt, schema and images; the call through `CappedReader` at `--thinking`, held to `--max-output-tokens`, with no retries) and written with `drawing_reader.write_saved`, the call's `settings` in the file; a page already in the reader's cache (`drawing_reader.CACHE`) costs nothing. `--check` calls no model: it replays each saved reading against the Northbank models and prints, per sheet, items by status, the truth file's labels confirmed, and the mismatches found beside the planted ones, then both sheets through `drawings.compare_scene` | `samples/drawings/*.pdf`, `*.truth.json`; `--check` also Northbank's models from `samples/` | `--max-usd` (a hard cap on the run, default 0.30: no sheet starts when what is spent plus the worst a page can cost, five images at the output cap, or the last page's cost when higher, would pass it, and no page when its estimate would), `--thinking` (default `low`; the reader's own is `high`), `--max-output-tokens` (default 18000, thinking included), `--timeout` (default 300 s), `--only <name.pdf>`, `--check`; exits 2 when the cap stops it, 3 when a page's reply failed (that sheet is not saved; the run stops there), and with `--check` 4 when a sheet has no saved reading, 1 when the mismatches found are not exactly the planted ones | `samples/drawings/<stem>.reading.json`; console: items by status, this run's cost, the reading's cost | Not quoted here |
 
 Notes:
 - Paid: `answer_key.py`, `navisworks_triage.py`, `not_a_clash.py`, `penetration_hosts.py`, `step_cell.py` (class
-  names and proposals) and `escalation.py` (the escalation model bills every token). The detection evals and
-  `big_models` call no model.
+  names and proposals), `escalation.py` (the escalation model bills every token) and `save_drawing_readings.py`
+  (the fast model, within its own `--max-usd`). The detection evals, `big_models` and `make_drawings.py` call no
+  model.
 - `detection_navisworks.py` calls `detect.run(scene)` with the default tests. Its recorded run (633 clashes) predates
   Site's tests being off by default; a rerun now checks Structure, MEP and Architecture (464 clashes).
 - `detection_cell.py`'s docstring still says five planted problems and 13 pairs; it reads the answer key from the
@@ -385,6 +398,12 @@ to port 8000), or build the web app and let the server serve `web/dist` on one p
   16:10 and writes `web/public/demos/northbank.webp` and `cell.webp` with Pillow from the server's env. Run against a
   server with the demo models (`--url`, default `http://localhost:8765`). Recapture after the viewer's look or the demo
   models change; the README's "Two demos" table shares these pictures and the landing cards' numbers.
+- **`web/scripts/capture-drawings.cjs`** records the first screen's "2D drawing reader" clip (and with `--clash` the
+  3D clash check) in the app as a visitor tries it, against one origin (the server serving `web/dist`): Try the sample
+  drawings, both sample sheets read from their saved readings (no Gemini call; it needs no credentials), the
+  Mismatches tab, one mismatch shown on the sheet. It writes `web/public/demos/drawings.webp` with its still, and a
+  full-size MP4 to `~/Downloads/Iris-demo/` for the hackathon video, and prints each read's line, chips and
+  mismatches, so a run doubles as a product check of the demo path.
 - **`web/scripts/capture-proposals.cjs`** records the README's proposal clips: for each run (Northbank #1, #2, #3 and
   the cell's #66) it opens the demo, picks the clash, chooses Propose fixes (a live Gemini Pro call), waits for the
   verified options, flips Before / After, and for #1 and #66 opens Activity in its own window and replays the

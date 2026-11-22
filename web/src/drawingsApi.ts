@@ -16,7 +16,14 @@ export interface Page {
 }
 /** Title-block fields when found on the sheet (sheet, scale, title). */
 export type TitleBlock = Partial<Record<"sheet" | "scale" | "title", string>> & Record<string, string | undefined>;
-export interface Drawing { id: string; name: string; sha256: string; pages: Page[]; title: TitleBlock }
+/** A saved AI reading (a sample sheet's, made once with Gemini and shipped with it): a read replays it, at no cost, and
+ *  the page says so; never shown as a live reading. `label`: the model as people read it ("Gemini 3.8 Flash"). */
+export interface SavedReading { model: string; label: string; at: string | null }
+export interface Drawing {
+  id: string; name: string; sha256: string; pages: Page[]; title: TitleBlock;
+  /** Set when every page has a saved reading (the sample sheets): reading it replays that, instantly and free. */
+  saved_reading?: SavedReading | null;
+}
 
 export type ItemKind = "duct" | "pipe" | "tray" | "diffuser" | "unit" | "equipment" | "other";
 export type ItemSource = "ai" | "text";
@@ -49,14 +56,16 @@ export interface Mismatch {
 export interface Match { item: string; element: string; by: string }
 export interface Comparison { matches: Match[]; mismatches: Mismatch[] }
 
-/** The read stream's events, as this module hands them on (see `toReadEvent`). */
+/** The read stream's events, as this module hands them on (see `toReadEvent`). `page.saved`: that page replays its saved
+ *  reading (set only when true); `done.saved`: the saved reading replayed, null when every page was read live. */
 export type ReadEvent =
-  | { type: "page"; page: number; total: number }
+  | { type: "page"; page: number; total: number; saved?: true }
   | { type: "item"; item: Item }
-  | { type: "done"; items: number; cost_usd: number | null }
+  | { type: "done"; items: number; cost_usd: number | null; saved: SavedReading | null }
   | { type: "error"; detail: string; status: number };
-/** What a finished reading returns: every item the stream sent, and what it cost (null when not reported). */
-export interface ReadResult { items: Item[]; count: number; cost_usd: number | null }
+/** What a finished reading returns: every item the stream sent, what it cost (null when not reported), and the saved
+ *  reading it replayed (null when it was read live). */
+export interface ReadResult { items: Item[]; count: number; cost_usd: number | null; saved: SavedReading | null }
 export interface ReadOptions { pages?: number[]; onEvent?(e: ReadEvent): void; signal?: AbortSignal }
 
 /* ---------------------------------------------------------------------------------------------------------------- */
@@ -125,12 +134,31 @@ export function uploadDrawings(sceneId: string, files: readonly File[], onProgre
 }
 
 export const listDrawings = (sceneId: string) => getJson<Drawing[]>(sceneAt(sceneId));
+/** Attach the sample drawings that go with the open sample models (POST .../drawings/samples): the scene's sample
+ *  drawings, held already or added now. 409 when the open models have none. */
+export async function addSampleDrawings(sceneId: string): Promise<Drawing[]> {
+  const r = await apiFetch(`${sceneAt(sceneId)}/samples`, { method: "POST", headers: { Accept: "application/json" } });
+  if (!r.ok) throw await failure(r);
+  return (await r.json()) as Drawing[];
+}
 /** Where page `n` (its Page.index) of a drawing is drawn from. */
 export const pageUrl = (did: string, n: number) => `${drawingAt(did)}/pages/${n}.png`;
 export const drawingItems = (did: string) => getJson<Item[]>(`${drawingAt(did)}/items`);
 export const compareDrawings = (sceneId: string) => getJson<Comparison>(`${sceneAt(sceneId)}/compare`);
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** A saved reading as sent (`Drawing.saved_reading`, `done.saved`, an item's `evidence.saved_reading`), or null for
+ *  anything else: an object whose `model` and `label` are strings (when present), one of them not empty; `at` a
+ *  string, else null. */
+export function savedReadingOf(v: unknown): SavedReading | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  if ((r.model !== undefined && typeof r.model !== "string") || (r.label !== undefined && typeof r.label !== "string")) return null;
+  const model = (r.model as string | undefined) ?? "", label = (r.label as string | undefined) ?? "";
+  if (!model && !label) return null;
+  return { model, label, at: typeof r.at === "string" && r.at ? r.at : null };
+}
 
 /** One stream line as a ReadEvent, or null for one this page does not use (a keep-alive, a future event). Tolerant of
  *  the page event's field names (`page`/`index`, `total`/`pages`/`of`) and of `done.items` as a count or a list. */
@@ -140,12 +168,14 @@ export function toReadEvent(raw: unknown): ReadEvent | null {
   switch (e.type) {
     case "page": {
       const page = num(e.page) ?? num(e.index), total = num(e.total) ?? num(e.pages) ?? num(e.of);
-      return page === null ? null : { type: "page", page, total: total ?? 0 };
+      if (page === null) return null;
+      return e.saved === true ? { type: "page", page, total: total ?? 0, saved: true } : { type: "page", page, total: total ?? 0 };
     }
     case "item":
       return e.item && typeof e.item === "object" ? { type: "item", item: e.item as Item } : null;
     case "done":
-      return { type: "done", items: Array.isArray(e.items) ? e.items.length : num(e.items) ?? 0, cost_usd: num(e.cost_usd) };
+      return { type: "done", items: Array.isArray(e.items) ? e.items.length : num(e.items) ?? 0, cost_usd: num(e.cost_usd),
+        saved: savedReadingOf(e.saved) };
     case "error":
       return { type: "error", detail: (typeof e.detail === "string" && e.detail) || (typeof e.message === "string" && e.message)
         || "The reading failed.", status: num(e.status) ?? 500 };
@@ -166,7 +196,7 @@ export function splitNdjson(buffer: string): { lines: unknown[]; rest: string } 
 }
 
 /** Read a drawing (all pages, or `pages`) as an NDJSON stream: `page` progress, `item` events, then `done` with the
- *  cost. Resolves with the items sent and the cost; an `error` event, a failed request or a stream that ends without
+ *  cost. Resolves with the items sent, the cost and the saved reading replayed (if any); an `error` event, a failed request or a stream that ends without
  *  `done` rejects (ApiError). Every event goes to `onEvent` as it arrives. */
 export async function readDrawing(did: string, { pages, onEvent, signal }: ReadOptions = {}): Promise<ReadResult> {
   const r = await apiFetch(`${drawingAt(did)}/read`, {
@@ -185,7 +215,7 @@ export async function readDrawing(did: string, { pages, onEvent, signal }: ReadO
     if (e.type === "item") items.push(e.item);
     onEvent?.(e);
     if (e.type === "error") throw new ApiError(e.detail, e.status);
-    return e.type === "done" ? { items, count: Math.max(e.items, items.length), cost_usd: e.cost_usd } : null;
+    return e.type === "done" ? { items, count: Math.max(e.items, items.length), cost_usd: e.cost_usd, saved: e.saved } : null;
   };
   try {
     for (;;) {
@@ -204,7 +234,7 @@ export async function readDrawing(did: string, { pages, onEvent, signal }: ReadO
 }
 
 /** The same calls as one object, for a caller that passes them around (tests, the integration in App). */
-export const drawingsApi = { uploadDrawings, listDrawings, pageUrl, readDrawing, drawingItems, compareDrawings };
+export const drawingsApi = { uploadDrawings, addSampleDrawings, listDrawings, pageUrl, readDrawing, drawingItems, compareDrawings };
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 /* Facts the Drawings step shows                                                                                    */
@@ -238,11 +268,26 @@ export const kindLabel = (k: string) => KIND_LABEL[k as ItemKind] ?? k;
 /** A drawing size as printed: "600x300" → "600 × 300", "Ø150" kept. */
 export const sizeText = (s: string | null | undefined) => (s ? s.replace(/(\d)\s*[xX×*]\s*(?=\d)/g, "$1 × ") : "");
 
-/** What a reading cost: "$0.0042", "$1.20", "$0 (cached)", or "cost not reported". */
-export function costText(usd: number | null | undefined): string {
+/** What a reading cost: "$0.0042", "$1.20", "$0 (already read, cached)", or "cost not reported". With `saved` (the
+ *  reading replayed a saved one), nothing spent reads "$0 (saved reading)". */
+export function costText(usd: number | null | undefined, saved?: SavedReading | boolean | null): string {
   if (usd === null || usd === undefined || !Number.isFinite(usd)) return "cost not reported";
-  if (usd === 0) return "$0 (already read, cached)";
+  if (usd === 0) return saved ? "$0 (saved reading)" : "$0 (already read, cached)";
   return `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`;
+}
+
+/** The model of a saved reading as people read it: its label, else its id. */
+export const savedModel = (s: SavedReading) => s.label || s.model;
+/** "Saved AI reading of this sample (Gemini 3.8 Flash)": what a replayed reading is; never called a live one. */
+export const savedText = (s: SavedReading) => `Saved AI reading of this sample (${savedModel(s)})`;
+/** The saved reading the items came from (the first item whose `evidence.saved_reading` is one), else null: a sheet
+ *  read earlier, e.g. after a reload, when only its items are at hand. */
+export function savedOfItems(items: readonly Pick<Item, "evidence">[]): SavedReading | null {
+  for (const it of items) {
+    const s = savedReadingOf(it?.evidence?.saved_reading);
+    if (s) return s;
+  }
+  return null;
 }
 
 /** The sheet's text-layer state: every page has one, some do, or none (scanned: every item is AI-read). */

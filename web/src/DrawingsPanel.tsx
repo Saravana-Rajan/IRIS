@@ -1,10 +1,10 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { Box, ChevronLeft, ChevronRight, FileUp, Maximize2, RotateCcw, TriangleAlert, ZoomIn, ZoomOut } from "lucide-react";
+import { Box, ChevronLeft, ChevronRight, FileUp, History, Maximize2, RotateCcw, TriangleAlert, ZoomIn, ZoomOut } from "lucide-react";
 import {
-  centreOn, costText, findItem, fitWidth, kindLabel, mismatchStyle, pageNumber, pageUrl, plural, sizeText, statusStyle,
-  statusTally, TEXT_LAYER_LABEL, textLayerOf, zoomAt,
+  centreOn, costText, findItem, fitWidth, kindLabel, mismatchStyle, pageNumber, pageUrl, plural, savedModel, savedOfItems,
+  savedReadingOf, savedText, sizeText, statusStyle, statusTally, TEXT_LAYER_LABEL, textLayerOf, zoomAt,
   type Comparison, type Drawing, type Item, type ItemStatus, type Mismatch, type ReadEvent, type ReadResult,
-  type UploadProgress, type View,
+  type SavedReading, type UploadProgress, type View,
 } from "./drawingsApi";
 import "./drawings.css";
 
@@ -32,15 +32,21 @@ export interface DrawingsPanelProps {
   /** Show a model element in 3D (the page's go-to-element / isolate). */
   onFocusElement(gid: string): void;
   onSelectItem?(item: Item, drawing: Drawing): void;
+  /** The open models are the sample building: with no drawings yet, offer its sample drawings (drawingsApi
+   *  .addSampleDrawings). Return the call's promise to have its progress and errors shown here. */
+  onSamples?(): Promise<unknown> | void;
 }
 
+/** A reading's state. `reading.saved`: the page in hand replays its saved reading; `done.saved`: the saved reading the
+ *  read replayed (null when read live). */
 export type ReadState =
-  | { state: "reading"; page: number | null; total: number; items: number }
-  | { state: "done"; count: number; cost_usd: number | null }
+  | { state: "reading"; page: number | null; total: number; items: number; saved?: boolean }
+  | { state: "done"; count: number; cost_usd: number | null; saved?: SavedReading | null }
   | { state: "error"; message: string };
 type UploadState =
   | { state: "sending"; loaded: number; total: number; names: string[] }
   | { state: "error"; message: string; files: File[] };
+type SamplesState = { state: "adding" } | { state: "error"; message: string };
 type Tab = "items" | "mismatches";
 
 const area = (b: readonly number[]) => (b.length < 4 ? 0 : Math.abs((b[2] - b[0]) * (b[3] - b[1])));
@@ -52,7 +58,7 @@ const HOW = "Iris reads each sheet with AI, then checks every tag and size again
   + "them with the 3D model's data. Nothing is changed for you: you decide what to fix.";
 
 export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false, names = {}, error, onRetry, onUpload, onRead,
-  onFocusElement, onSelectItem }: DrawingsPanelProps) {
+  onFocusElement, onSelectItem, onSamples }: DrawingsPanelProps) {
   const [sel, setSel] = useState<string | null>(null);
   const [pageAt, setPageAt] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
@@ -63,6 +69,7 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
   const [upload, setUpload] = useState<UploadState | null>(null);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [samples, setSamples] = useState<SamplesState | null>(null);
 
   const current = drawings.find((d) => d.id === sel) ?? drawings[0] ?? null;
   const itemsOf = (did: string): readonly Item[] => (items[did]?.length ? items[did] : live[did] ?? []);
@@ -104,7 +111,7 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
     setLive((l) => ({ ...l, [did]: [] }));
     const onEvent = (e: ReadEvent) => {
       if (e.type === "page") {
-        setReads((r) => { const s = r[did]; return s?.state === "reading" ? { ...r, [did]: { ...s, page: e.page, total: e.total || s.total } } : r; });
+        setReads((r) => { const s = r[did]; return s?.state === "reading" ? { ...r, [did]: { ...s, page: e.page, total: e.total || s.total, saved: e.saved === true } } : r; });
       } else if (e.type === "item") {
         setLive((l) => ({ ...l, [did]: [...(l[did] ?? []), e.item] }));
         setReads((r) => { const s = r[did]; return s?.state === "reading" ? { ...r, [did]: { ...s, items: s.items + 1 } } : r; });
@@ -114,9 +121,19 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
     try { out = onRead(did, onEvent); } catch (e) { setReads((r) => ({ ...r, [did]: { state: "error", message: messageOf(e) } })); return; }
     if (!isPromise<ReadResult | void>(out)) { setReads((r) => { const { [did]: _gone, ...rest } = r; return rest; }); return; }
     out.then(
-      (res) => setReads((r) => ({ ...r, [did]: { state: "done", count: res ? res.count : 0, cost_usd: res ? res.cost_usd : null } })),
+      (res) => setReads((r) => ({ ...r, [did]: { state: "done", count: res ? res.count : 0, cost_usd: res ? res.cost_usd : null,
+        saved: res ? savedReadingOf(res.saved) : null } })),
       (e) => setReads((r) => ({ ...r, [did]: { state: "error", message: messageOf(e) } })),
     );
+  };
+
+  const addSamples = () => {
+    if (!onSamples || busy || !sceneId || samples?.state === "adding" || upload?.state === "sending") return;
+    setSamples({ state: "adding" });
+    let out: unknown;
+    try { out = onSamples(); } catch (e) { setSamples({ state: "error", message: messageOf(e) }); return; }
+    if (!isPromise(out)) { setSamples(null); return; }
+    out.then(() => setSamples(null), (e) => setSamples({ state: "error", message: messageOf(e) }));
   };
 
   const dropProps = {
@@ -132,11 +149,24 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
   </>;
 
   if (!drawings.length) {
+    const adding = samples?.state === "adding";
     return (
       <section className={`dwg dwg-empty${dragOver ? " drag" : ""}`} aria-label="Drawings" {...dropProps}>
         <RuleStrip />
         {notices}
-        <DropZone big disabled={busy || !sceneId || upload?.state === "sending"} onFiles={send} />
+        <DropZone big disabled={busy || !sceneId || upload?.state === "sending" || adding} onFiles={send} />
+        {onSamples && (
+          <div className="dwg-samples">
+            <p className="dwg-samples-line" aria-live="polite">
+              <span>No drawings to hand?</span>
+              <button type="button" className="btn" data-dwg="samples" aria-busy={adding || undefined}
+                disabled={busy || !sceneId || adding || upload?.state === "sending"} onClick={addSamples}>
+                {adding ? <><i className="spinner" aria-hidden /> Adding the sample drawings…</> : "Add the sample drawings"}</button>
+            </p>
+            {samples?.state === "error" && <Alert message={`Adding the sample drawings failed: ${samples.message}`} onRetry={addSamples}
+              onDismiss={() => setSamples(null)} />}
+          </div>
+        )}
         {!sceneId && <p className="dwg-hint">Open the project's models first: drawings are compared with them.</p>}
       </section>
     );
@@ -144,6 +174,9 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
 
   const readState = current ? reads[current.id] : undefined;
   const wasRead = !!(current && (items[current.id]?.length || readState?.state === "done"));
+  // The sheet's saved reading (the sample sheets): its own, the one a read just replayed, or its items' (read earlier).
+  const savedSheet = current ? savedReadingOf(current.saved_reading) : null;
+  const saved = savedSheet ?? (readState?.state === "done" ? readState.saved ?? null : null) ?? savedOfItems(shown);
   const tally = statusTally(shown);
   const filtered = filter === "all" ? shown : shown.filter((it) => it.status === filter);
   // Largest first, so a small box drawn over a large one stays on top and can be clicked.
@@ -164,7 +197,7 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
           </header>
           <ul>
             {drawings.map((d) => {
-              const its = itemsOf(d.id), t = statusTally(its), layer = textLayerOf(d), rs = reads[d.id];
+              const its = itemsOf(d.id), t = statusTally(its), layer = textLayerOf(d), rs = reads[d.id], sv = savedReadingOf(d.saved_reading);
               return (
                 <li key={d.id}>
                   <button type="button" className="dwg-sheet" aria-current={d.id === current?.id ? "true" : undefined} onClick={() => choose(d.id)}>
@@ -175,6 +208,9 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
                       <span className={`dwg-badge ${layer === "none" ? "st-ai" : "st-confirmed"}`}
                         title={layer === "none" ? "No text layer: every item is AI-read and needs checking" : "Readings are checked against the PDF's own text"}>
                         {TEXT_LAYER_LABEL[layer]}</span>
+                      {sv && <span className="dwg-badge dwg-saved-badge" data-dwg="saved-badge"
+                        title={`A saved ${savedModel(sv)} reading of this sample: reading the sheet replays it at no cost; it is not read live.`}>
+                        Saved reading</span>}
                     </span>
                     <span className="dwg-sheet-meta">
                       {rs?.state === "reading" ? <span>Reading…</span>
@@ -204,9 +240,11 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
               )}
               <span className="dwg-spacer" />
               <button type="button" className={`btn small${wasRead ? "" : " primary"}`} disabled={busy || readState?.state === "reading"} onClick={() => read(current)}
-                title={wasRead ? "Read the sheet again (a page already read is cached and costs nothing)" : "Gemini reads tags, types and sizes; the text layer checks them"}>
+                title={savedSheet ? `Replays the saved ${savedModel(savedSheet)} reading of this sample: instant, no cost.`
+                  : wasRead ? "Read the sheet again (a page already read is cached and costs nothing)" : "Gemini reads tags, types and sizes; the text layer checks them"}>
                 {readState?.state === "reading" ? "Reading…" : wasRead ? "Read again" : "Read with AI"}</button>
             </header>
+            {saved && <SavedNote saved={saved} />}
             <ReadLine read={readState} drawing={current} onRetry={() => read(current)} />
             {page && !page.has_text_layer && (
               <p className="dwg-notice st-ai" role="note"><b>No text layer on this page (scanned).</b> Every item on it is AI-read: check each one on the sheet.</p>
@@ -294,7 +332,20 @@ function UploadLine({ upload, onRetry, onDismiss }: { upload: UploadState; onRet
   );
 }
 
-/** The reading's honest state: page n of N while it runs, items and cost when done, the error with Retry. */
+/** A saved reading said once, calmly: what it is, that it was replayed at no cost, and that it was not read live. */
+export function SavedNote({ saved }: { saved: SavedReading }) {
+  const when = saved.at ? saved.at.slice(0, 10) : null;
+  return (
+    <p className="dwg-saved" role="note" data-dwg="saved"
+      title={`Read once with ${savedModel(saved)}${when ? ` on ${when}` : ""} and saved with this sample. Upload your own PDFs to read them live.`}>
+      <History size={14} aria-hidden />
+      <span>{`${savedText(saved)}: replayed at no cost, not read live.`}</span>
+    </p>
+  );
+}
+
+/** The reading's honest state: page n of N while it runs, items and cost when done (and the saved reading it replayed,
+ * never called a live one), the error with Retry. */
 export function ReadLine({ read, drawing, onRetry }: { read: ReadState | undefined; drawing: Drawing; onRetry(): void }) {
   if (!read) return null;
   if (read.state === "error") return <Alert message={`Reading failed: ${read.message}`} onRetry={onRetry} />;
@@ -302,8 +353,9 @@ export function ReadLine({ read, drawing, onRetry }: { read: ReadState | undefin
     return (
       <p className="dwg-run done" role="status" aria-live="polite">
         <span>{`Read ${plural(drawing.pages.length, "page")}: `}<span className="mono">{read.count}</span>{` item${read.count === 1 ? "" : "s"}`}</span>
+        {read.saved && <><span className="dwg-faint">·</span><span className="dwg-run-saved">{`Saved AI reading (${savedModel(read.saved)})`}</span></>}
         <span className="dwg-faint">·</span>
-        <span>Cost <span className="mono">{costText(read.cost_usd)}</span></span>
+        <span>Cost <span className="mono">{costText(read.cost_usd, read.saved)}</span></span>
       </p>
     );
   }
@@ -312,7 +364,7 @@ export function ReadLine({ read, drawing, onRetry }: { read: ReadState | undefin
   return (
     <div className="dwg-run reading" role="status" aria-live="polite">
       <span className="dwg-pulse" aria-hidden />
-      <span>{n === null ? "Starting the reading…" : <>Reading page <span className="mono">{n}</span> of <span className="mono">{total}</span></>}</span>
+      <span>{n === null ? "Starting the reading…" : <>{read.saved ? "Replaying the saved reading of page " : "Reading page "}<span className="mono">{n}</span> of <span className="mono">{total}</span></>}</span>
       <span className="dwg-bar" aria-hidden><i style={{ width: `${n === null || !total ? 0 : Math.round((n / total) * 100)}%` }} /></span>
       <span className="dwg-faint"><span className="mono">{read.items}</span>{` item${read.items === 1 ? "" : "s"} so far`}</span>
     </div>
@@ -419,7 +471,23 @@ export function evidenceLines(ev: Readonly<Record<string, unknown>> | null | und
   if (words.length) out.push(`Text layer: ${words.map((w) => `“${w}”`).join(", ")}`);
   const dist = typeof ev.distance_px === "number" ? ev.distance_px : typeof ev.distance === "number" ? ev.distance : null;
   if (dist !== null && Number.isFinite(dist)) out.push(`${Math.round(dist)} px from the box`);
-  if (typeof ev.model === "string" && ev.model) out.push(`Read by ${ev.model}`);
+  // The reader's own evidence: what the PDF's text confirmed (tag, size), what it prints there instead, a moved box.
+  const textOf = (v: unknown) => (v && typeof v === "object" && typeof (v as { text?: unknown }).text === "string" ? (v as { text: string }).text : null);
+  const fields = (o: unknown) => (["tag", "size"] as const).map((f) => [f, textOf((o as Record<string, unknown> | null)?.[f])] as const)
+    .filter(([, t]) => t).map(([f, t]) => `“${t}” (${f})`);
+  const confirmed = fields(ev);
+  if (confirmed.length) out.push(`Text layer confirms ${confirmed.join(", ")}`);
+  const says = fields(ev.text_says);
+  if (says.length) out.push(`The PDF prints ${says.join(", ")} there`);
+  const shift = ev.box_shift as { dx?: unknown; dy?: unknown; anchors?: unknown } | undefined;
+  if (shift && typeof shift.dx === "number" && typeof shift.dy === "number") {
+    out.push(`Box moved ${Math.round(shift.dx)}, ${Math.round(shift.dy)} px: the AI placed this part of the sheet off, measured from ${
+      typeof shift.anchors === "number" ? shift.anchors : "its"} tags printed once`);
+  }
+  if (typeof ev.label_tags === "number" && ev.label_tags > 1) out.push(`One of ${ev.label_tags} tags on one label, sharing its size`);
+  const saved = savedReadingOf(ev.saved_reading);
+  if (typeof ev.model === "string" && ev.model) out.push(`Read by ${ev.model}${saved ? " (saved reading, replayed)" : ""}`);
+  else if (saved) out.push(`Read by ${savedModel(saved)} (saved reading, replayed)`);
   return out;
 }
 
@@ -515,6 +583,9 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
   const [attempt, setAttempt] = useState(0);
   const drag = useRef<{ id: number; x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
   const dims = { w: page.width_px, h: page.height_px };
+  // The view is the automatic fit until the reader zooms, pans or picks: until then it follows the stage's size.
+  const fitted = useRef(true);
+  const moveView = (f: (v: View | null) => View | null) => { fitted.current = false; setView(f); };
 
   useLayoutEffect(() => {
     const el = stage.current;
@@ -526,8 +597,9 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // Fit the width once the stage has a size (the viewer is keyed by page, so each page starts fitted).
-  useLayoutEffect(() => { if (size && size.w > 0) setView((v) => v ?? fitWidth(size, dims)); }, [size]);
+  // Fit the width once the stage has a size (the viewer is keyed by page, so each page starts fitted), and again when
+  // the stage settles at another size before the reader has moved the view (a note or the items arriving above it).
+  useLayoutEffect(() => { if (size && size.w > 0) setView((v) => (v && !fitted.current ? v : fitWidth(size, dims))); }, [size]);
 
   useEffect(() => {
     const el = stage.current;
@@ -537,7 +609,7 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       const r = el.getBoundingClientRect();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * r.height : e.deltaY;
       const f = Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015));
-      setView((v) => v && zoomAt(v, f, e.clientX - r.left, e.clientY - r.top));
+      moveView((v) => v && zoomAt(v, f, e.clientX - r.left, e.clientY - r.top));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -551,14 +623,16 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       if (!v) return v;
       const [x0, y0, x1, y1] = pickedItem.box;
       const inside = v.x + x0 * v.s >= 0 && v.y + y0 * v.s >= 0 && v.x + x1 * v.s <= size.w && v.y + y1 * v.s <= size.h;
-      return inside ? v : centreOn(v, pickedItem.box, size);
+      if (inside) return v;
+      fitted.current = false;
+      return centreOn(v, pickedItem.box, size);
     });
   }, [pickedItem, size]);
 
-  const fit = () => { if (size) setView(fitWidth(size, dims)); };
-  const zoom = (f: number) => { if (size) setView((v) => v && zoomAt(v, f, size.w / 2, size.h / 2)); };
+  const fit = () => { if (size) { fitted.current = true; setView(fitWidth(size, dims)); } };
+  const zoom = (f: number) => { if (size) moveView((v) => v && zoomAt(v, f, size.w / 2, size.h / 2)); };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const pan = (dx: number, dy: number) => setView((v) => v && { ...v, x: v.x + dx, y: v.y + dy });
+    const pan = (dx: number, dy: number) => moveView((v) => v && { ...v, x: v.x + dx, y: v.y + dy });
     const step = e.shiftKey ? 200 : 60;
     switch (e.key) {
       case "+": case "=": zoom(1.25); break;
@@ -585,7 +659,7 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       d.moved = true;
       e.currentTarget.setPointerCapture?.(e.pointerId);   // only once it is a drag, so a click still reaches a box
     }
-    setView((v) => v && { ...v, x: d.vx + dx, y: d.vy + dy });
+    moveView((v) => v && { ...v, x: d.vx + dx, y: d.vy + dy });
   };
   const up = (e: PointerEvent<HTMLDivElement>) => { if (drag.current?.id === e.pointerId) drag.current = null; };
 

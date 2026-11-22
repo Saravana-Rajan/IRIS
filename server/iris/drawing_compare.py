@@ -2,9 +2,14 @@
 
 Model data only, never AI. The reader (drawing_reader.py) may have used Gemini to find an item; this module only
 compares what it found with the model's own data: an element's Tag, its Name, the identifier keys in its property
-sets (Mark, Reference, ElementName…) and the section of its body profile. An item the AI read but the PDF's text layer
-did not confirm (status "ai_only") is compared like any other, and every result about it carries
-`evidence.unconfirmed = True`, so the page can say "check the reading first".
+sets (Mark, Reference, ElementName…) and the section of its body profile. On a page with a text layer, only what the
+PDF's own text confirms is compared: an AI-read tag it does not print near the item is not looked up (the item is
+`unmatched`: a misread or invented tag must not hide a missing element or invent a missing one), and an AI-read size
+it does not print there is not compared (`evidence.size_unchecked`). On a scan (no text layer) the AI's reading is all
+there is: an item the text did not confirm (status "ai_only") is compared, and every result about it carries
+`evidence.unconfirmed = True`, so the page can say "check the reading first". A tag the text confirms settles the
+family when its letters name one (`drawing_reader.kind_of_tag`: "SA-…" a duct): the AI's own word for the symbol
+("diffuser") then raises no type difference; the drawn size's shape still does.
 
 `model_index` lists the MEP elements a drawing can show (segments, fittings, accessories, terminals, equipment) with
 their family (`kind`, the reader's words: duct, pipe, tray, diffuser, unit, equipment, other), identifiers, section
@@ -37,6 +42,7 @@ from typing import TYPE_CHECKING, Any, Iterable
 import ifcopenshell.util.element
 
 from . import datums, demos
+from .drawing_reader import kind_of_tag
 from .scene import IfcScene
 
 if TYPE_CHECKING:   # never imported at run time: an item may be the reader's dataclass or a plain dict
@@ -319,6 +325,22 @@ def _item_size(item) -> list[float] | None:
     return parse_size(_get(item, "size"))
 
 
+def _checked(item, field_name: str) -> bool:
+    """Whether an item's tag or size may be compared: printed in the PDF's text layer (a text-only item; or the reader
+    found it near the item), or there is no text layer to check it against (a scan, or an item from elsewhere)."""
+    if _get(item, "source") == "text":
+        return True
+    ev = _get(item, "evidence") or {}
+    if not isinstance(ev, dict) or ev.get("text_layer") is not True:
+        return True
+    return field_name in ev
+
+
+def _tag_confirmed(item) -> bool:
+    ev = _get(item, "evidence") or {}
+    return _get(item, "source") == "text" or (isinstance(ev, dict) and "tag" in ev)
+
+
 def _kinds_agree(item_kind, m: ModelItem) -> bool:
     if not item_kind or item_kind == "other" or item_kind == m.kind:
         return True
@@ -399,14 +421,22 @@ def compare(scene: IfcScene, items: Iterable[Any], *, storey: str | None = None,
     for it in items:
         iid = str(_get(it, "id"))
         tag, kind, status = _get(it, "tag"), _get(it, "kind"), _get(it, "status")
-        size_mm = _item_size(it)
+        size_checked = _checked(it, "size")
+        size_mm = _item_size(it) if size_checked else None
         if kind and kind != "other":
             shown.add(kind)
         base = {"drawing_tag": tag, "status": status, "unconfirmed": status == "ai_only"}
+        if not size_checked and _get(it, "size"):
+            base["size_unchecked"] = "the AI's size is not printed near the item in the PDF's text: not compared"
         key = norm(tag)
         if not key:
             unmatched.append({"item": iid, "why": "no tag"})
             continue
+        if not _checked(it, "tag"):
+            unmatched.append({"item": iid, "why": "the AI's tag is not printed near the item in the PDF's text: "
+                                                  "not compared"})
+            continue
+        tag_kind = kind_of_tag(tag) if _tag_confirmed(it) else "other"
 
         cands: list[tuple[ModelItem, dict]] = []
         seen = set()
@@ -453,7 +483,7 @@ def compare(scene: IfcScene, items: Iterable[Any], *, storey: str | None = None,
         # are not compared across types; the numbers stay in the evidence.
         drawn_size = _get(it, "size") or format_size(size_mm)
         check = _size_check(size_mm, m)
-        reasons = [r for r, differs in (("kind", not _kinds_agree(kind, m)),
+        reasons = [r for r, differs in (("kind", not _kinds_agree(kind, m) and tag_kind != m.kind),
                                         ("shape", check is not None and not check["shape_agrees"])) if differs]
         if reasons:
             values = (kind, m.kind) if "kind" in reasons else (drawn_size, m.size)
