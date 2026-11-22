@@ -1,0 +1,280 @@
+{
+ "calls": {
+  "03fea89ae8823f3bd17f37761e98755c1e0f16fc3a9cc43473b90158c2440c30": {
+   "advice": "Using the pre-formed web opening via a local vertical offset avoids lowering the ceiling line or disrupting ceiling void levels below the girder. Confirm with the structural team that the opening is reserved for this service run.",
+   "candidates": [
+    {
+     "also_needs": "4 x 90\u00b0 bends and pipe sleeves/supports within the web opening",
+     "dz_m": 0.28,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Lifts the pipe segment locally by 280 mm into the existing web opening with 25 mm clearance all round.",
+     "split_m": [
+      9.35,
+      9.95
+     ],
+     "title": "Offset pipe up 280 mm through girder web opening"
+    },
+    {
+     "also_needs": "Adjustment of pipe hanger lengths and vertical riser drop at the tea point connection",
+     "delta_m": [
+      0.0,
+      0.0,
+      -0.12
+     ],
+     "kind": "move",
+     "move": "A",
+     "rationale": "Lowers the straight run clear of the girder bottom flange (z 6.850 m) while maintaining joined fittings and downstream fall/clearances.",
+     "title": "Drop pipe run 120 mm below transfer girder"
+    },
+    {
+     "also_needs": "4 x 90\u00b0 elbows and air vent / drain points if required by service design",
+     "dz_m": -0.12,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Locally dips the cold water main beneath the girder flange to preserve ceiling void height elsewhere along the run.",
+     "split_m": [
+      9.35,
+      9.95
+     ],
+     "title": "Offset pipe down 120 mm beneath beam soffit"
+    }
+   ],
+   "understanding": "Cold water main DN54 clashes with the bottom flange of a 1000 mm deep transfer plate girder. A designated opening exists through the girder web directly above the pipe's current alignment. The pipe cannot shift horizontally due to a kitchen sink connection downstream, but vertical offsets or adjustments are permitted."
+  },
+  "16b7333ebd46d49b7d6f54e8943fa970c4f0ce8b503eb3dbee57d7ad7f7fe9d9": {
+   "advice": "This overlap represents an intentional cast-in holding-down bolt embedded into the pad footing. The structural engineer or BIM lead should confirm if cast-in fasteners should be excluded from clash detection or left as designed.",
+   "candidates": [
+    {
+     "also_needs": "none",
+     "kind": "trim",
+     "move": "A",
+     "rationale": "Trims the embedded end of the bolt to the top surface of the footing to resolve the geometric clash.",
+     "title": "Trim holding-down bolt to pad footing top face"
+    }
+   ],
+   "understanding": "Holding-down bolt M24 embeds 350 mm into the concrete pad footing as part of the column base anchorage assembly. This physical overlap is standard cast-in construction detailing rather than an unintended clash. Any model edit would simply be to clean up IFC geometry if required by modeling protocols."
+  },
+  "22caf70011ec419143f15075ad9a6e975d7fd291404574075f4fb165cea22440": {
+   "advice": "Confirm whether the lift pit wall is intended to be cast monolithically with an integrated footing upstand or seated directly on top of the pad footing with dowels. The structural engineer should confirm the joint detailing.",
+   "candidates": [
+    {
+     "also_needs": "Structural engineer review of bearing capacity and starter bar / dowel detailing between footing and wall",
+     "kind": "seat",
+     "move": "B",
+     "rationale": "Cuts the portion of the lift pit wall that extends into the pad footing below its top surface (z -0.600 m), seating the wall directly on top of the footing without altering member positions.",
+     "title": "Seat the lift pit wall on the pad footing"
+    }
+   ],
+   "understanding": "The concrete lift pit wall (element B) clashes with the pad footing (element A) by embedding directly into its body down to z -1.250 m. The wall extends 350 mm above the top surface of the footing at z -0.600 m. Because this is a structural interface where the wall bears into the foundation, it should be resolved at the connection rather than shifting structural elements."
+  },
+  "3a315a8c1e5996640372ac0cc3fa3e098b0357e16d02b864a9f8c4c170613409": {
+   "advice": "Verify that the structural opening in the transfer girder web is approved for containment routing and that cable bend radii requirements for the installed circuits are satisfied by the offset fittings.",
+   "candidates": [
+    {
+     "also_needs": "4 x 90\u00b0 bends and riser fittings",
+     "dz_m": 0.25,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Raises the cable tray through the existing girder web opening with 25 mm clearance all around while maintaining the overall run alignment.",
+     "split_m": [
+      10.85,
+      11.75
+     ],
+     "title": "Offset cable tray up 250 mm through girder opening"
+    },
+    {
+     "also_needs": "4 x 45\u00b0 bends",
+     "bend_deg": 45,
+     "dz_m": 0.25,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Passes through the girder opening using 45-degree bends to ease pulling cables through the offset.",
+     "split_m": [
+      10.6,
+      12.0
+     ],
+     "title": "Offset cable tray up 250 mm at 45 degrees through opening"
+    }
+   ],
+   "understanding": "Cable tray L02 (Element A) clashes with the bottom flange of a 1000 mm deep transfer plate girder (Element B). The girder has an existing web opening aligned with the tray's path between z 7.050 m and 7.250 m. A local offset allows the tray to rise directly through this opening without disturbing adjoining vertical conduit and ladder risers."
+  },
+  "7a99a50aee1310578adcd0765302e1b3ca789b2ac9f7aab5e53d7fe047605c57": {
+   "advice": "This clash should be approved or whitelisted as an intentional embedment, because holding-down bolts are cast directly into the concrete footing. Trimming or moving the bolt alters the real-world anchorage design; the structural engineer should verify and mark this as an accepted design condition.",
+   "candidates": [
+    {
+     "also_needs": "structural engineer confirmation that embedment detailing does not need to be physically cut in the IFC representation",
+     "kind": "trim",
+     "move": "A",
+     "rationale": "Trims the 350 mm embedded length of the holding-down bolt flush to the top face of the pad footing to satisfy geometric clash rules if required by the model author.",
+     "title": "Trim bolt end to footing top face"
+    }
+   ],
+   "understanding": "The M24 holding-down bolt is cast 350 mm into the concrete pad footing as intended for anchor bolts. This overlap is physically standard construction practice rather than an error in execution, though it registers as a clash in geometric coordination. Modifying the bolt geometry or trimming it would compromise the structural anchor detailing."
+  },
+  "86e98ef02475f3f88b21537d1c1d0cf9db5932d193353f23f95d825509453177": {
+   "advice": "Verify that the existing web opening in the transfer plate girder is reserved for this supply run and that the offset fittings fit between the two adjacent branch tees.",
+   "candidates": [
+    {
+     "also_needs": "4 x 90\u00b0 duct elbows and two vertical risers",
+     "dz_m": 0.4,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Raises the duct segment by 400 mm to pass neatly through the girder's built-in web opening with 25 mm clearance all round while keeping connected fittings in place.",
+     "split_m": [
+      1.05,
+      2.35
+     ],
+     "title": "Offset duct up 400 mm through girder opening"
+    },
+    {
+     "also_needs": "4 x 45\u00b0 duct bends",
+     "bend_deg": 45,
+     "dz_m": 0.4,
+     "kind": "offset",
+     "move": "A",
+     "rationale": "Offsets the duct through the girder opening using 45-degree bends for improved airflow characteristics.",
+     "split_m": [
+      0.85,
+      2.55
+     ],
+     "title": "Offset duct up 400 mm through opening with 45\u00b0 bends"
+    }
+   ],
+   "understanding": "The 600x300 supply air main clashes directly through the lower half of a 1000 mm deep transfer plate girder. Element A cannot be moved globally because its joined branches and terminals restrict movement in all directions. Fortunately, the girder features an existing opening directly above the clash zone through which the duct can be routed via an offset."
+  },
+  "d225ca1afff0439034f7bbb063180cd8a70dfef82bbad81ba6350675c87797bf": {
+   "advice": "In in-situ reinforced concrete substructures, overlaps between lift pit walls and adjacent pad footings are frequently modeled without boolean cutouts and resolved on site via monolithic casting or dowelled joints. The structural engineer and foundation modeller should confirm whether the wall steps onto the footing (seat) or if the overlap should be retained as-designed.",
+   "candidates": [
+    {
+     "also_needs": "structural engineer confirmation of the bearing detail and starter bars",
+     "kind": "seat",
+     "move": "A",
+     "rationale": "Cuts the portion of the wall embedded within the footing footprint below z -0.600 m so the wall bears properly on the footing top.",
+     "title": "Seat the lift pit wall on top of the pad footing"
+    },
+    {
+     "also_needs": "verification of foundation waterproofing and reinforcement continuity",
+     "kind": "trim",
+     "move": "A",
+     "rationale": "Cuts the wall's end back to butt against the side face of the pad footing, removing the horizontal overlap.",
+     "title": "Trim lift pit wall to the pad footing face"
+    }
+   ],
+   "understanding": "The lift pit wall (Element A) penetrates 500 mm horizontally and vertically into a pad footing (Element B) at the foundation level. Both elements belong to the structural model, where overlapping geometry at cast-in-place junctions is common unless explicitly stepped or notched. Because the wall projects above the footing top, it can be seated directly on top of the footing or trimmed to the footing face."
+  },
+  "d8025f77a4eb63801091a31983769f556e2445114c17165c67cf49b85f5369c5": {
+   "advice": "Cast-in fasteners normally embed directly into concrete footings by design. The structural designer should review whether this clash needs to be formally resolved in the model or simply filtered out as an intentional embedment.",
+   "candidates": [
+    {
+     "also_needs": "none",
+     "kind": "trim",
+     "move": "A",
+     "rationale": "Trims the embedded portion of the anchor bolt at the top surface of the footing to resolve the geometric volume overlap without altering element positions.",
+     "title": "Trim holding-down bolt to pad footing top face"
+    }
+   ],
+   "understanding": "Holding-down bolt M24 embeds 350 mm into the top of the concrete pad footing. This embedment is the intended physical design of a cast-in anchor bolt rather than a physical error. If clash-free geometry is required for model cleanliness, the bolt shank can be trimmed to the top face of the footing."
+  }
+ },
+ "format": 1,
+ "items": {
+  "004v8MJf9JzBSaFH3srHEE|1ItwH9mpbUSAqQzt1IxZ7U": {
+   "clash_ids": [
+    "s96311af05"
+   ],
+   "clash_key": "hard|Structure (within)|004v8MJf9JzBSaFH3srHEE|1ItwH9mpbUSAqQzt1IxZ7U",
+   "label": "IfcMechanicalFastener 'Holding-down bolt M24' x IfcFooting 'Pad footing 1800x1800x600 - A2'",
+   "options": 1
+  },
+  "04QFAghPvUKBliE7rMSysX|3QQGVjHV5KxAOI0jGYlYUM": {
+   "clash_ids": [
+    "s1838e75f3"
+   ],
+   "clash_key": "hard|Structure (within)|04QFAghPvUKBliE7rMSysX|3QQGVjHV5KxAOI0jGYlYUM",
+   "label": "IfcMechanicalFastener 'Holding-down bolt M24' x IfcFooting 'Pad footing 1800x1800x600 - C2'",
+   "options": 1
+  },
+  "04wvKAWCrLJBlfyUhh498S|23J5ZOKJ5VUOAHYGijbWdq": {
+   "clash_ids": [
+    "se66de0dae"
+   ],
+   "clash_key": "hard|Structure (within)|04wvKAWCrLJBlfyUhh498S|23J5ZOKJ5VUOAHYGijbWdq",
+   "label": "IfcMechanicalFastener 'Holding-down bolt M24' x IfcFooting 'Pad footing 1800x1800x600 - C1'",
+   "options": 1
+  },
+  "0PyZFVuybVJ96KwhoYQLKr|19OJpW66zUKRUGqW4Z_o71": {
+   "clash_ids": [
+    "sf51911ae1"
+   ],
+   "clash_key": "hard|Structure (within)|0PyZFVuybVJ96KwhoYQLKr|19OJpW66zUKRUGqW4Z_o71",
+   "label": "IfcWall 'Lift pit wall 200' x IfcFooting 'Pad footing 1800x1800x600 - B1'",
+   "options": 2
+  },
+  "19OJpW66zUKRUGqW4Z_o71|32bO7sQTPLg8u2FN9x1vP6": {
+   "clash_ids": [
+    "sdec67f08b"
+   ],
+   "clash_key": "hard|Structure (within)|19OJpW66zUKRUGqW4Z_o71|32bO7sQTPLg8u2FN9x1vP6",
+   "label": "IfcFooting 'Pad footing 1800x1800x600 - B1' x IfcWall 'Lift pit wall 200'",
+   "options": 1
+  },
+  "1RHD_I4ibLDuUhW1LBAckc|1eVHoPtl1IhAbbhivqVqb0": {
+   "clash_ids": [
+    "sf413959a9"
+   ],
+   "clash_key": "hard|MEP vs Structure|1RHD_I4ibLDuUhW1LBAckc|1eVHoPtl1IhAbbhivqVqb0",
+   "label": "IfcPipeSegment 'Cold water main L02 DN54' x IfcBeam 'Transfer plate girder 1000 deep - grid 3'",
+   "options": 1
+  },
+  "1eVHoPtl1IhAbbhivqVqb0|2AbvqKF25LGeR0M34N_jld": {
+   "clash_ids": [
+    "s40afb0996"
+   ],
+   "clash_key": "hard|MEP vs Structure|1eVHoPtl1IhAbbhivqVqb0|2AbvqKF25LGeR0M34N_jld",
+   "label": "IfcDuctSegment 'Supply air main L02 600x300' x IfcBeam 'Transfer plate girder 1000 deep - grid 3'",
+   "options": 1
+  },
+  "1eVHoPtl1IhAbbhivqVqb0|3tQ7zxxRDMefPXL6hbHmO2": {
+   "clash_ids": [
+    "s67ca00aa0"
+   ],
+   "clash_key": "hard|MEP vs Structure|1eVHoPtl1IhAbbhivqVqb0|3tQ7zxxRDMefPXL6hbHmO2",
+   "label": "IfcCableCarrierSegment 'Cable tray L02 300x100' x IfcBeam 'Transfer plate girder 1000 deep - grid 3'",
+   "options": 1
+  }
+ },
+ "key": {
+  "clearance_m": 0.025,
+  "files": [
+   [
+    "Northbank-Architecture.ifc",
+    "bacfad5a602d0ba55bbf8c6faebd634e31fdd7147a91706e1718afea0113a2fc"
+   ],
+   [
+    "Northbank-MEP.ifc",
+    "2942d4eea7c1c2b5b86a23435a73948ec473211774e2ec6916c2f6c271fa9439"
+   ],
+   [
+    "Northbank-Site.ifc",
+    "6a21daed36ef6f006197d0f8d0d1c9f2a7a38b271d967275b38188672b1734ab"
+   ],
+   [
+    "Northbank-Structure.ifc",
+    "a349cea6089463198e7fd5f9ebb9bd370e5b9dd6a926a30c82039d3e1749e0fb"
+   ]
+  ],
+  "hosts": null,
+  "model": "gemini-3.8-flash",
+  "prompt": "635de102388cfbb8d0547bdbf9f8bdb000cbe4dc3366bb2822f8d3544068d431",
+  "requirements": null,
+  "rounds": 2,
+  "thinking": "low",
+  "version": 1,
+  "want": 3
+ },
+ "label": "Saved AI proposals for this sample",
+ "made": "2026-11-22",
+ "model": "gemini-3.8-flash",
+ "model_label": "Gemini Flash"
+}
