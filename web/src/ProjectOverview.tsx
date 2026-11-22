@@ -4,7 +4,7 @@ import { CountUp, EmptyState } from "./Holo";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { ownClick, stepLabel, type Step } from "./projectRoute";
 import {
-  REVIEW_LABEL, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
+  REVIEW_LABEL, closedText, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
   type ActivityItem, type CoordCounts, type Project, type ReviewStatus,
 } from "./projectsApi";
 import "./projects.css";
@@ -49,13 +49,6 @@ export function SaveButton({ onSave, saving = false, disabled = false, tip }: {
         : <><Save size={14} aria-hidden /> Save</>}
     </button>
   );
-}
-
-/** The share closed, never rounded to a claim that isn't true: "<1% closed" for 1 of 464, ">99% closed" short of all.
- *  (Local until projectsApi's own `closedText` arrives with the release merge.) */
-function closedText(closed: number, total: number): string {
-  const pct = total > 0 ? Math.round((100 * closed) / total) : 0;
-  return `${closed > 0 && pct === 0 ? "<1" : closed < total && pct === 100 ? ">99" : pct}% closed`;
 }
 
 /**

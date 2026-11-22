@@ -403,13 +403,17 @@ export function NewProjectDialog({ onCreate, onClose, busy = false, error }: {
   const input = useRef<HTMLInputElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const id = useId();
-  const close = useRef(onClose);
-  close.current = onClose;
+  const live = useRef({ onClose, busy });
+  live.current = { onClose, busy };
 
   useEffect(() => {
     const before = typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null;
     input.current?.focus();
-    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); close.current(); } };
+    const esc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (!live.current.busy) live.current.onClose();   // not while it is being created
+    };
     document.addEventListener("keydown", esc);
     return () => { document.removeEventListener("keydown", esc); before?.focus?.(); };
   }, []);

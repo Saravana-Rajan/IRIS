@@ -385,6 +385,11 @@ test("empty states: no models, no reports, no activity", () => {
 });
 
 test("the share closed is never rounded to a claim that isn't true", () => {
+  assert.equal(p.closedText(1, 464), "<1% closed", "1 of 464 is not 0% closed");
+  assert.equal(p.closedText(0, 464), "0% closed");
+  assert.equal(p.closedText(464, 464), "100% closed");
+  assert.equal(p.closedText(463, 464), ">99% closed", "463 of 464 is not 100% closed");
+  assert.equal(p.closedText(7, 12), "58% closed");
   const closed = (c) => text(renderToStaticMarkup(h(ProjectOverview, overview({ counts: c })))).replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .match(/\S+% closed/)?.[0];
   assert.equal(closed({ clashes: 464, open: 463, resolved: 1, reviewed: 0 }), "<1% closed", "1 of 464 is not 0% closed");
