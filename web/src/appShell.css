@@ -1,0 +1,208 @@
+/* The app shell (AppShell.tsx; style brief §3): the left sidebar, the top bar and its search. Light only, on
+   index.css's tokens; each var() carries the brief's value as a fallback.
+
+   The container App renders:
+     <div class="shell">
+       <Sidebar … />                      nav.side (.rail collapsed; .side-drawer.open/.closed on phones and tablets)
+       <div class="shell-main">
+         <TopBar … />                     header.topbar
+         <div class="shell-body">…</div>  the page (it scrolls here); add .fill on the 3D workspace (no scroll)
+       </div>
+     </div>
+   With `drawer` set the sidebar leaves the flow (fixed, over a light scrim), so .shell-main takes the whole width. */
+
+.shell { display: flex; height: 100%; min-height: 0; background: var(--bg, #fff); }
+.shell-main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg, #fff); }
+.shell-body { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; }
+.shell-body.fill { overflow: hidden; }
+
+/* The app icon: the mark in white on a rounded holographic tile with a glassy top light */
+.shell-logo { position: relative; display: inline-grid; place-items: center; flex: none; overflow: hidden; color: #fff;
+  background: var(--holo, linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), inset 0 -1px 0 rgba(26, 26, 26, .06), 0 1px 2px rgba(26, 26, 26, .08),
+    0 6px 14px -6px rgba(176, 122, 242, .6); }
+.shell-logo::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 75% at 22% 0%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 58%); }
+.shell-logo .iris-mark { position: relative; z-index: 1; filter: drop-shadow(0 1px 1px rgba(70, 30, 130, .28)); }
+
+/* ---- Sidebar ------------------------------------------------------------------------------------------------- */
+.side { position: relative; flex: none; display: flex; flex-direction: column; width: 264px; height: 100%; min-height: 0;
+  overflow: hidden; background: var(--surface, #fff); border-right: 1px solid var(--line, #e6e6e6); color: var(--ink, #1a1a1a);
+  font-family: var(--body, "IBM Plex Sans", system-ui, sans-serif); transition: width .18s ease; }
+.side.rail { width: 64px; }
+
+.side-top { flex: none; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 12px 0 16px; }
+.side-brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--ink, #1a1a1a); text-decoration: none;
+  border-radius: 10px; }
+.side-brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; white-space: nowrap; }
+.side-brand-name { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.side-brand-by { font-size: 11.5px; color: var(--muted, #6a6a6a); }
+.side-close { margin-left: auto; display: inline-grid; place-items: center; width: 36px; height: 36px; flex: none; border: 0;
+  border-radius: 8px; background: transparent; color: var(--muted, #6a6a6a); cursor: pointer; }
+.side-close:hover { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+
+.side-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 4px 12px 12px; scrollbar-width: thin; }
+.side-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* A row: 20 px icon + label; the 1 px border and 9 px padding put the icon on the same line in the rail and expanded */
+.side-item, .side-group-head { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 42px;
+  padding: 0 9px; border: 1px solid transparent; border-radius: 8px; background: transparent; cursor: pointer;
+  color: color-mix(in srgb, var(--ink, #1a1a1a) 84%, #fff); font: 400 14px/1 var(--body, "IBM Plex Sans", system-ui, sans-serif);
+  text-align: left; text-decoration: none; white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
+.side-icon { flex: none; color: var(--muted, #6a6a6a); transition: color .15s ease; }
+.side-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-item:hover, .side-group-head:hover { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+.side-item:hover .side-icon, .side-group-head:hover .side-icon { color: var(--ink, #1a1a1a); }
+.side-item:focus-visible, .side-group-head:focus-visible, .side-close:focus-visible, .side-edit:focus-visible {
+  outline: 2px solid var(--accent, #b07af2); outline-offset: 1px; }
+
+/* The page shown: a white pill with a hairline, a soft shadow and a 2 px holographic left edge */
+.side-item.active, .side-item.active:hover { background: var(--surface, #fff); border-color: var(--line, #e6e6e6);
+  box-shadow: var(--shadow-soft, 0 1px 2px rgba(26, 26, 26, .05), 0 4px 12px -4px rgba(26, 26, 26, .08));
+  color: var(--ink, #1a1a1a); font-weight: 500; }
+.side-item.active .side-icon { color: var(--ink, #1a1a1a); }
+.side-item.active::before { content: ""; position: absolute; left: -1px; top: 8px; bottom: 8px; width: 2px; border-radius: 0 2px 2px 0;
+  background: var(--holo, linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%)); }
+
+/* Live counts */
+.side-badge { flex: none; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--panel, #f2f2f2); color: var(--muted, #6a6a6a);
+  font: 500 11.5px/1 var(--mono, "IBM Plex Mono", ui-monospace, monospace); font-variant-numeric: tabular-nums; }
+.side-item.active .side-badge { background: var(--accent-soft, #f4ecfd); color: var(--accent-ink, #6f3fc0); }
+.side-badge.alert, .side-item.active .side-badge.alert { background: #fdecea; color: #c2362e; }
+
+/* The open project's group: "Project: <name>" with a chevron, its steps indented along a hairline guide */
+.side-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft, #efefef); }
+.side-group-head { gap: 12px; }
+.side-group-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side-group-kicker { color: var(--muted, #6a6a6a); }
+.side-group-name { color: var(--ink, #1a1a1a); font-weight: 500; }
+.side-chevron { flex: none; color: var(--muted, #6a6a6a); transform: rotate(-90deg); transition: transform .15s ease; }
+.side-group.open .side-chevron { transform: none; }
+.side-group.has-active:not(.open) .side-group-head .side-icon { color: var(--ink, #1a1a1a); }
+.side-steps { margin: 2px 0 0 20px; padding-left: 8px; border-left: 1px solid var(--line, #e6e6e6); }
+.side-item.sub { height: 38px; font-size: 13.5px; gap: 10px; }
+
+/* Help, Settings, then the reviewer */
+.side-foot { flex: none; padding: 8px 12px 0; }
+.side-divider { height: 1px; margin: 8px 0 0; border: 0; background: var(--line, #e6e6e6); }
+.side-user { display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 4px; min-width: 0; }
+.side-avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center;
+  border: 1.5px solid transparent; color: var(--accent-ink, #6f3fc0); font: 600 13px/1 var(--body, "IBM Plex Sans", system-ui, sans-serif);
+  background: linear-gradient(135deg, #eef0ff, #f5ecfe 50%, #ffeefa) padding-box,
+    var(--holo, linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%)) border-box; }
+.side-user-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.25; }
+.side-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; color: var(--ink, #1a1a1a); }
+.side-user-name.empty { color: var(--muted, #6a6a6a); font-weight: 400; }
+.side-user-role { font-size: 11.5px; color: var(--muted, #6a6a6a); white-space: nowrap; }
+.side-edit { flex: none; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+  color: var(--accent-ink, #6f3fc0); font: 500 12.5px/1.2 var(--body, "IBM Plex Sans", system-ui, sans-serif); }
+.side-edit:hover { background: var(--accent-soft, #f4ecfd); }
+.side-user-input { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--accent, #b07af2); border-radius: 6px;
+  background: var(--surface, #fff); color: var(--ink, #1a1a1a); font: 400 13.5px var(--body, "IBM Plex Sans", system-ui, sans-serif);
+  outline: none; box-shadow: 0 0 0 3px var(--accent-soft, #f4ecfd); }
+
+/* The rail: icons only, centred on the 64 px column */
+.side.rail .side-top { padding: 0 16px; }
+.side.rail .side-item { width: 40px; gap: 0; }
+.side.rail .side-item.sub { height: 40px; padding: 0 10px; }
+.side.rail .side-group { margin-top: 8px; padding-top: 8px; border-top-color: var(--line, #e6e6e6); }
+.side.rail .side-steps { margin: 0; padding: 0; border-left: 0; }
+
+/* Phones and tablets: a drawer from the left over a light veil, off-screen and unfocusable while closed */
+.side.side-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 55; width: 280px; max-width: 86vw; height: auto;
+  transform: translateX(-100%); visibility: hidden;
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), visibility 0s linear .22s, box-shadow .22s ease; }
+.side.side-drawer.open { transform: none; visibility: visible; box-shadow: 0 16px 48px -12px rgba(26, 26, 26, .16);
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), visibility 0s, box-shadow .22s ease; }
+.side.side-drawer .side-item { height: 44px; }
+.side.side-drawer .side-item.sub { height: 42px; }
+.side-scrim { position: fixed; inset: 0; z-index: 54; background: rgba(250, 250, 252, .6); -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px); opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility 0s linear .2s; }
+.side-scrim.open { opacity: 1; visibility: visible; transition: opacity .2s ease, visibility 0s; }
+
+/* ---- Top bar ------------------------------------------------------------------------------------------------- */
+.topbar { position: relative; z-index: 30; flex: none; display: flex; align-items: center; gap: 12px; height: 56px; min-width: 0;
+  padding: 0 16px; background: var(--surface, #fff); border-bottom: 1px solid var(--line, #e6e6e6); }
+.topbar.compact { height: 52px; gap: 8px; padding: 0 12px; }
+.topbar-btn { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted, #6a6a6a); cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.topbar-btn:hover { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
+.topbar-btn:focus-visible { outline: 2px solid var(--accent, #b07af2); outline-offset: 1px; }
+.topbar > .topbar-btn:first-child { margin-left: -6px; }
+.topbar-logo { flex: none; display: inline-flex; align-items: center; gap: 8px; color: var(--ink, #1a1a1a); font-size: 15px; font-weight: 600;
+  letter-spacing: -.01em; }
+.topbar-middle { flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; overflow: hidden; }
+/* The workspace's slim page header sits in the bar: no height, padding, border or background of its own */
+.topbar-middle > .page-head.slim { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; border-bottom: 0; background: transparent; }
+.topbar-search { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.topbar.has-middle .topbar-search { flex: 0 1 260px; }
+.topbar-actions { flex: none; display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.topbar-actions .btn { white-space: nowrap; }
+.topbar.compact.has-middle .topbar-logo-name { display: none; }
+
+/* ---- Search -------------------------------------------------------------------------------------------------- */
+.search { position: relative; width: 100%; max-width: 420px; min-width: 0; }
+.search-open { display: none; }
+.search-field { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 8px 0 12px; border: 1px solid transparent;
+  border-radius: 10px; background: var(--panel, #f2f2f2); transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.search-field:hover { border-color: var(--line, #e6e6e6); }
+.search-field:focus-within { background: var(--surface, #fff); border-color: var(--accent, #b07af2); box-shadow: 0 0 0 3px var(--accent-soft, #f4ecfd); }
+.search-icon { flex: none; color: var(--muted, #6a6a6a); }
+.search-input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent;
+  color: var(--ink, #1a1a1a); font: 400 14px var(--body, "IBM Plex Sans", system-ui, sans-serif); }
+.search-input::placeholder { color: var(--muted, #6a6a6a); opacity: .85; }
+.search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search-key { flex: none; min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border: 1px solid var(--line, #e6e6e6);
+  border-radius: 5px; background: var(--surface, #fff); color: var(--muted, #6a6a6a); font: 500 11.5px/1 var(--mono, "IBM Plex Mono", ui-monospace, monospace); }
+.search-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.search-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 35; width: max(100%, min(360px, calc(100vw - 24px)));
+  max-height: min(440px, 70vh); overflow: auto; padding: 6px; border: 1px solid var(--line, #e6e6e6); border-radius: 12px;
+  background: var(--surface, #fff); box-shadow: var(--shadow-soft, 0 1px 2px rgba(26, 26, 26, .05), 0 12px 32px -8px rgba(26, 26, 26, .14)); }
+.search-pop[hidden] { display: none; }
+.topbar.has-middle .search-pop { left: auto; right: 0; }
+.search-group + .search-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line-soft, #efefef); }
+.search-group-label { padding: 8px 10px 4px; color: var(--muted, #6a6a6a); font-size: 11.5px; font-weight: 500; }
+.search-hit { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--ink, #1a1a1a); text-decoration: none; }
+.search-hit.active { background: var(--panel, #f2f2f2); }
+.search-hit-icon { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
+  background: var(--raised, #fafafa); border: 1px solid var(--line-soft, #efefef); color: var(--muted, #6a6a6a); }
+.search-hit-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.3; }
+.search-hit-label, .search-hit-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-hit-label { font-size: 13.5px; }
+.search-hit-sub { font-size: 12px; color: var(--muted, #6a6a6a); }
+.search-hit-enter { flex: none; color: var(--muted, #6a6a6a); }
+.search-none { margin: 0; padding: 12px 10px; color: var(--muted, #6a6a6a); font-size: 13px; }
+
+/* Narrow: the search is an icon; opened, the field lies over the whole bar */
+@media (max-width: 600px) {
+  .topbar-search { justify-content: flex-end; }
+  .search { width: auto; }
+  .search:not(.expanded) .search-field { display: none; }
+  .search:not(.expanded) .search-open { display: inline-grid; }
+}
+@media (max-width: 1180px) {
+  .topbar.has-middle .topbar-search { flex: none; }
+  .topbar.has-middle .search { width: auto; }
+  .topbar.has-middle .search:not(.expanded) .search-field { display: none; }
+  .topbar.has-middle .search:not(.expanded) .search-open { display: inline-grid; }
+}
+@media (max-width: 600px) {
+  .search.expanded { position: absolute; left: 8px; right: 8px; top: 50%; transform: translateY(-50%); z-index: 36; width: auto; max-width: none; }
+  .search.expanded .search-field { background: var(--surface, #fff); }
+  .search.expanded .search-pop { left: 0; right: auto; width: 100%; }
+}
+@media (max-width: 1180px) {
+  .topbar.has-middle .search.expanded { position: absolute; left: 8px; right: 8px; top: 50%; transform: translateY(-50%); z-index: 36;
+    width: auto; max-width: 520px; margin-left: auto; }
+  .topbar.has-middle .search.expanded .search-field { background: var(--surface, #fff); }
+  .topbar.has-middle .search.expanded .search-pop { left: 0; right: auto; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side, .side.side-drawer, .side.side-drawer.open, .side-scrim, .side-scrim.open, .side-item, .side-group-head, .side-icon,
+  .side-chevron, .topbar-btn, .search-field { transition: none; }
+}
