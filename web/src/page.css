@@ -24,7 +24,7 @@ a.page-crumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1
 .page-actions .btn.small { height: 34px; padding: 0 12px; }
 
 /* The workspace's slim header: one row, white, no divider of its own (the 3D view starts under it) */
-.page-head.slim { flex: 1 1 auto; min-width: 0; flex-direction: row; align-items: center; gap: 12px; height: 100%; padding: 0; border-bottom: 0;
+.page-head.slim { flex: 1 1 auto; min-width: 0; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12px; height: 100%; padding: 0; border-bottom: 0;
   background: transparent; }
 .page-head.slim .page-head-row { flex: 1 1 auto; flex-wrap: nowrap; align-items: center; }
 .page-head.slim .page-head-main { flex: 0 1 auto; flex-direction: row; align-items: center; gap: 2px; overflow: hidden; }

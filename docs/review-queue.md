@@ -152,7 +152,8 @@ The page wiring is kept small so it can move with the app shell:
    fixed={[...fixed ids, ...reviewed ids]} onOpen={() => setReviewOpen(true)} />` on Clash review: the primary action
    in the workspace's header, at the right of the app shell's top bar (`workActions`, when `reviewLeads`: Clash review
    or a session outside a project, not on phones and tablets), with Export beside it as a secondary; its one line
-   shows beside the button (hidden under 1500 px), its error under it (`frame.css`).
+   and "Prepare again" show beside the button only on very wide screens (the queue has both), its error under it
+   (`frame.css`).
 4. `{reviewOpen && sceneId && report && <ReviewQueue … viewer={viewer.current} reviewer onReviewer={setReviewer}
    onDecisions={(d) => noteDecisions(d, true)} onClose={() => setReviewOpen(false)} onKept={…} />}` with the overlays,
    inside the workspace (`div.app`): in the app shell it covers the shell's body only (`.shell .rq` is absolute), so the
