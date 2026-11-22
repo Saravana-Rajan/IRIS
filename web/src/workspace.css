@@ -183,14 +183,15 @@ section.clash-panel .fixed-state .link { all: unset; cursor: pointer; font-size:
 section.clash-panel .fixed-state .link:hover:not(:disabled) { text-decoration: underline; }
 section.clash-panel .fixed-state .link:disabled { opacity: .5; cursor: default; }
 section.clash-panel .fixed-state .link:focus-visible { outline: 2px solid var(--accent, #b07af2); outline-offset: 2px; border-radius: 4px; }
-section.clash-panel .clash-glance { display: flex; align-items: center; gap: 10px; min-width: 0; }
+section.clash-panel .clash-glance { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
 /* The A/B/C pictures: one row of small squares on a light ground, the letter on a white chip */
 section.clash-panel .thumbs { display: flex; gap: 6px; flex: none; }
 section.clash-panel .thumbs .thumb { width: 60px; height: 60px; border-radius: 8px; background: var(--panel, #f2f2f2); border: 1px solid var(--line-soft, #efefef); }
 section.clash-panel .thumbs .thumb .clash-thumb { display: block; width: 100%; height: 100%; }
 section.clash-panel .thumbs .thumb span { left: 3px; top: 3px; padding: 0 4px; font: 500 10px var(--mono); color: var(--ink, #1a1a1a);
   background: rgba(255, 255, 255, .85); border-radius: 4px; }
-section.clash-panel .clash-now { flex: 1 1 auto; min-width: 0; gap: 3px 8px; font-size: 12px; }
+section.clash-panel .clash-now { flex: 1 1 150px; min-width: 0; gap: 3px 8px; font-size: 12px; }
+section.clash-panel .clash-now dd.mono { white-space: nowrap; }
 section.clash-panel .clash-now dd { min-width: 0; }
 section.clash-panel .clash-match { display: flex; flex-wrap: wrap; gap: 3px; }
 section.clash-panel .clash-match .chip { gap: 4px; font-weight: 500; }
