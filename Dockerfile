@@ -47,7 +47,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY server/iris ./iris
 
 COPY --from=web /app/web/dist /app/web/dist
-# Filtered by .dockerignore to .ifc/.step/.stp/.json/.xml/.png/.jpg/.jpeg (the demo file types).
+# Filtered by .dockerignore to .ifc/.step/.stp/.json/.xml/.png/.jpg/.jpeg (the demo file types), plus the sample
+# PDF drawings (samples/drawings/*.pdf) and their saved readings (*.reading.json).
 COPY samples /app/samples
 
 RUN useradd --create-home --uid 10001 iris \

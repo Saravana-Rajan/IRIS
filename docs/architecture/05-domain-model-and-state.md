@@ -4,7 +4,8 @@
 > `triage.py`, `titles.py`, `chat.py`, `agents.py`, `requirements.py`, `settings.py`, `limits.py`, `spend.py`,
 > `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `app.py` (its module-level stores), and the browser storage
 > in `web/src/` (`App.tsx`, `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`, `reqFile.ts`,
-> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings; re-branded on 2026-11-11) ·
+> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings, saved drawing
+> readings; re-branded on 2026-11-11) ·
 > **Deeper design:** [docs/detection.md](../detection.md), [docs/requirements.md](../requirements.md),
 > [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md)
@@ -415,12 +416,20 @@ The 2D drawing reader's objects ([docs/drawings.md](../drawings.md)); the reader
 disk beyond the temp folder only through a project attach or save.
 
 - **Drawing:** `{id, name, sha256, pages, title}`; `title` holds only the title-block fields printed on the first sheet
-  that has any (`sheet`, `scale`, `title`, `drawing_no`).
+  that has any (`sheet`, `scale`, `title`, `drawing_no`). The drawing routes add `saved_reading` (`{model, label, at}`
+  when every page has a saved reading, else null; `app._drawing_out`, `drawing_reader.saved_info`): worked out on each
+  reply, never a field or stored.
 - **Page:** `{index, width_px, height_px, dpi, png, words, has_text_layer}`; `index` 0-based, `png` relative to the
   drawing's folder (`page-<index>.png`), `dpi` 150 unless the page is over 50 MP at it.
 - **Word:** `{text, x0, y0, x1, y1}` in pixels on the page's image, origin top-left, from the PDF's own text layer.
 - **Items** of a drawing: the last read's (`drawing_reader.read_drawing`'s `done.items`, plain dicts); a read of some
-  pages replaces only those pages' items (`merge_items`).
+  pages replaces only those pages' items (`merge_items`). An AI item from a replayed page carries
+  `evidence.saved_reading`, so it stays marked as a saved reading wherever it is shown later.
+- **Saved reading** of a sample sheet: a file, `samples/drawings/<stem>.reading.json` (`drawing_reader.write_saved`):
+  the PDF's `drawing_sha256`, `VERSION`, `prompt_hash`, `model`, `settings` (the call's thinking level, output cap and
+  timeout), `at`, and per page its `tiles`, `reply` and `usage`.
+  Read-only to the server; replayed for a page only when the sha256, the prompt hash and the page's pixel size match
+  ([19](19-demo-data.md)).
 - **In a project:** `project.json`'s `drawings` (`[{name, sha256, size, pages, items}]`), the PDF as
   `drawings/<sha256>.pdf` and the items as `drawings/<sha256>.items.json`; a scene holding no drawings leaves a
   project's as they were.
@@ -666,6 +675,7 @@ stateDiagram-v2
 | Host readings by kind | `hosts._cache` | The server's life |
 | The filters' index | `IfcScene._facets` (`facets.index`; `Workspace.facets` reads and builds it outside the lock and keeps it only if the revision held) | Until a kept edit changes the scene's revision or its elements |
 | Pictures being drawn | `built._running` | Only while drawing |
+| Saved drawing readings, by their PDF's sha256 | `drawing_reader._saved_index` (under `_saved_lock`, one folder) | Read again when a `*.reading.json` there changes (name, mtime or size) |
 | 2D drawings per scene and the items of their last read | `drawings.STORE` (`scenes`, `drawings`, `scene_of`, `items`) | 30 per scene (`MAX_PER_SCENE`); dropped with the scene: when its `IfcScene` is garbage (`Store.watch`), and on every drawing call for any scene no longer open (`Store.prune`) |
 | Settings for everyone (cached) | `settings._current` | Read from the store once |
 | Caps | Each `ProposeLimit`'s deques in `app.py` | The rolling hour and day |
@@ -679,10 +689,11 @@ Paths under "temp" are in the system temporary folder (`tempfile.gettempdir()`).
 
 | What | Path | Kept until |
 |---|---|---|
-| Sample models, sample reports, shipped STEP cache | `samples/`, `samples/reports/<name>/`, `samples/step-cache/` | Read-only; part of the deploy image |
+| Sample models, sample reports, shipped STEP cache, sample drawings with their truth files and saved readings | `samples/`, `samples/reports/<name>/`, `samples/step-cache/`, `samples/drawings/` | Read-only; part of the deploy image |
 | Uploaded models and STEP conversions; a project's files copied in to open it | temp `iris-models/<folder>/` (`service.MODELS`, `Workspace._roots`: one folder per opening or adding) | The scene is evicted (or the open or add fails); a removed model's file at once, its folder once it holds none of the scene's files |
 | Projects | `IRIS_PROJECTS_DIR`, default `server/.iris-projects/` (gitignored); on Cloud Run `/mnt/iris/projects` when a bucket is mounted. One folder per project: `project.json`, `models/`, `saved/<n>/` (with `state.json`), `reports/`, `drawings/` ([14](14-files-in-and-out.md)) | Kept; at most `IRIS_PROJECTS_MAX` (50) projects |
 | 2D drawings: the PDF and each page's PNG | temp `iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`): `source.pdf`, `page-<index>.png` | The scene is evicted (its folder goes when the scene object is let go, or on the next drawing call) |
+| The drawing reader's replies | temp `iris-drawing-reads/` (`drawing_reader.CACHE`): `<key>.json`, the key a sha256 of the file hash, page, model and prompt hash (`cache_key`) | Not cleaned |
 | STEP conversion cache (when `samples/step-cache` is absent) | temp `iris-models/step-cache/` (`Workspace.step_cache`) | Not cleaned |
 | Uploaded Navisworks reports | temp `iris-reports/<folder>/` (`app.UPLOADS`) | The report is dropped (it is `temporary`) |
 | A run on its own (evals, the requirements preview) | temp `iris-run-*/` | The report is dropped |

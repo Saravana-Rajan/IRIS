@@ -2,9 +2,10 @@
 
 > **Covers:** `web/src/App.tsx`, `web/src/api.ts`, `web/src/pilot.ts`, `web/src/voice.ts`, `web/src/uploads.ts`,
 > `web/src/Chat.tsx`, `web/src/ReportDoc.tsx`, `web/src/Agent.tsx`, `web/src/proposalState.ts`, `web/src/ProposalCard.tsx`,
-> `web/src/projectsApi.ts`, `web/src/projectRoute.ts`, `server/iris/app.py`, `server/iris/service.py`,
+> `web/src/projectsApi.ts`, `web/src/projectRoute.ts`, `web/src/drawingsApi.ts`, `server/iris/app.py`, `server/iris/service.py`,
 > `server/iris/projects.py`, `server/iris/journal.py`, and the workflow modules each flow reaches ·
-> **Checked against code:** re-branded on 2026-11-11; the decision and project flows on 2026-11-22 · **Deeper design:**
+> **Checked against code:** re-branded on 2026-11-11; the decision and project flows, and trying the sample drawings, on
+> 2026-11-22 · **Deeper design:**
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/detection.md](../detection.md), [docs/edits.md](../edits.md),
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/voice.md](../voice.md),
 > [docs/mcp.md](../mcp.md), [docs/uploads.md](../uploads.md), [docs/requirements.md](../requirements.md)
@@ -660,8 +661,8 @@ id) writes the scene's models as they are now into `saved/<n>/` (`Workspace.file
 `state.json` (the edit log's entries, the decisions, the clashes' ids, numbers and titles), then `project.json`, so a
 state is read only once it is whole.
 
-`#projects` lists the projects whose ids this browser keeps (`iris.projects`): `GET /api/projects?ids=…` leaves out
-ids the server does not have, and `pruneProjectIds` forgets them. Opening one (`#project/<pid>/<step>`, then
+`/projects` lists the projects whose ids this browser keeps (`iris.projects`): `GET /api/projects?ids=…` leaves out
+ids the server does not have, and `pruneProjectIds` forgets them. Opening one (`/projects/<pid>/<step>`, then
 `openProject`) posts `POST /api/projects/{pid}/open`: 409 when no models are attached or a model file is missing, 400
 when the models cannot be read. `projects.open_project` takes the newest saved state of the project's current files
 (else the originals in `models/`), copies it into a fresh temporary folder the scene owns (eviction never touches the
@@ -672,7 +673,7 @@ again keeps them and new ones number on; it puts the saved decisions and earlier
 records the new `scene_id` on the project. The reply is `{scene_id, project, scene}` (`scene` as
 `GET /api/scenes/{sid}` gives it). The page then draws the files as Resume does and runs the check; the decisions come
 back with the edit log. A reopened project's undo history starts at the saved state: it is the new baseline. The page
-side is the contract's; `App` does not mount the Projects pages yet ([12](12-web-app.md), "Engineer workflow").
+side is [12](12-web-app.md), "Engineer workflow".
 
 ```mermaid
 sequenceDiagram
@@ -683,7 +684,7 @@ sequenceDiagram
   participant WS as Workspace
   App->>API: GET projects with the ids in iris.projects
   API-->>App: those projects, unknown ids left out
-  App->>App: pruneProjectIds, then the project's hash address
+  App->>App: pruneProjectIds, then the project's address
   App->>API: POST projects/:pid/open
   API->>P: open_project
   P->>P: newest saved state of the current files, else models
@@ -702,6 +703,60 @@ sequenceDiagram
 Owned by: [05](05-domain-model-and-state.md) (projects on disk, the journal), [10](10-http-api-and-streams.md) (the
 project routes), [12](12-web-app.md) (`projectsApi.ts`, `projectRoute.ts`), [15](15-requirements-settings-and-config.md)
 (`IRIS_PROJECTS_DIR`, `IRIS_PROJECTS_MAX`).
+
+## Try the sample drawings
+
+A visitor tries the 2D drawing reader with no PDF of their own and no Gemini spend ([docs/drawings.md](../drawings.md),
+"Saved readings"). `GET /api/samples` lists each demo's sample drawings (`demos[].drawings`, from
+`samples/drawings/`); when the sample building has some, the first screen shows **Try the sample drawings** beside
+**Try the sample building** (`StartScreen`, `onSampleDrawings`). `App.trySampleDrawings` finds this browser's sample
+project by name, or makes it (`sampleProject`), goes to its Drawings step (`/projects/<pid>/drawings`), and attaches
+the sheets once the sample building's models are open:
+
+- **Its models are the ones open here:** the sheets are attached at once.
+- **A project this browser knows, not open:** `openProjectScene(p, attach)` opens it as [Open a saved project](#open-a-saved-project)
+  does and attaches the sheets before its clashes are read or checked.
+- **A new project:** the sample models are opened (`open`, `POST /api/scenes`), the sheets attached, both kept with
+  the project (`keepModels`, `POST /api/projects/{pid}/attach`, which copies the scene's drawings too), then checked
+  (`runDetect`).
+
+Attaching is `POST /api/scenes/{scene_id}/drawings/samples` (`app.sample_drawings`). The server takes the demo of the
+open files (`demos.drawings_for`), reads its PDFs from `samples/drawings/` and ingests each one the scene does not
+hold yet (`drawings.ingest`, by sha256, under a lock), as an upload would, but takes nothing from the upload
+allowance. It answers with the scene's sample drawings, each with `saved_reading` (`drawing_reader.saved_info`); 409
+when the open models are no demo with sample drawings or the scene has no room. The Drawings step then lists them
+(`drawingsTry`). On the step itself, with the sample building open and no drawings, **Add the sample drawings**
+(`DrawingsPanel` `onSamples`) calls the same route.
+
+**Read with AI** is the ordinary read (`POST /api/drawings/{drawing_id}/read`). `drawing_reader.read_drawing` finds
+each page's saved reading (`saved_reading`: the same PDF by sha256, the prompt as it is now, the same page size) and
+replays it: no model call, no budget check, that page's cost 0. The stream says so (`page.saved`, each AI item's
+`evidence.saved_reading`, `done.saved`), and the panel shows "Saved AI reading of this sample (…): replayed at no cost,
+not read live." Reconciling with the text layer and the comparison with the models run as for any drawing.
+
+```mermaid
+sequenceDiagram
+  participant S as StartScreen
+  participant App as App.tsx
+  participant API as app.py
+  participant D as drawings.py
+  participant R as drawing_reader.py
+  S->>App: Try the sample drawings
+  App->>App: sampleProject, then the Drawings step
+  App->>API: open the sample models, or the project
+  App->>API: POST scenes/:sid/drawings/samples
+  API->>D: ingest each sample PDF not held yet
+  API->>R: saved_info for each
+  API-->>App: Drawing list with saved_reading
+  App->>API: POST drawings/:did/read
+  API->>R: read_drawing finds the saved reading
+  R-->>App: page saved, items, done saved, cost 0
+  App->>API: GET scenes/:sid/drawings/compare
+```
+
+Owned by: [10](10-http-api-and-streams.md) (the samples route, the read stream's fields), [12](12-web-app.md)
+(`StartScreen.tsx`, `trySampleDrawings`, `DrawingsPanel.tsx`, `drawingsApi.ts`), [14](14-files-in-and-out.md) (the
+sample PDFs and `.reading.json` files), [19](19-demo-data.md) (the sample sheets).
 
 ## When the server lets go of the models
 

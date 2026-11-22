@@ -89,7 +89,7 @@ test("each read route of the contract is called with its method and path, ids en
   ]);
   assert.equal(d.pageUrl("d/1", 0), "/api/drawings/d%2F1/pages/0.png");
   assert.equal(d.pageUrl("d1", 3), "/api/drawings/d1/pages/3.png");
-  for (const k of ["uploadDrawings", "listDrawings", "pageUrl", "readDrawing", "drawingItems", "compareDrawings"]) assert.equal(typeof d.drawingsApi[k], "function", k);
+  for (const k of ["uploadDrawings", "addSampleDrawings", "listDrawings", "pageUrl", "readDrawing", "drawingItems", "compareDrawings"]) assert.equal(typeof d.drawingsApi[k], "function", k);
 });
 
 test("a failed call throws api.ts's ApiError with the server's words and status", async () => {
@@ -197,7 +197,7 @@ test("stream lines become events: aliases accepted, unknown lines skipped, parti
   assert.deepEqual(d.toReadEvent({ type: "page", page: 2, total: 5 }), { type: "page", page: 2, total: 5 });
   assert.deepEqual(d.toReadEvent({ type: "page", index: 1, pages: 4 }), { type: "page", page: 1, total: 4 });
   assert.equal(d.toReadEvent({ type: "page" }), null);
-  assert.deepEqual(d.toReadEvent({ type: "done", items: [1, 2], cost_usd: "x" }), { type: "done", items: 2, cost_usd: null });
+  assert.deepEqual(d.toReadEvent({ type: "done", items: [1, 2], cost_usd: "x" }), { type: "done", items: 2, cost_usd: null, saved: null });
   assert.deepEqual(d.toReadEvent({ type: "error", message: "boom" }), { type: "error", detail: "boom", status: 500 });
   assert.equal(d.toReadEvent({ type: "heartbeat" }), null);
   assert.equal(d.toReadEvent(null), null);

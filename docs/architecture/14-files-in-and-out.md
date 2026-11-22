@@ -5,9 +5,10 @@
 > `add_models`, `remove_model`, `export`, `file`, `step_changes`, `open_report_sample`, `open_report_folder`, `save_capture`, `match`) and of
 > `server/iris/app.py` (`_receive_models`, `_unpack`, `upload_report`, `export`, `_build_document`,
 > `_tidy_exports`), `server/iris/built.py` (its cache), `server/iris/projects.py` (the project folders),
-> `server/iris/drawings.py` (PDF drawings in),
+> `server/iris/drawings.py` (PDF drawings in), the saved-reading files of `server/iris/drawing_reader.py`,
 > `web/src/uploads.ts`, `web/src/reqFile.ts` (the file side) · **Checked against code:** 2026-11-22 (project folders,
-> PDF drawings; re-branded on 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
+> PDF drawings, sample drawings and their saved readings, what `samples/` keeps in git and the image; re-branded on
+> 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
 Iris reads models (IFC, or STEP converted to IFC), clash reports (Navisworks XML with its pictures), pictures the
@@ -94,7 +95,10 @@ flowchart LR
 ### Sample models
 
 - `GET /api/samples` lists every `*.ifc`, `*.step` and `*.stp` directly in `samples/` (`Workspace.list_samples`,
-  `MODEL_SUFFIXES`). The folder is gitignored except `samples/README.md`; the Cloud Run image copies it in at deploy.
+  `MODEL_SUFFIXES`), and with each demo the sample PDF drawings of its own in `samples/drawings/`
+  (`drawings.sample_names`, below). Git keeps only `samples/README.md`, the eight demo models and `samples/drawings/`
+  (`.gitignore`); the image copies the folder in, filtered by `.dockerignore` to the demo file types (models, JSON,
+  XML, pictures) and `samples/drawings/*.pdf` (`Dockerfile`).
 - `POST /api/scenes` opens the named samples (`Workspace.open`). A name that resolves outside `samples/` is refused
   as not found. A STEP sample is converted first, with the fast model (`GEMINI_FAST_MODEL`) as classifier (`app._classifier`).
 - The page picks its defaults from the list: every `…structure|mep|architecture|site.ifc` (App.tsx), and the
@@ -235,8 +239,23 @@ flowchart TB
   TITLE / SHEET TITLE or DRAWING NO. / DWG NO. takes the rest of its run, else the next run on its line, else the run
   under it; the first sheet with any is the drawing's `title`. Nothing is guessed.
 - **Where.** `$TMP/iris-drawings/<scene id>/<drawing id>/`: `source.pdf` and the PNGs, deleted with the scene.
+- **Sample drawings.** `POST /api/scenes/{scene_id}/drawings/samples` takes the demo's own sheets
+  (`Demo.drawings`: Northbank's `Northbank-M-201.pdf` and `Northbank-M-201-mismatch.pdf`) from
+  `samples/drawings/` in the image and runs each through `ingest` exactly as an upload, so they land in the same
+  folder and every drawing route treats them the same. Nothing comes from the browser: no `Content-Length`, no
+  upload charged. A sheet whose sha256 the scene already holds is not taken in twice. `drawings.sample_names` lists
+  the `*.pdf` there for `GET /api/samples`.
+- **Saved readings.** Beside each sample sheet, `<stem>.reading.json` (`drawing_reader.SAVED`, `SAVED_SUFFIX`) holds
+  the model's reply for each page as `evals/save_drawing_readings.py` got it once (`drawing_reader.write_saved`, from
+  the reader's own cache): `about`, `pdf`, `drawing_sha256`, `version`, `prompt_hash`, `model`, `settings` (how the
+  call was made when it differs from the reader's own: thinking level, output cap, timeout), `at`, and `pages`
+  (`page`, `at`, `tiles`, `reply`, `usage`). No secret is in it. The server reads every such file in that folder by
+  `drawing_sha256` and reads them again only when a file's name, size or modification time changes
+  (`drawing_reader._saved`); a file it cannot parse is logged and skipped. A page replays its saved reply only when
+  the PDF's sha256, `prompt_hash()` and the page's pixel size all match ([docs/drawings.md](../drawings.md), "Saved
+  readings").
 - **Libraries.** pypdfium2 (Apache-2.0 / BSD-3) and pdfplumber (MIT); reportlab (BSD) writes the sample and test
-  PDFs. Never PyMuPDF (AGPL).
+  PDFs (`evals/make_drawings.py`, [19](19-demo-data.md)). Never PyMuPDF (AGPL).
 
 ## In: Navisworks clash reports
 
@@ -549,6 +568,8 @@ outside `$TMP`.
 | Projects: original models, saved states, kept reports | `IRIS_PROJECTS_DIR/<id>/` (default `server/.iris-projects/`; Cloud Run with a bucket `/mnt/iris/projects/`) | Kept across restarts; on Cloud Run without a bucket, until the instance goes. At most `IRIS_PROJECTS_MAX` (50) projects |
 | A project's files, opened | `$TMP/iris-models/project-*/` (a copy) | The scene is dropped |
 | PDF drawings: the PDF and each page's PNG | `$TMP/iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`) | The scene is dropped (when its scene object is let go, or on the next drawing call) |
+| Sample drawings, their answer keys and saved readings | `samples/drawings/` (`*.pdf`, `*.truth.json`, `*.reading.json`); the saved readings also in memory (`drawing_reader._saved`) | Redeploy (part of the image) |
+| The drawing reader's replies | `$TMP/iris-drawing-reads/<key>.json` (`drawing_reader.CACHE`, keyed by PDF sha256, page, model and prompt hash) | Never deleted by the server |
 
 - **"An hour"** is `EXPORTS_KEEP_S` (3,600 s): `app._tidy_exports` deletes anything in `iris-exports` older
   than that, but it runs only when someone fetches a model file or an export, not on a timer.
@@ -567,6 +588,7 @@ outside `$TMP`.
   fix in the report (`evidence_state`, `EVIDENCE_LABEL`) or the decision shape it reads.
 - A change to `service.step_changes` or `step.export` (what is moved, replaced or added).
 - A change to PDF drawing intake (`drawings.py`: the checks, caps, dpi, text-layer mapping, title-block rule, where
-  the files go).
+  the files go), to which sample drawings a demo attaches, or to the saved-reading file (`write_saved`, what
+  `saved_reading` matches on).
 - A change to the project folder (`projects.py`: `project.json`, `models/`, `saved/<n>/` and its `state.json`,
   `reports/`, `drawings/`), to what a saved state writes for a model, or to how opening copies the files.

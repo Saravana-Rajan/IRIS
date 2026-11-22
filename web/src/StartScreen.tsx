@@ -1,6 +1,7 @@
-import { Building2, FolderOpen } from "lucide-react";
+import { Building2, FileText, FolderOpen } from "lucide-react";
 import { projectName, type Resume } from "./About";
 import { Wordmark } from "./Brand";
+import { DemoClips } from "./DemoClips";
 
 /** When a saved session was kept, in words ("12 min ago"). */
 function ago(savedAt: number, now = Date.now()): string {
@@ -13,17 +14,21 @@ function ago(savedAt: number, now = Date.now()): string {
 
 /**
  * The first screen (docs/ui-design.md §10.1): light and lean. Iris's name and principle, two ways in (the projects,
- * and the sample building as a project, opened on its clash review with no live AI call), and the last session to
- * resume when there is one. Nothing animates and no 3D starts until a model opens; the one picture is the Northbank
- * still. Props only.
+ * and the sample building as a project, opened on its clash review with no live AI call, or on its Drawings step with
+ * the sample PDF sheets), and the last session to resume when there is one. No 3D starts until a model opens; the
+ * pictures are the two demo clips (DemoClips). Props only.
  */
-export function StartScreen({ onProjects, projectsHref = "/projects", onSample, sampleBusy = false, resume }: {
+export function StartScreen({ onProjects, projectsHref = "/projects", onSample, sampleBusy = false, onSampleDrawings, sampleDrawingsBusy = false, resume }: {
   onProjects: () => void;
   /** The projects' address: "Open projects" is a link (a new tab opens it), a plain click handled by `onProjects`. */
   projectsHref?: string;
   /** The Northbank sample as a project, opened on its clash review. Absent when the server lists no sample. */
   onSample?: () => void;
   sampleBusy?: boolean;
+  /** The same sample project opened on its Drawings step with the sample PDF sheets attached (their saved Gemini
+   * readings replay at no cost). Absent when the server lists no sample drawings. */
+  onSampleDrawings?: () => void;
+  sampleDrawingsBusy?: boolean;
   resume?: Resume;
 }) {
   return (
@@ -38,8 +43,10 @@ export function StartScreen({ onProjects, projectsHref = "/projects", onSample, 
             <a className="btn primary" data-start="projects" href={projectsHref}
               onClick={(e) => { if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onProjects(); }}>
               <FolderOpen size={15} aria-hidden /> Open projects</a>
-            {onSample && <button type="button" className="btn" data-start="sample" disabled={sampleBusy} onClick={onSample}>
+            {onSample && <button type="button" className="btn" data-start="sample" disabled={sampleBusy || sampleDrawingsBusy} onClick={onSample}>
               {sampleBusy ? <i className="spinner" aria-hidden /> : <Building2 size={15} aria-hidden />} Try the sample building</button>}
+            {onSampleDrawings && <button type="button" className="btn" data-start="sample-drawings" disabled={sampleBusy || sampleDrawingsBusy} onClick={onSampleDrawings}>
+              {sampleDrawingsBusy ? <i className="spinner" aria-hidden /> : <FileText size={15} aria-hidden />} Try the sample drawings</button>}
           </div>
           {resume && (
             <p className="start-resume">
@@ -49,9 +56,7 @@ export function StartScreen({ onProjects, projectsHref = "/projects", onSample, 
               <button type="button" className="btn small ghost" onClick={resume.onFresh}>Start fresh</button>
             </p>)}
         </div>
-        <figure className="start-pic">
-          <img src="/demos/northbank.webp" alt="Northbank, the synthetic sample building: a supply air duct through a transfer girder, found by Iris's check" />
-        </figure>
+        <DemoClips />
       </div>
     </div>
   );

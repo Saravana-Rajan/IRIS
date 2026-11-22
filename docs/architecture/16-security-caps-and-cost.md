@@ -3,10 +3,11 @@
 > **Covers:** `server/iris/owner.py`, `server/iris/origins.py`, `server/iris/limits.py`, `server/iris/spend.py`, the
 > token side of `server/iris/agents.py`, the gates in `server/iris/app.py` (`_OwnerContext`, `_CrossOrigin`, `_take`,
 > `escalation_refused`, `built_stream`, `_receive_models`, `_McpGate`, `mcp_hooks`), `voice_live.same_origin` and
-> `voice_live.relay`, `model_client.load_env` and `PRICES`, the budget in `server/iris/built.py`,
-> `web/src/Owner.tsx`, the deploy identity in `deploy/github-setup.sh` · **Checked against code:** re-branded on
-> 2026-11-11; origins, the owner cookie, the voice socket's Origin rule, deploy identity and the cloud footprint
-> re-checked on 2026-11-22 · **Deeper design:**
+> `voice_live.relay`, `model_client.load_env` and `PRICES`, the budgets in `server/iris/built.py` and
+> `server/iris/drawing_reader.py`, `web/src/Owner.tsx`, the deploy identity in `deploy/github-setup.sh` ·
+> **Checked against code:** re-branded on 2026-11-11; origins, the owner cookie, the voice socket's Origin rule,
+> deploy identity and the cloud footprint re-checked on 2026-11-22, the drawing reader's budget and the sample drawings
+> the same day · **Deeper design:**
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/uploads.md](../uploads.md)
 
 Iris is a public demo that spends money on every model call, on one shared set of credentials, in one process. This doc is
@@ -224,7 +225,7 @@ not counted. The state is per process, which is why the deploy pins one containe
 | Runs after hand edits | three times the detection runs' (`app.edit_rerun_limit`) | 0 / 0 | off | 1 per detection run naming its edit in `after_edit` (once per entry), so keep, run, undo and keep again cannot farm free runs |
 | Detection runs | `IRIS_DETECT_PER_HOUR` / `IRIS_DETECT_PER_DAY` | 0 / 0 | off | 1 per `/detect/stream`, chat or MCP `detect_clashes` (a check on filters refused for a name the models lack or an empty side A costs none; Run all again, every kept check, is 1; making a list of kept checks again, `GET .../checks`, is free; the one run after a hand edit kept with clashes, naming that newest entry in `after_edit`, is not charged here once (`Journal.free_rerun`) but on its own cap below), and MCP `open_models` when it checks on the server (no page following the link: the page's check is its own request) |
 | Voice | `IRIS_VOICE_PER_HOUR` / `IRIS_VOICE_PER_DAY` | 0 / 0 | 60 / 2000 | 1 per clip (`/api/transcribe`) or live session, hands-free included |
-| Model uploads | `IRIS_MODEL_UPLOADS_PER_HOUR` / `IRIS_MODEL_UPLOADS_PER_DAY` | 0 / 0 | 10 / 200 | 1 per upload, after the size and type checks: opening your own models, or adding them to an open scene (`/api/scenes/{scene_id}/models/upload/stream`, charged only after the mixing and "already open" refusals); adding samples and removing a model are free ([docs/add-and-remove-models.md](../add-and-remove-models.md)) |
+| Model uploads | `IRIS_MODEL_UPLOADS_PER_HOUR` / `IRIS_MODEL_UPLOADS_PER_DAY` | 0 / 0 | 10 / 200 | 1 per upload, after the size and type checks: opening your own models, or adding them to an open scene (`/api/scenes/{scene_id}/models/upload/stream`, charged only after the mixing and "already open" refusals); adding samples and removing a model are free ([docs/add-and-remove-models.md](../add-and-remove-models.md)); a PDF drawing upload (`POST /api/scenes/{scene_id}/drawings`) is one too, while attaching the open demo's sample drawings (`POST /api/scenes/{scene_id}/drawings/samples`) is free: nothing is sent |
 | Requirements files | `IRIS_REQUIREMENTS_PER_HOUR` / `IRIS_REQUIREMENTS_PER_DAY` | **120** / 0 | default | 1 per file the server does not know yet |
 | Requirement previews | `IRIS_PREVIEW_PER_HOUR` / `IRIS_PREVIEW_PER_DAY` | **60** / 0 | default | 1 per preview not already cached |
 | Agent links | `IRIS_LINKS_PER_HOUR` / `IRIS_LINKS_PER_DAY` | 0 / 0 | 10 / 500 | 1 per link made |
@@ -277,14 +278,15 @@ flowchart TB
 ```
 
 Plain proposals, chat, triage, titles and voice on the main or fast model skip the budget box: only second tries,
-Show it built's judges (escalation or fast model) and the Gemini image model are charged to the day's budget. The order (switch, budget, caps) is the one `escalation_refused` and `built_stream`
+Show it built's judges (escalation or fast model), the Gemini image model and the drawing reader (fast model) are
+charged to the day's budget. The order (switch, budget, caps) is the one `escalation_refused` and `built_stream`
 use; routes without a per-token model only take their cap.
 
 ### The escalation day budget (`spend.py`)
 
 - **What is priced.** `model_client.PRICES`, with `IRIS_MODEL_PRICES` over them: the escalation model's input and
-  output tokens (thinking counts as output), and the fast model's when it judges pictures. The main model and the
-  fast model's other work are not charged here. Each picture from the Gemini image model is charged
+  output tokens (thinking counts as output), and the fast model's when it judges pictures or reads a drawing. The
+  main model and the fast model's other work are not charged here. Each picture from the Gemini image model is charged
   `built.IMAGE_USD`: `IRIS_IMAGE_USD`, default 0.04 (in `built.restyle`). No other price numbers are kept in these
   docs.
 - **Charging.** `GeminiModel` counts every call's usage (`Usage`, however a stream ended) and passes its cost to
@@ -311,6 +313,18 @@ at low thinking check them instead (`built.MAIN_JUDGES`, `built.main_judge_model
 `built.main_judge_label`). A picture checked the lighter way is drawn and
 checked again by the escalation model when the budget allows. Then the built cap is taken. Design:
 [docs/show-it-built.md](../show-it-built.md).
+
+### The drawing reader's budget
+
+A drawing read (`POST /api/drawings/{drawing_id}/read`) is priced per page on the fast model, with no count cap.
+`drawing_reader.read_drawing` asks `spend.refused` for the estimate of every page it has to read before its first
+event (a refusal is a 429 before the stream starts), and again before each page (an `error` event mid-read); each
+page's call runs inside `spend.held` and is charged as it lands (`DayBudget`; the owner is exempt but counted). Two
+kinds of page are free and never checked: one read before with the same model and prompt (the reader's cache), and
+one replayed from a sample sheet's saved reading (`drawing_reader.saved_reading`), which the stream marks as such
+([docs/drawings.md](../drawings.md)). `evals/save_drawing_readings.py`, which makes the saved readings, runs under its
+own hard cap (`--max-usd`, default 0.30 a run: no sheet starts when what is spent plus the worst a page can cost at
+its output cap would pass it), not the server's day budget.
 
 ### Everything else
 
@@ -343,6 +357,7 @@ How to deploy and change it: [17](17-deployment-and-operations.md).
 | Open scenes | `IRIS_MAX_SCENES` and `IRIS_SCENE_BUDGET_MB` (IFC bytes) | `Workspace._evict`: room is made before a new scene is read, or before models are added to one; the oldest go first, those a live agent link points at last (`Links.kept`), never the one just opened or being added to; the scene's folders are deleted. Adding models that would put one scene alone past the budget is refused (400, `Workspace.check_adding`: "With these the open models would be N MB, over this server's M MB for one set: open fewer models together."), since a scene grown one upload at a time is not held by the upload cap |
 | Open reports | `IRIS_MAX_REPORTS` | `Workspace._keep`, the same order; a temporary report's folder is deleted |
 | Wider fixes | `IRIS_WIDER_FIX_MAX_MB` (100) | `context_planner.validate_objective`: 413 before anything is charged |
+| PDF drawings | `IRIS_DRAWING_MAX_MB` (50) a file, `IRIS_DRAWING_MAX_PAGES` (40) a file, 10 files a request (`MAX_FILES`), 30 a scene (`MAX_PER_SCENE`) | `app.upload_drawings`, `drawings.ingest`: 411, 413, 400, 409; the sample drawings' attach 409 when the scene has no room |
 | Wider-fix search | `IRIS_CONTEXT_*` ceilings: 6 model calls, 12 trials, 120 s, 3 alternatives, 2.5 m | `context_planner.Limits` |
 | STEP | `IRIS_STEP_MAX_PARTS` (20,000), `IRIS_STEP_MAX_TRIANGLES` (5 M) | `step.parts`, `step.write_ifc`: 400 with the reason |
 | Voice clip | 3,000,000 bytes; mono 16-bit WAV at 16 or 24 kHz | `app.transcribe_voice`: 413, 422 |

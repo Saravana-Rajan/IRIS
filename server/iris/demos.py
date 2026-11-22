@@ -28,6 +28,7 @@ class Demo:
     context: tuple[str, ...] = ()   # in the set, not opened by default (grids, a later revision)
     tour: str | None = None      # the guided tour that goes with it (web/src/Tour.tsx)
     requirements: str | None = None   # its default requirements file in `demos/`
+    drawings: tuple[str, ...] = ()   # its sample PDF drawings in `samples/drawings/` (POST .../drawings/samples)
     extra: dict = field(default_factory=dict)
 
 
@@ -35,7 +36,7 @@ DEMOS: tuple[Demo, ...] = (
     Demo(id="northbank", name="Northbank", label="Open the Northbank demo", kind="construction",
          files=("Northbank-Architecture.ifc", "Northbank-MEP.ifc", "Northbank-Site.ifc", "Northbank-Structure.ifc"),
          context=("Northbank-Grids.ifc", "Northbank-MEP-Rev04.ifc"), tour="northbank",
-         requirements="northbank.json"),
+         requirements="northbank.json", drawings=("Northbank-M-201.pdf", "Northbank-M-201-mismatch.pdf")),
     Demo(id="cell", name="PC-03 palletising cell", label="Open the machine cell", kind="machines",
          files=("PC-03-Palletising-Cell-RevA.step",), context=("PC-03-Palletising-Cell-RevB.step",), tour="cell",
          requirements="palletising-cell.json"),
@@ -75,13 +76,22 @@ def requirements_for(files: list[str]) -> "Doc | None":
     return _load(demo.requirements) if demo and demo.requirements else None
 
 
-def listing(samples: list[str]) -> list[dict]:
-    """The demos whose default files are all among the samples, for the start page."""
+def listing(samples: list[str], drawings: list[str] | tuple[str, ...] = ()) -> list[dict]:
+    """The demos whose default files are all among the samples, for the start page; `drawings`: the sample PDF
+    drawings there are (samples/drawings/), each demo listing those of its own."""
     have = {_key(s): s for s in samples}
+    sheets = {_key(s): s for s in drawings}
     out = []
     for d in DEMOS:
         files = [have[_key(f)] for f in d.files if _key(f) in have]
         if len(files) == len(d.files):
             out.append({"id": d.id, "name": d.name, "label": d.label, "kind": d.kind, "files": files,
-                        "context": [have[_key(f)] for f in d.context if _key(f) in have], "tour": d.tour})
+                        "context": [have[_key(f)] for f in d.context if _key(f) in have], "tour": d.tour,
+                        "drawings": [sheets[_key(f)] for f in d.drawings if _key(f) in sheets]})
     return out
+
+
+def drawings_for(files: list[str]) -> tuple[str, ...]:
+    """The sample drawings of the demo these opened files are (`find`); () for anything else."""
+    demo = find(files)
+    return demo.drawings if demo else ()

@@ -361,6 +361,36 @@ def test_an_item_only_the_ai_read_is_compared_but_flagged_unconfirmed(scene, ind
     assert next(m for m in result["matches"] if m["item"] == "a")["evidence"]["unconfirmed"] is True
 
 
+def test_on_a_page_with_a_text_layer_only_what_the_text_confirms_is_compared(scene, index):
+    """The reader marks what the PDF's own text confirmed (evidence "tag", "size") on a page with a text layer: a tag
+    the AI read that the text does not print (misread, or invented from a pattern) is not looked up, so it can neither
+    hide a missing element nor invent one; a size it does not print is not compared."""
+    checked = {"text_layer": True, "tag": {"text": "x"}}
+    result = dc.compare(scene, [
+        dict(item("a", "SA-MAIN-L02-5", size="600x250", status="ai_only"), evidence=checked),        # size unchecked
+        dict(item("b", "SA-BR-L02-3", size="300x200", status="ai_only"), evidence={"text_layer": True}),  # invented
+        dict(item("c", "CW-MAIN-L02-2", kind="pipe", size="Ø100"), source="text", evidence={})],   # the text's own
+        storey="Level 02", index=index)
+    got = {(x.kind, x.item, x.element) for x in result["mismatches"]}
+    assert ("size_differs", "c", gid(index, "CW-MAIN-L02-2")) in got
+    assert not [x for x in result["mismatches"] if x.item in ("a", "b")]
+    assert ("missing_in_drawing", None, gid(index, "SA-BR-L02-3")) in got       # the invented tag hides nothing
+    a = next(m for m in result["matches"] if m["item"] == "a")
+    assert a["element"] == gid(index, "SA-MAIN-L02-5") and "size_unchecked" in a["evidence"]
+    assert [u["item"] for u in result["unmatched"] if "not printed" in u["why"]] == ["b"]
+
+
+def test_a_confirmed_tag_s_letters_settle_the_family(scene, index):
+    """The AI's word for a symbol ("diffuser" for a duct's label) raises no type difference when the tag the text
+    confirms names the model's family; a rectangular size drawn for a round pipe still does, for its shape."""
+    sure = {"text_layer": True, "tag": {"text": "x"}, "size": {"text": "y"}}
+    result = dc.compare(scene, [
+        dict(item("a", "SA-MAIN-L02-5", kind="diffuser", size="600x300"), evidence=sure),
+        dict(item("b", "CW-MAIN-L02-2", kind="duct", size="150x100"), evidence=sure)], storey="Level 02", index=index)
+    got = [(x.kind, x.item, x.evidence["reason"]) for x in result["mismatches"] if x.item]
+    assert got == [("type_differs", "b", ["shape"])]
+
+
 def test_the_result_is_json(scene, index):
     import json
     out = dc.to_json(dc.compare(scene, DRAWING + [item("x", "SA-MAIN-L02-5", size="600x250")], index=index))

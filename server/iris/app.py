@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import hashlib
 import importlib
 import io
 import json
@@ -456,9 +457,10 @@ def put_settings(body: dict):
 
 @app.get("/api/samples")
 def samples():
-    """The sample models, and the demos among them (`demos.listing`: their files, start label and tour)."""
+    """The sample models, and the demos among them (`demos.listing`: their files, start label, tour and sample
+    drawings)."""
     files = ws.list_samples()
-    return {"files": files, "demos": demos.listing(files)}
+    return {"files": files, "demos": demos.listing(files, drawings.sample_names(ws.samples))}
 
 
 def _classifier():
@@ -883,6 +885,13 @@ def _optional(module: str, attr: str):
     return getattr(found, attr, None)
 
 
+def _drawing_out(drawing: drawings.Drawing) -> dict:
+    """A drawing as the page gets it: its fields, and `saved_reading` ({model, label, at}) when reading it replays a
+    saved reading (drawing_reader.saved_info: a sample sheet's, free), else None."""
+    info = _optional("drawing_reader", "saved_info")
+    return {**drawing.to_dict(), "saved_reading": info(drawing) if info is not None else None}
+
+
 def _drawing(drawing_id: str) -> drawings.Drawing:
     drawings.STORE.prune(ws.scenes)
     try:
@@ -959,15 +968,61 @@ async def upload_drawings(scene_id: str, request: Request):
         _scene(scene_id)
     for d in made:
         store.add(scene_id, d)
-    return [d.to_dict() for d in made]
+    return [_drawing_out(d) for d in made]
+
+
+_samples_lock = threading.Lock()   # one sample attach at a time: two at once would add the sheets twice
+
+
+@app.post("/api/scenes/{scene_id}/drawings/samples")
+def sample_drawings(scene_id: str):
+    """The sample PDF drawings of the demo whose models are open (demos.Demo.drawings, from samples/drawings/),
+    attached as an upload attaches them (drawings.ingest), so every drawings route works on them: Drawing[], the
+    scene's sample drawings (one already held is not attached again). Each has a saved reading, so reading it replays
+    that at no cost (drawing_reader.saved_reading). No upload is taken from the allowance: nothing is sent. 409 when the
+    open models are not a demo with sample drawings, or the scene has no room for them."""
+    _scene(scene_id)
+    store = drawings.STORE
+    store.prune(ws.scenes)
+    folder = ws.samples / "drawings"
+    paths = [folder / n for n in demos.drawings_for(ws.names.get(scene_id) or []) if (folder / n).is_file()]
+    if not paths:
+        raise HTTPException(409, "The open models have no sample drawings: they go with the sample building.")
+    blobs = [(p.name, p.read_bytes()) for p in paths]
+    shas = {hashlib.sha256(data).hexdigest() for _, data in blobs}
+    with _samples_lock:
+        held = {d.sha256 for d in store.list(scene_id)}
+        todo = [(name, data) for name, data in blobs if hashlib.sha256(data).hexdigest() not in held]
+        if len(todo) > store.room(scene_id):
+            raise HTTPException(409, f"A model set holds at most {drawings.MAX_PER_SCENE} drawings.")
+        scene = ws.scenes.get(scene_id)
+        if scene is None:
+            _scene(scene_id)
+        store.watch(scene_id, scene)
+        root = store.root(scene_id)
+        made: list[drawings.Drawing] = []
+        try:
+            for name, data in todo:
+                made.append(drawings.ingest(data, name, root))
+        except BaseException:
+            for d in made:
+                shutil.rmtree(root / d.id, ignore_errors=True)
+            raise
+        if scene_id not in ws.scenes:   # let go while its pages were rendered
+            for d in made:
+                shutil.rmtree(root / d.id, ignore_errors=True)
+            _scene(scene_id)
+        for d in made:
+            store.add(scene_id, d)
+    return [_drawing_out(d) for d in store.list(scene_id) if d.sha256 in shas]
 
 
 @app.get("/api/scenes/{scene_id}/drawings")
 def list_drawings(scene_id: str):
-    """The scene's drawings, in upload order (Drawing[])."""
+    """The scene's drawings, in upload order (Drawing[], each with `saved_reading`)."""
     _scene(scene_id)
     drawings.STORE.prune(ws.scenes)
-    return [d.to_dict() for d in drawings.STORE.list(scene_id)]
+    return [_drawing_out(d) for d in drawings.STORE.list(scene_id)]
 
 
 @app.get("/api/drawings/{drawing_id}/pages/{n}.png")
@@ -990,7 +1045,8 @@ def read_drawing_stream(drawing_id: str, body: DrawingRead | None = None):
     as newline-delimited JSON: its `page` progress and `item` events, then `done` {items, cost_usd}, or `error`
     {status, detail}; a `tick` every 5 s. A read the budget cannot cover is refused before the stream starts (429).
     The items are kept for GET .../items and the comparison (a read of some pages replaces only those pages' items).
-    501 "reader not available" when this build has no reader."""
+    A page with a saved reading (a sample sheet's) is replayed instead, free and instant, and the stream says so
+    (`page.saved`, `evidence.saved_reading`, `done.saved`). 501 "reader not available" when this build has no reader."""
     drawing = _drawing(drawing_id)
     read = _optional("drawing_reader", "read_drawing")
     if read is None:
