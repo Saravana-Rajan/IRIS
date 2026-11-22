@@ -2185,23 +2185,7 @@ a.pop-item { color: inherit; }
   color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: var(--radius); cursor: pointer; }
 .pset-add:hover, .pset-add:focus-visible { color: var(--ink); border-color: var(--accent); }
 
-/* The project shell (App.tsx; docs/engineer-workflow.md, "Web contract"): the step bar above the workspace on a
-   desktop (a row of the page's grid), a step picker in the phone's and tablet's header, and the project pages (the
-   projects home, a project's Overview, Reports and Activity) over the workspace, which stays open beneath them. */
-.app.projected.notched { grid-template-rows: auto minmax(0, 1fr) auto; }
-.app.projected.notched.docked { grid-template-rows: auto minmax(0, 1fr); }
-.app.projected.notched .resizer { grid-row: 2 / 3; }
-.proj-workbar { grid-column: 1 / -1; min-width: 0; position: relative; z-index: 8; }
-.proj-workbar .proj-stepbar-actions .bad.small { font-size: 12px; }
-.proj-step-pick { font: inherit; font-size: 12.5px; height: 32px; min-width: 0; max-width: 42vw; padding: 0 6px; border: 1px solid var(--line);
-  border-radius: 7px; background: var(--surface); color: var(--ink); }
-.proj-shell { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); }
-.proj-shell > .proj-page { flex: 1 1 auto; min-height: 0; }
-.proj-shell-top { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; background: var(--surface);
-  border-bottom: 1px solid var(--line); }
-.proj-shell-top .spacer { flex: 1; }
-.proj-shell-alert { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--fail-soft, #fdecec);
-  color: var(--fail, #b42318); font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--line); }
+/* The project pages and Home over the workspace, and the shell around them: frame.css */
 /* The Models step in the left pane */
 .proj-work { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .proj-work-note { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; border: 1px dashed var(--line);
@@ -2222,37 +2206,8 @@ details.tried > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; 
 details.tried[open] > summary { margin-bottom: 8px; }
 details.tried > .pcard + .pcard { margin-top: 8px; }
 .lp-nav-projects { flex: none; }
-/* The menu's folded part (docs/ui-design.md §10.4) */
-.menu-more { display: block; border-top: 1px solid var(--line); padding-top: 6px; }
-.menu-more-sum { cursor: pointer; list-style: none; padding: 8px 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.menu-more-sum::-webkit-details-marker { display: none; }
-.menu-more-sum::before { content: "▸ "; }
-.menu-more[open] > .menu-more-sum::before { content: "▾ "; }
-.menu-more-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
-/* The first screen (StartScreen.tsx; docs/ui-design.md §10.1): light, left-aligned in a 960 px column, vertically
-   centred; the Northbank still on wide screens only. No dark surface, no motion. */
-.start { position: absolute; inset: 0; z-index: 5; overflow: auto; display: grid; place-items: center; padding: 32px 16px;
-  background: var(--bg); color: var(--ink); }
-.start-col { width: min(960px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 40px; align-items: center; }
-.start-text { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; min-width: 0; }
-.start-brand { margin: 0; display: flex; align-items: center; gap: 10px; color: var(--accent-ink); }
-.start-brand span { font-size: 12px; font-weight: 500; letter-spacing: .04em; color: var(--muted); }
-.start-line { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 500; letter-spacing: -.01em; color: var(--ink); display: block; }
-.start-sub { margin: 0; font-size: 15px; line-height: 1.55; color: var(--muted); max-width: 52ch; }
-.start-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
-.start-actions .btn { height: 38px; padding: 0 16px; font-size: 14px; }
-.start-resume { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--muted);
-  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-.start-resume b { color: var(--ink); font-weight: 600; }
-.start-more summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
-.start-more[open] summary { margin-bottom: 6px; }
-.start-about { all: unset; cursor: pointer; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
-.start-about:hover { color: var(--ink); }
-.start-about:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
-.start-pic { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
-.start-pic img { display: block; width: 100%; height: auto; }
-@media (max-width: 760px) { .start-col { grid-template-columns: minmax(0, 1fr); } .start-pic { display: none; } .start { place-items: start center; } }
+/* Home (StartScreen.tsx) has its own stylesheet: home.css */
 /* The loading card's slim bar (Brand.tsx LoadCard): a width once measured, a moving band while the server works. */
 .load-head .load-cancel { margin-left: auto; }
 .load-bar { position: relative; height: 4px; border-radius: 999px; overflow: hidden; background: var(--accent-soft); }
