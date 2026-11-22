@@ -1139,4 +1139,9 @@ Export in the header's actions, and no ☰ Menu (its contents are Settings, besi
 f76fb7c (report without triage, Save feedback, the fixed clash state) was merged (c0d6265) and kept in the new shell.
 `web/scripts/record-demo.cjs` reads `iris.dock.v2` and opens More tools for the views and saved views. Checked: the
 full web suite (`npm test`: 503 tests, all passing), `tsc`, `vite build`, server `test_docs_map.py` and `test_web_pages.py`, and
-headless Chromium screenshots at 1512×805 and 390×844 against a local one-origin server, with no Gemini call.
+headless Chromium screenshots at 1512×805 and 390×844 against a local one-origin server, with no Gemini call. **The logo** is the owner's
+chosen Aperture (six holographic blades around an ink hexagonal pupil): `Brand.tsx` draws it inline (`ApertureMark`,
+`Lockup`, `AppIcon`), the sidebar and top bar use it, the status line's mark opens and closes its blades while Iris
+works, every spinner is the mark turning, and `web/public` has the new favicon (SVG, 32 px PNG, ICO), Apple touch,
+Android and maskable icons, the pinned tab and a white manifest theme; the boot splash and the PDF cover
+(`document.LOCKUP`) carry it too ([docs/brand-assets.md](../brand-assets.md)).

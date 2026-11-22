@@ -6,22 +6,13 @@ colour tokens, no build step. The app carries its own copies of what it uses (`w
 
 ## The mark
 
-An eye seen front-on: a **ring** (the iris) round a solid **pupil** with a **six-bladed aperture** cut through it, the
-hexagonal opening of a camera stop. It reads at 16 px as a ringed dot and at full size as a lens, which is the
-question Iris asks: does AI truly see? The wordmark sets the mark beside the word "Iris"; "by Techjays" is set as plain
-supporting text next to it (in the app's header and footer), not drawn into the artwork.
-
-| Colour | Value | Use |
-| --- | --- | --- |
-| Navy | `#052640` | The mark and wordmark on light backgrounds; the app's accent |
-| White | `#FFFFFF` | The mark and wordmark on dark backgrounds |
-| Ink | `#11161B` | Body text |
-| Paper | `#F5F7F8` | Light surface |
-| Line | `#DDE3E7` | Dividers |
-| Muted | `#52636E` | Supporting copy |
-
-Clear space round the artwork is a quarter of its height. Supporting text uses the system sans-serif; no font files
-are shipped.
+**Aperture** (the owner's choice, Nov 22): an iris diaphragm drawn to exact geometry, six **holographic blades**
+(the `--holo` gradient: #8f9bff, #b07af2, #ff5cd6, #7dd3fc) closing around an **ink hexagonal pupil** (#1a1a1a), so the
+camera's iris and the eye's iris become one mark. The lockup sets the mark beside "Iris" in live text (IBM Plex Sans
+500), with "by Techjays" as smaller grey text beside it in the sidebar, never drawn into the artwork. The app draws it
+inline (`web/src/Brand.tsx`: `ApertureMark`, `Lockup`, `AppIcon`); a one-colour version is the spinner's mask. The
+earlier split-O (a ring round a pupil with a six-bladed cut) remains in the kit below for reference; the app no longer
+shows it.
 
 ## Files
 
@@ -41,13 +32,16 @@ are shipped.
 
 ## In the app
 
-- **Header and footer:** the wordmark with "by Techjays" beside it (`web/src/Brand.tsx`, `About.tsx`). On the desktop the
-  wordmark hangs from the model's top edge in a notch; phones and tablets keep a compact bar.
-- **Loading:** every `.spinner` is `web/public/brand/iris-spinner.svg` as a CSS mask. Loading states read live state;
+- **The app shell:** the mark with "Iris" and "by Techjays" at the top of the sidebar, the mark alone on its collapsed
+  rail and in the phone's and tablet's top bar (`web/src/AppShell.tsx`). While Iris works, the status line's mark opens
+  and closes its blades.
+- **Loading:** every `.spinner` is `web/public/brand/iris-spinner.svg` (the Aperture in one colour) as a CSS mask; the
+  boot splash in `web/index.html` draws the mark with its blades opening and closing. Loading states read live state;
   nothing advances on a timer, and no animation stands in for a geometry result.
-- **Icons:** `web/public/favicon.svg` and `web/public/brand/` (ICO, Apple touch, Android, maskable, manifest, pinned tab,
-  `og.png`); theme colour navy.
-- **Report:** the PDF cover carries the wordmark in navy.
+- **Icons:** `web/public/favicon.svg` and `web/public/brand/` (`favicon.svg`, `favicon-32.png`, `favicon.ico`, the Apple
+  touch icon, the Android and maskable icons rendered from the mark, the pinned tab, the manifest); theme colour white.
+  `og.png` still shows the earlier mark.
+- **Report:** the PDF cover carries the Aperture lockup (`document.LOCKUP`).
 - Reduced motion stills the spinner.
 
 ## Other people's logos
