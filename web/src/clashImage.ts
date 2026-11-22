@@ -43,6 +43,9 @@ function load(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.decoding = "async";
+    // From another origin (the server, when the page is hosted elsewhere) the picture must come with CORS, or the
+    // canvas is tainted and its pixels can't be read.
+    if (typeof location !== "undefined" && new URL(url, location.href).origin !== location.origin) img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = url;

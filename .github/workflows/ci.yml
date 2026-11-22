@@ -1,0 +1,105 @@
+# Tests for every pull request and push. A push to main runs these through deploy.yml (workflow_call), which deploys
+# only when they pass, so main is left out of the push trigger here to avoid running them twice.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  server:
+    name: Server tests (Python 3.13)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # WeasyPrint (PDF reports) needs Pango and HarfBuzz and a font; OpenCASCADE's bindings (STEP) need libGL.
+      # The same libraries the Dockerfile installs.
+      - name: System libraries
+        working-directory: .
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core libgl1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - run: uv sync --frozen
+      # VisionBench (tests/bench) runs in its own job with the renderer installed.
+      - run: uv run pytest -q --ignore=tests/bench
+
+  web:
+    name: Web tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund   # postinstall copies web-ifc's .wasm into public/wasm
+      - run: npm test
+      - run: npm run build
+
+  bench:
+    name: VisionBench tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: What is here
+        id: has
+        run: |
+          echo "tests=$([ -d server/tests/bench ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+          echo "render=$([ -f bench/render/package-lock.json ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+      - name: System libraries
+        if: steps.has.outputs.tests == '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core libgl1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.has.outputs.render == '1'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bench/render/package-lock.json
+      # The renderer (three.js in Playwright's Chromium, SwiftShader): without it the render tests skip.
+      - name: Renderer
+        if: steps.has.outputs.tests == '1' && steps.has.outputs.render == '1'
+        working-directory: bench/render
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: steps.has.outputs.tests == '1'
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: Tests
+        if: steps.has.outputs.tests == '1'
+        working-directory: server
+        run: |
+          uv sync --frozen
+          uv run pytest -q tests/bench

@@ -2,7 +2,9 @@
 
 > **Covers:** `CLAUDE.md` ("Rules", "Stack and why", "Status and next steps"), `AGENTS.md`, the "Not yet" sections
 > of the feature designs, and the code that enforces each limit (`server/iris/edits.py`, `context_eval.py`, `hosts.py`,
-> `document.py`, `service.py`, `deploy/deploy.sh`) · **Checked against code:** re-branded 2026-11-11 · **Deeper
+> `document.py`, `service.py`, `origins.py`, `owner.py`, `deploy/deploy.sh`, `deploy/github-setup.sh`,
+> `.github/workflows/deploy.yml`) · **Checked against code:** re-branded 2026-11-11; the hosting and deploy decisions
+> and limits checked 2026-11-22 · **Deeper
 > design:** [docs/edits.md](../edits.md), [docs/escalation.md](../escalation.md),
 > [docs/show-it-built.md](../show-it-built.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md)
 
@@ -20,7 +22,7 @@ carries the decision today.
 | Date | Decision | Where it shows |
 |---|---|---|
 | Oct 31 | Bundle six Northbank IFCs and two PC-03 STEP revisions in the repo, so anyone can run the demos with no private access or separate model download. No generator source is copied | `samples/README.md`, `.gitignore` filename allowlist, `.gitattributes` byte preservation, `README.md`; [19](19-demo-data.md) |
-| Oct 27 | Deploy publicly with proposal caps (each proposal is a paid model call); now on Cloud Run | `deploy/deploy.sh` (one instance), `limits.ProposeLimit`, `IRIS_PROPOSE_PER_HOUR` / `_PER_DAY`; [16](16-security-caps-and-cost.md), [17](17-deployment-and-operations.md) |
+| Oct 27 | Deploy publicly with proposal caps (each proposal is a paid model call); now on Cloud Run | `deploy/deploy.sh` (at most one instance), `limits.ProposeLimit`, `IRIS_PROPOSE_PER_HOUR` / `_PER_DAY`; [16](16-security-caps-and-cost.md), [17](17-deployment-and-operations.md) |
 | Oct 28 | A site model is context: its tests are listed but off by default, and duplicates cover the building models only | `detect.default_tests`; [docs/detection.md](../detection.md) |
 | Oct 28 | Coordination first: Iris's own check is the golden path, a Navisworks report the second way in; the job is "design coordination", one item a "clash" | `openDemo` → `runDetect` in `App.tsx`; the header's **Coordinate** menu; [01](01-product-and-journeys.md), [21](21-glossary-and-naming.md) |
 | Oct 28 | Settings for everyone beside the owner's own; bulk work (titles, triage, part names) on the fast model (`GEMINI_FAST_MODEL`) | `settings.py`, the Owner menu "For me" / "For everyone"; [15](15-requirements-settings-and-config.md) |
@@ -69,6 +71,10 @@ carries the decision today.
 | Nov 4 (feedback) | "The navisworks card has nothing in there": it gets a picture (a Navisworks report coming in, pictures and all, each clash given its #N and a verdict). And the formats' own logos go "at the relevant locations" (IFC, BCF, Navisworks and MCP as supplied; STEP and PDF drawn for Iris): a strip under the hero, the hand-off tile, the agent tile, the glossary, with whose they are in the footer | `landing/Bento.tsx`, `landing/logos.ts`, `web/public/logos/`; [12](12-web-app.md), [docs/brand-assets.md](../brand-assets.md) |
 | Oct 31 | More model formats wait, and come in only as models Iris checks (converted to IFC on the server, like STEP), never as a view-only viewer; glTF/GLB first | Nothing in code yet; "Later", below |
 | Oct 31 | Later work to explore: connectors into design tools (Inventor, Revit and others) so a kept fix lands in the designer's own model, and site data (photos, video, scans) aligned to the coordination model | Nothing in code yet; "Later: connectors into design tools" and "Later: site data aligned to the model", below |
+| Nov 22 | Deploy on every push to `main`: GitHub Actions runs the tests, then deploys. Keyless, through Workload Identity Federation: only this repository's `main` may sign in. `deploy/deploy.sh` still deploys by hand | `.github/workflows/ci.yml` and `deploy.yml`, `deploy/github-setup.sh` (once); [17](17-deployment-and-operations.md), [18](18-testing-and-evals.md) |
+| Nov 22 | A minimal Google Cloud footprint: Cloud Run scales to zero (min 0, max 1 instance, 2 vCPU, 4 GiB) with CPU only while a request is open; no load balancer, no Cloud Build trigger, no database, and no custom domain unless one is added (`WEB_URL`, `API_URL`); one Artifact Registry repository keeping the newest 5 images; Firebase Hosting only for the page; one identity pool and one provider; one deploy service account with the fewest roles; no Gemini API key in the cloud (Vertex AI as the runtime service account `iris-run`); no JSON keys anywhere | `deploy/deploy.sh` (`MIN_INSTANCES`, `CPU_THROTTLING`), `deploy/setup.sh` (`KEEP_IMAGES`), `deploy/github-setup.sh`; [16](16-security-caps-and-cost.md), [17](17-deployment-and-operations.md) |
+| Nov 22 | Split hosting: the web app on Firebase Hosting, the API on Cloud Run, and the page calls Cloud Run directly (`VITE_API_BASE`). Firebase does not proxy the API: its rewrites to Cloud Run cut requests at 60 s and carry no WebSockets, while Iris streams NDJSON for minutes and talks voice on a WebSocket. CORS and the cross-site owner cookie are only for the web app's own origins (`IRIS_ALLOWED_ORIGINS`). One origin stays for local development and the plain deploy | `server/iris/origins.py`, `app._CrossOrigin`, `owner.set_cookie`, `voice_live.same_origin`, `web/src/api.ts` (`apiUrl`, `wsUrl`), `firebase.json`; [02](02-system-architecture.md), [10](10-http-api-and-streams.md), [16](16-security-caps-and-cost.md) |
+| Nov 22 | The Cloud Run service is `iris-api`. Split, it serves only the API (`/api/*`, `/docs`, `/mcp`, the voice socket) and `GET /` says so. It replaces the `iris` service an earlier hand deploy made | `deploy/deploy.sh` (`SERVICE`), `deploy.yml`, `app.front_door`; [17](17-deployment-and-operations.md) |
 
 **Oct 30, owner decision:** approved direction **05 / Iris Type** (custom wordmark and split-O symbol), then the full
 asset and motion pack, and requested its repository PR and merge for the upcoming application redesign. The approved
@@ -94,6 +100,7 @@ The app adopted it on Oct 30 (the notch row above).
 | A prompt line to keep the tray's bends closed in pictures | The pictures did not keep them closed | Fix the model's bends to follow the profile (open, below) | [docs/show-it-built.md](../show-it-built.md) |
 | Spoken replies | The voice model used at the time had no text-to-speech | Real-time recognition in, text out | `voice_live.py`; [docs/voice.md](../voice.md) |
 | `Cache-Control: no-transform` on streams | An earlier host's edge ignored it, compressed NDJSON and held it back from browsers | `Content-Encoding: identity` on every stream | `app._ndjson`, `NDJSON_HEADERS`; [10](10-http-api-and-streams.md) |
+| Firebase Hosting rewrites to Cloud Run, for one origin through Firebase (considered, Nov 22) | Rewrites cut a request at 60 s and carry no WebSockets; Iris streams NDJSON for minutes and voice is a WebSocket | The page calls Cloud Run directly, with CORS for its own origins | `origins.py`, `web/src/api.ts`; [17](17-deployment-and-operations.md) |
 | Long-held MCP sessions over SSE | The host cuts long requests and its edge buffers streams | `/mcp` stateless with one JSON response per call; long work as jobs | `mcp_server.py`; [11](11-mcp-and-agent-links.md) |
 | CSS `::after` tooltips | Cut off by panel and window edges | One fixed `Tooltips` layer that flips and clamps | `web/src/ui.tsx` |
 | An effect that returns `scrollIntoView(...)` | Chromium returns a Promise; React's cleanup broke and the panel blanked | Effects use braces | `web/src/App.tsx`, `Chat.tsx` |
@@ -187,10 +194,23 @@ and `deploy` finds none: open work is tracked in the feature docs and here, not 
 
 - **Everything lives in one process's memory:** open scenes and their edits, reports, chat sessions, triage and title
   jobs, the last try per pair, and agent links. A container restart, or opening the models again, starts clean; a
-  restart ends every link. That is why the Cloud Run service runs exactly one instance
+  restart ends every link. That is why the Cloud Run service runs at most one instance
   ([17](17-deployment-and-operations.md)). What outlives a restart is what is kept in the Cloud Storage bucket and what
-  ships in the image (the demo's `samples/step-cache`); see [17](17-deployment-and-operations.md) for which files
-  persist.
+  ships in the image (the demo's `samples/step-cache`, when the image has it); see
+  [17](17-deployment-and-operations.md) for which files persist.
+- **Scale to zero loses open models.** The service runs no instance while idle (`MIN_INSTANCES` 0). The first request
+  after an idle spell waits for a cold start, and the models visitors had open are gone: the page opens them again.
+  CPU runs only while a request is open (`CPU_THROTTLING` 1), so work that outlives its request runs slowly until the
+  next request. `MIN_INSTANCES=1` and `CPU_THROTTLING=0` restore the always-warm service, billed all the time.
+- **The owner cookie is cross-site in split hosting.** The page (Firebase Hosting) and the API (Cloud Run's
+  `run.app`) are different sites, so the owner cookie is a third-party cookie there (`SameSite=None; Secure;
+  Partitioned`). Safari and other browsers that block third-party cookies may not send it, so the owner's unlock does
+  not stick; `Partitioned` (CHIPS) gets it through where the browser supports it. Split, Cloud Run serves no web app,
+  so its own URL is no way round this. The ways round: put the page and the API on one site (custom domains on
+  techjays.com make the cookie first-party; `deploy/README.md`), or use the plain one-origin deploy
+  (`IRIS_ALLOWED_ORIGINS` empty, the cookie `SameSite=Strict`).
+- **Images built in CI hold only what git has.** The gitignored, optional `samples/reports/` and `samples/step-cache/`
+  are not in them. `deploy/deploy.sh` run from a machine that has them still bakes them in.
 - **Held models are capped:** 8 model sets on the demo (`IRIS_MAX_SCENES`), within `IRIS_SCENE_BUDGET_MB`
   (300); the oldest are evicted first, linked ones last. Exports older than an hour are deleted.
 - **No accounts.** The owner is a token and a signed cookie (`owner.cookie_ok`); review sign-offs and the reviewer's
@@ -415,7 +435,7 @@ Cloud Run GPU if it falls short); how good alignment can be from photos alone (s
   its entry too).
 - An approach is tried and dropped, or a dropped one comes back.
 - A limit is lifted or a new one is enforced in the code (`Unsupported` reasons in `edits.py`, `context_eval`,
-  `hosts.hard_rule`, caps in `deploy/deploy.sh`).
+  `hosts.hard_rule`, caps in `deploy/deploy.sh`), or the hosting changes (scale to zero, split hosting, the cookie).
 - A "Known, not fixed" item is fixed, an item is checked for the first time, or an open question is decided.
 - A roadmap item is done or added (CLAUDE.md's "Later", or a feature doc's "Not yet"), or the Visual Task Factory
   entry's scope changes.

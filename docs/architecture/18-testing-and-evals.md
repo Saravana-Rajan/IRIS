@@ -1,7 +1,9 @@
 # 18 · Testing, evals and verification
 
 > **Covers:** `server/tests/`, `server/iris/fixtures.py`, `web/tests/`, `evals/`, `spikes/`, `web/spikes/`,
-> `web/scripts/capture-demos.cjs`, `evals/big_models_browser.cjs`, `assets/brand/iris/` checks · **Checked against code:** re-branded 2026-11-11 ·
+> `web/scripts/capture-demos.cjs`, `evals/big_models_browser.cjs`, `assets/brand/iris/` checks,
+> `.github/workflows/ci.yml` and `deploy.yml`'s smoke test · **Checked against code:** re-branded 2026-11-11; CI,
+> `test_origins.py` and the voice relay's origin test checked 2026-11-22 ·
 > **Deeper detail:** [evals/README.md](../../evals/README.md) (the eval log)
 
 Iris's promise is that no fix reaches a person unverified, so the project checks itself at five levels: fast server
@@ -20,6 +22,10 @@ what each level covers, how to run it, where its results go, and what to run bef
 | Spikes | The day-one go/no-go questions, and Show it built's S0 | Northbank in `samples/`; model access for spike 4 and S0 | Spike 4 and S0 paid | `spikes/`, `web/spikes/` |
 | Product checks | The running app does what the tests say: the golden path, the cell, phones, streams through Cloud Run | A running server and web app, Playwright's Chromium | Paid when a step proposes | ad hoc, plus two committed scripts |
 
+GitHub Actions runs the server tests, the web tests and build, and the VisionBench tests on every pull request and
+push ([CI on GitHub Actions](#ci-on-github-actions), below). Evals and product checks stay with whoever makes the
+change.
+
 ## Server tests
 
 ### Running them
@@ -37,7 +43,7 @@ uv run pytest -q -k penetration          # by name
   `server/.venv/bin/python`), and says to run tests from `server` with `..` paths adjusted. `uv run pytest -q` is the
   supported way everywhere.
 - The suite needs nothing but the Python environment (`uv sync`; the PDF tests need WeasyPrint's system libraries,
-  pango and harfbuzz, which the container image also installs). No test calls Gemini: model calls go to scripted
+  pango and harfbuzz, which the container image and CI also install). No test calls Gemini: model calls go to scripted
   stand-ins (`ScriptedModel` in `test_agent.py` and its relatives), the Gemini SDK client is mocked in
   `test_model_client.py` (HTTP hosts faked with httpx mock transports in `test_triage.py`, `test_context_planner.py`),
   and live voice's transcription is a scripted stand-in (`test_voice_live.py`). Every model is built on the fly by
@@ -78,7 +84,8 @@ gives an element a rectangular extrusion and is reused by tests that build their
 
 ### Every test file
 
-Counts are tests collected at `104fda9` (parametrised cases counted separately).
+Counts are tests collected at `104fda9` (parametrised cases counted separately), except `test_origins.py` and the
+voice relay's origin test, counted on 2026-11-22.
 
 **Geometry, the check and detection** ([06](06-geometry-and-detection.md))
 
@@ -161,6 +168,7 @@ Counts are tests collected at `104fda9` (parametrised cases counted separately).
 | `test_requirements_wiring.py` | 18 | Requirements reaching the agent, triage and the API: unchanged prompt without a file, move limits, `meets`, recommendations, rules settling without a call, Gemini's audit, seeded jobs, registration and 409 `requirements_unknown`, detection and preview, suggest, the report, agent links |
 | `test_settings.py` | 9 | `settings.py`: the store survives a restart, refuses unknown values, ignores a retired setting, falls back when broken; effort precedence owner > everyone > environment; thinking-level defaults from the environment; triage always on the fast model; owner-only `/api/settings`; `/api/models` |
 | `test_owner.py` | 7 | `owner.py`: the HttpOnly cookie, a new token logs everyone out, no token no owner, wrong tokens capped, settings count only for the owner, unknown settings dropped, the owner skips the demo caps |
+| `test_origins.py` | 10 | The web app on another origin (`origins.py`, `IRIS_ALLOWED_ORIGINS`): its preflight allowed with credentials, another site's refused (400); a credentialed call readable, the owner cookie `SameSite=None; Secure; Partitioned` and cleared with the same flags; another site's call answered with no `Access-Control-Allow-Origin`; nothing configured means no CORS and a `SameSite=Strict` cookie; a stream through `_CrossOrigin` keeps `Content-Encoding: identity`; origins normalised, a malformed one (`*`, a path, no scheme) refused; `GET /api/health` names `IRIS_VERSION`; split, `GET /` is the API's JSON and no web app; one origin, `GET /` is the web app |
 | `test_limits.py` | 5 | `limits.ProposeLimit`: per-visitor hour, the daily cap for everyone (refusals not counted), no limits by default, 429 on propose, `Workspace` keeps only the newest scenes |
 | `test_env_file.py` | 3 | Configuration: a fresh interpreter on a copy of the package beside its own `.env` (the package's `__init__.py` loads it) reads `.env` for the settings read at import and the caps, a real environment variable wins, and empty numbers take their defaults (`limits.env_int` / `env_float`); a value that is not a number still raises |
 
@@ -169,7 +177,7 @@ Counts are tests collected at `104fda9` (parametrised cases counted separately).
 | File | Tests | What it covers |
 |---|---|---|
 | `test_mcp.py` | 12 | `mcp_server.py` and `agents.py`: the tools and their `readOnlyHint`s, 401 without a live token, an agent finds, checks, proposes, applies and exports, the page answers for pictures and follows `set_view`, `set_filters` and `clear_filters`, a person's filter shared with the link checked by name, link expiry (sliding, 24 h at most) and caps, long proposals become jobs, stdio on its own session, a closed page |
-| `test_voice_live.py` | 13 | `voice_live.py` with transcription scripted: hold to talk transcribes the clip once on release (an empty clip calls nothing), hands-free sends each RMS segment when the speaker pauses and ignores a click, the time limit (flushing a segment in progress), non-microphone audio refused, a failed or missing model said in words, other origins refused, the page leaving ends the session, the loudness measure, one voice cap use per session |
+| `test_voice_live.py` | 14 | `voice_live.py` with transcription scripted: hold to talk transcribes the clip once on release (an empty clip calls nothing), hands-free sends each RMS segment when the speaker pauses and ignores a click, the time limit (flushing a segment in progress), non-microphone audio refused, a failed or missing model said in words, other origins refused, the web app's own origin let in only when it is in `IRIS_ALLOWED_ORIGINS`, the page leaving ends the session, the loudness measure, one voice cap use per session |
 
 **The docs map**
 
@@ -227,7 +235,8 @@ flowchart LR
   resolve it. The same holds for the narrower harnesses: `async-ownership.test.mjs` compiles `Chat.tsx` with stubs for
   `react`, three lucide icons (`AudioLines`, `Mic`, `Square`), `./api` and `./voice`; `viewer-load.test.mjs` compiles
   `viewer/Viewer.ts` with real `three` (and its OrbitControls and BufferGeometryUtils), a stubbed `./ifcLoader` and the
-  real `./patch`.
+  real `./patch`; `built-view.test.mjs` and `workings.test.mjs` compile the real `./api` for `apiUrl` (Node has no
+  `VITE_API_BASE`, so paths stay as they are).
 - **The transform limit:** `app-replacement.test.mjs`'s state-label transform checks
   `ts.isCallExpression(node.initializer)` on every variable declaration with an array pattern. A
   `for (const [a, b] of …)` declaration has no initializer, so the check throws and the test file fails to load. In
@@ -411,8 +420,32 @@ to port 8000), or build the web app and let the server serve `web/dist` on one p
   response must say `content-encoding: identity` and the first events must arrive at once, not with the result.
 - **Voice:** recognition was checked with espeak-ng speech through the relay and in Chromium with a fake microphone
   ([docs/voice.md](../voice.md)); a human voice on a real microphone is not yet checked.
-- **After a deploy:** open the Cloud Run service URL, load Northbank, try one proposal (see
-  [17](17-deployment-and-operations.md)).
+- **After a deploy:** `deploy.yml`'s smoke test checks both ends ([CI on GitHub Actions](#ci-on-github-actions));
+  then open the web app (Firebase Hosting, `https://<site>.web.app`), load Northbank, try one proposal, and unlock as
+  the owner once to see the cookie travel cross-site (see [17](17-deployment-and-operations.md)). A plain one-origin
+  deploy is checked on the Cloud Run service URL.
+
+## CI on GitHub Actions
+
+`.github/workflows/ci.yml` (named CI) runs the tests on GitHub's machines. It runs on every pull request, on a push
+to any branch except `main`, when another workflow calls it (`workflow_call`), and by hand (`workflow_dispatch`). A
+push to `main` runs it through `deploy.yml` instead, so the tests do not run twice. A newer run of the same pull
+request cancels the older one. Every action is pinned to a commit SHA.
+
+| Job | Machine | What it runs |
+|---|---|---|
+| `server` | ubuntu-24.04, 30 min | apt installs `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz0b`, `libharfbuzz-subset0`, `fonts-dejavu-core` and `libgl1` (what the Dockerfile installs), so WeasyPrint's PDF tests and OpenCASCADE's STEP tests pass; `astral-sh/setup-uv` with Python 3.13, cached on `server/uv.lock`; `uv sync --frozen`; `uv run pytest -q --ignore=tests/bench` |
+| `web` | ubuntu-24.04, 20 min | Node 22 with the npm cache; `npm ci` (its postinstall copies web-ifc's wasm), `npm test`, `npm run build` |
+| `bench` | ubuntu-24.04, 30 min | VisionBench, only when `server/tests/bench` exists: the same system libraries; when `bench/render` exists, `npm ci` there and `npx playwright install --with-deps chromium` (without the renderer the render tests skip); then `uv sync --frozen` and `uv run pytest -q tests/bench` |
+
+**On `main`:** `.github/workflows/deploy.yml` (named Deploy) runs on every push to `main` and by hand. Its job `ci`
+reuses `ci.yml`; its job `deploy` needs `ci`, so nothing deploys unless all three jobs pass. After both deploys its
+smoke test checks the two ends: the web app's page on Firebase Hosting answers 200, `GET /api/health` on Cloud Run
+reports this commit (`IRIS_VERSION`), and a CORS preflight to `/api/owner/unlock` from the Firebase origin gets
+`Access-Control-Allow-Origin` back. A failed check fails the run. The deploy itself is in
+[17](17-deployment-and-operations.md).
+
+CI calls no model: evals and the product checks in a browser are not in it.
 
 ## Before you call a change done
 
@@ -442,6 +475,7 @@ flowchart TD
     py --> run
     web --> run
     run --> log["Dated entry in 22-build-log.md, PR on its own branch"]
+    log --> ci["CI on the PR: server, web and VisionBench tests"]
 ```
 
 | The change touches | Run, besides the server tests and the web build and tests |
@@ -453,6 +487,7 @@ flowchart TD
 | Escalation | `escalation.py` (billed), sparingly |
 | Scene loading, boxes, uploads | `big_models.py`, `big_models_browser.cjs`; Northbank's boxes and its 464 clashes unchanged |
 | A stream or a route behind Cloud Run | The `Accept-Encoding` curl check, on the live URL after deploy |
+| Calls from the web app on another origin: `origins.py`, CORS, the owner cookie, the voice socket's `Origin` | `test_origins.py`, `test_voice_live.py`; after deploy, the smoke test, then unlock as the owner and talk once on the Firebase page |
 | App's imports | Both stub lists (`app-host.mjs`, `app-replacement.test.mjs`) |
 | The viewer's look, the demo models | `capture-demos.cjs` and `capture-proposals.cjs --landing`; then the landing, the README's "Two demos" table and the demo cards together |
 | The proposal flow's look, the Workings graph | `capture-proposals.cjs`, and with `--landing`; then the README's "See it work" captions and the landing clips' alt text from that run |
@@ -483,3 +518,4 @@ checked 2026-10-30 against `0390a12` plus this slice. Details: [brand asset desi
   folder.
 - A new recorded result worth quoting (the "Latest recorded result" column), or the answer-key procedure changes.
 - A new committed browser script, or the delivery checklist in `AGENTS.md` or `CLAUDE.md` changes.
+- `.github/workflows/ci.yml` changes (a job, a trigger, a system library), or `deploy.yml`'s smoke test does.

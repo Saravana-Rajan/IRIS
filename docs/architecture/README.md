@@ -1,6 +1,7 @@
 # 00 · Iris architecture map
 
-> **Covers:** the whole repository · **Checked against code:** re-branded on 2026-11-11
+> **Covers:** the whole repository · **Checked against code:** re-branded on 2026-11-11; the system diagram, "Where
+> the code is" and the change table re-checked for split hosting and CI on 2026-11-22
 
 These docs map Iris end to end: what it does, how the parts fit together, where each thing lives in the code, and
 how data and requests move through it. They are written for engineers and agents who need to understand or change
@@ -30,7 +31,8 @@ flowchart LR
         app <--> viewer
     end
     agentClient["MCP client (an agent)"]
-    subgraph run["Cloud Run service (one instance, one process)"]
+    hosting["Firebase Hosting (the built page, web/dist)"]
+    subgraph run["Cloud Run service iris-api (one instance, one process)"]
         api["FastAPI app (app.py)"]
         mcp["MCP server (mcp_server.py at /mcp)"]
         ws["Workspace (service.py): scenes, reports, jobs, links"]
@@ -47,6 +49,7 @@ flowchart LR
     gemini["Gemini on Vertex AI (Pro, Flash, escalation, image)"]
     files["samples/ (models, reports, STEP cache)"]
     bucket["Cloud Storage bucket (settings for everyone, built pictures)"]
+    hosting -.->|"serves the page"| app
     app -->|"HTTP and NDJSON streams, voice socket"| api
     agentClient -->|"MCP over HTTP, pairing token"| mcp
     ai -->|"model_client.py"| gemini
@@ -134,6 +137,9 @@ web/public/           tour recordings, demo pictures, favicon (12, 19)
 web/scripts/          build helpers and the demo capture scripts (12)
 web/tests/            node test suite and the App harness (18)
 deploy/deploy.sh      the public deploy to Cloud Run (17)
+deploy/github-setup.sh one-time setup for the auto-deploy: Workload Identity Federation, deploy account, Hosting site (17)
+.github/workflows/    ci.yml (tests on every PR and push) and deploy.yml (tests, then deploy on push to main) (17, 18)
+firebase.json         Firebase Hosting for the built page, with .firebaserc (17)
 evals/                evals, recorded runs, results.csv (18)
 samples/              eight bundled demo models; other models, reports and STEP cache gitignored (19)
 docs/                 feature designs; docs/architecture/ is this map
@@ -173,6 +179,7 @@ assets/brand/iris/    approved identity, motion, exports and rebuild/check scrip
 | The requirements format or what it compiles into, a setting, an env var | 15 (the test checks env vars) |
 | Secrets, identity, the owner, a cap, a budget, a size limit | 16 |
 | `deploy/deploy.sh`, `deploy/env.yaml`, image packages, secrets, deploy steps, operational quirks | 17 |
+| `.github/workflows/`, `deploy/github-setup.sh`, `firebase.json`, how the page is hosted or reaches the server | 17, 18 for CI, 02 for hosting |
 | A test harness, a new eval, the delivery checklist | 18 |
 | Demo models, the answer key, tour recordings, demo pictures | 19 |
 | An owner decision, a rejected approach, a known limit, the roadmap | 20 |

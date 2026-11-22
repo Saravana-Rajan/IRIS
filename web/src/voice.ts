@@ -8,6 +8,7 @@
  * `VoiceRecorder` (the fallback when the socket can't open): records a clip in the browser's own format (webm/opus or
  * mp4), then decodes, mixes down and resamples to 16 kHz mono WAV for `POST /api/transcribe`.
  */
+import { wsUrl } from "./api";
 
 export const MAX_SECONDS = 60;
 const RATE = 16000;
@@ -104,8 +105,7 @@ export class LiveVoice {
   async start(mode: VoiceMode, reportId: string | null, on: LiveHandlers, sceneId: string | null = null): Promise<void> {
     const mic = navigator.mediaDevices.getUserMedia(micConstraints());
     mic.catch(() => undefined);  // handled below; this only stops an unhandled rejection while the socket opens
-    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${scheme}//${location.host}/api/voice/live`);
+    const socket = new WebSocket(wsUrl("/api/voice/live"));
     socket.binaryType = "arraybuffer";
     this.socket = socket;
     const opened = new Promise<void>((resolve, reject) => {

@@ -1,4 +1,5 @@
-# Iris on Cloud Run: one container serves the built web app and the API from one origin.
+# Iris on Cloud Run: one container serves the built web app and the API from one origin. With IRIS_ALLOWED_ORIGINS set
+# (the GitHub deploy: the web app is on Firebase Hosting) the same image serves the API only (server/iris/origins.py).
 #
 #   docker build -t iris .            # local
 #   deploy/deploy.sh                  # Cloud Build + Cloud Run (see deploy/README.md)

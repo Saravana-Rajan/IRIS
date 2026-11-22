@@ -1,6 +1,6 @@
 import { CircleCheck, CircleX, Download, FileText, LoaderCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type CheckSummary, type DocEvent, type Evidence, type ModelTeam, type Report, type ReportClash, type Signoff, type Team, type TriageVerdict } from "./api";
+import { api, apiUrl, type CheckSummary, type DocEvent, type Evidence, type ModelTeam, type Report, type ReportClash, type Signoff, type Team, type TriageVerdict } from "./api";
 import type { Review } from "./ReportList";
 import { aiName } from "./aiNames";
 
@@ -183,7 +183,7 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
           <button className="btn small" onClick={() => { setError(null); onRunTriage(); }}>Triage all</button>}
         <div className="actions">
           {ready
-            ? <a className="btn primary big" data-tour="download" href={ready.url} download={ready.name}><Download size={16} aria-hidden /> Download {ready.name} ({Math.max(1, Math.round(ready.bytes / 1024))} KB)</a>
+            ? <a className="btn primary big" data-tour="download" href={apiUrl(ready.url)} download={ready.name}><Download size={16} aria-hidden /> Download {ready.name} ({Math.max(1, Math.round(ready.bytes / 1024))} KB)</a>
             : <button className="btn primary big" data-tour="build" disabled={!triageDone || busy || !models} onClick={build}>
               {busy ? <><i className="spinner" aria-hidden /> Building…</> : <><FileText size={16} aria-hidden /> Build the report</>}</button>}
           {ready && <button className="btn" onClick={() => setReady(null)}>Change and build again</button>}

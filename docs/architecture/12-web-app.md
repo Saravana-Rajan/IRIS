@@ -2,7 +2,8 @@
 
 > **Covers:** `web/src/` (all but `viewer/`, which is [13](13-3d-viewer.md)), `web/index.html`, `web/vite.config.ts`,
 > `web/tsconfig.json`, `web/package.json`, `web/scripts/`, `web/public/`, `assets/brand/iris/` · **Checked against code:**
-> re-branded on 2026-11-11 · **Deeper design:** [docs/mobile.md](../mobile.md),
+> re-branded on 2026-11-11; the server's address (`api.ts`, `voice.ts`, `clashImage.ts`, the server's URLs at render
+> time) on 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
 > [docs/views.md](../views.md), [docs/panels.md](../panels.md), [docs/brand-assets.md](../brand-assets.md)
 
 The web app is a single-page React 19 app built with Vite and TypeScript. One component, `App` in `App.tsx`, owns
@@ -20,7 +21,7 @@ only through `api.ts`, mostly as NDJSON streams, and draws the models through th
 | `main.tsx` | Entry: mounts `<App />` in `StrictMode` on `#root`, imports the stylesheet | (none) | `web/index.html` |
 | `App.tsx` | The whole page: state, handlers, effects, the notch and corner (desktop) or the compact header, panes, sheet, dialogs. Also small local components `ProofStrip`, `Recommended`, `NoFix`, `Thinking` and helpers `keepPlaces`, `movedPairs`, `clampPane`, `shortName` | `App` | `main.tsx` |
 | `index.css` | The app's stylesheet: tokens, layout grid, every feature's styles, then the "Responsive" block (the landing's are in `landing/landing.css`) | (CSS) | `main.tsx` |
-| `api.ts` | Every server call, the NDJSON reader, the wire types, the two request headers | `api`, `ApiError`, `setOwnerSettings`, `setRequirements`, `requirementsInUse`, ~100 types | everything |
+| `api.ts` | Every server call, the NDJSON reader, the wire types, the two request headers, the server's address (`VITE_API_BASE`) | `api`, `ApiError`, `apiUrl`, `wsUrl`, `setOwnerSettings`, `setRequirements`, `requirementsInUse`, ~100 types | everything |
 | `aiNames.ts` | The name of the AI model behind each role (proposal, escalation, triage, image, voice) as the server reports it (`GET /api/models` labels), for every panel's words; App sets them, the defaults until then | `aiName`, `setAiNames`, `DEFAULT_AI_NAMES`, `AiRole`, `AiNames` | `App`, `Activity.tsx`, `pilot.ts`, `PlanPanel.tsx`, `BuiltView.tsx`, `Triage.tsx`, `Insights.tsx`, `ReportDoc.tsx`, `ClashPanel.tsx`, `ReportList.tsx`, `Requirements.tsx`, `Owner.tsx`, `Workings.tsx`, `workingsGraph.ts` |
 | `names.ts` | Model files' names as people read them: no extension, and no prefix the set shares, whatever the project is called | `shortNames`, `sharedPrefix` | `App` |
 | `About.tsx` | The landing in the empty viewer, a page of its own (`landing/`): its header (the wordmark, section links that follow the scroll), the hero with the live replay (`landing/Hero.tsx`) and the resume card, the strip of formats Iris reads and writes by their logos (`Formats`), the problem (`Collide`), the loop as tabs beside one frame playing each step's recorded run (`Loop`), the check to try by hand (`landing/Sandbox.tsx`), the kinds of fix (`landing/FixArt.tsx`), the AI's rule and the five models, everything around the fix (`landing/Bento.tsx`), the two demo cards playing a recorded fix (`DemoCard`, `Clip`), who it is for, what is proven and what is not, words and colours, the close with the "Go deeper" card that opens About Iris, the footer. Its numbers are the measured ones; the one industry figure, rework's cost, links its source `GIRI_STRATEGY` | `About`, `Resume`, `projectName`, `GIRI_STRATEGY` | `App`, `AboutIris.tsx` |
@@ -76,7 +77,7 @@ only through `api.ts`, mostly as NDJSON streams, and draws the models through th
 | `filters.ts` | Filters, pure ([docs/filters.md](../filters.md)): the index's types, conditions and rules, `matching` (as the server's `facets.matching`), `found`, `evaluate` (what every rule that is on hides, isolates and colours: a `RuleView`), counts, facet names, the palette clear of every reserved colour, `migrate` for kept and saved states, `shareable` (the filters as chat and the agent link see them) | `evaluate`, `found`, `matching`, `prepare`, `count`, `valueCounts`, `describe`, `sets`, `nameFor`, `nextColour`, `migrate`, `shareable`, `PALETTE`, `RESERVED`, `Rule`, `FilterState`, `RuleView`, `FacetIndex` | `App`, `FiltersPanel.tsx`, `api.ts` (type), `viewer/Viewer.ts` (type) |
 | `checks.ts` | Checks on filters, pure ([docs/filters.md](../filters.md), "Checks"): a filter as a detection test's side (its complete conditions; colouring by value, what it colours), what the filters show together as a side (`viewOf`, counted from `evaluate`), the check's name as the user knows it, the test with the server's defaults and no id (Everything: the server's `check.everything`), what a side takes counted as the filter list counts it, with the rooms among it a check cannot test and the line that says so, whether a run was a check; and the kept checks' list as one check shows it, which fix marks a run leaves, a check's picker line ([docs/detection.md](../detection.md), "Kept checks") | `sideFilter`, `sideOf`, `viewOf`, `sideName`, `checkName`, `checkTest`, `sideCounts`, `shownCounts`, `roomsLine`, `checkOf`, `narrow`, `pruneFixes`, `checkLabel`, `sameClash`, `Side`, `CheckKind` | `FiltersPanel.tsx`, `Detect.tsx`, `App` |
 | `chatRequest.ts` | Who owns the chat's current turn, so a newer action can cut off an older stream | `ChatRequestOwner`, `ChatRequest` | `App`, `Chat.tsx` |
-| `clashImage.ts` | Reads a Navisworks clash picture by colour (red A, green B, where they meet) | `readClashImage`, `focusSquare`, `drawOverlay`, `ClashRead`, `Box` | `ClashPanel.tsx` |
+| `clashImage.ts` | Reads a Navisworks clash picture by colour (red A, green B, where they meet); asks for it with CORS when it comes from another origin | `readClashImage`, `focusSquare`, `drawOverlay`, `ClashRead`, `Box` | `ClashPanel.tsx` |
 | `fixKinds.ts` | Every fix kind in words: label, edit text, clearance, framing, reviewer, host rows; rejected options as the next proposal's notes | `KIND_LABEL`, `kindLabel`, `editText`, `changeText`, `clearanceText`, `needsText`, `framePieces`, `hostRows`, `moveWords`, `reviewText`, `recEditText`, `optionKey`, `rejectionNotes`, `Rejection` | `App`, `Activity.tsx`, `PlanPanel.tsx` |
 | `links.ts` | The connection highlight's logic: index the graph, an element's direct links by kind, its run (Shift), the groups and colours to light, the hover label's counts | `indexGraph`, `linksOf`, `runOf`, `highlightGroups`, `countsText`, `LINK_COLOURS`, `LINK_WORDS`, `LINK_ORDER`, `Graph`, `LinkIndex`, `LinkKind` | `App`, `api.ts` (the `Graph` type) |
 | `layout.ts` | Desktop / tablet / phone by width, touch detection, sheet snapping, `follow()` | `useLayout`, `layoutFor`, `useCoarse`, `isCoarse`, `follow`, `nearestSnap`, `nextSnap`, `SNAPS`, `PHONE_MAX`, `TABLET_MAX` | `App`, `Sheet.tsx`, `About.tsx` |
@@ -417,12 +418,27 @@ built-picture events into `builtRuns[key].step`. Event types are listed in [10](
 
 ### `api.ts`
 
+- **The server's address.** `API_BASE` is the build-time `VITE_API_BASE`, trailing slash dropped. Empty (the
+  default) means the server is on this page's origin: local dev through Vite's proxy, and the page Cloud Run serves
+  itself. Set, it is the API's origin: `deploy.yml` builds the page for Firebase Hosting with the Cloud Run
+  `iris-api` URL ([17](17-deployment-and-operations.md)).
+  - `apiUrl(path)` puts `API_BASE` before a path starting with `/`. `data:`, `blob:` and full URLs pass through.
+  - `wsUrl(path)` gives the WebSocket URL: `ws:`/`wss:` on the API's origin, or on this page's host when unset.
+  - `apiFetch` (internal) is `fetch(apiUrl(path))`. It adds `credentials: "include"` only when `API_BASE` is set, so
+    the owner cookie travels cross-origin; on one origin the request is as it always was.
+  - Every server call goes through them: `send`, `call`, `ndjson`, `reRegister`, `streamUpload` (its XHR sets
+    `withCredentials` cross-origin), the `leaveLink` beacon, `linkCapture`, `file`, `uploadReport`, and the URLs
+    `exportUrl`, `journalCsvUrl` and `imageUrl` return.
+  - URLs the server sends back (`/api/built/<key>.jpg`, its `-lines.png`, `/api/documents/<id>`) are wrapped with
+    `apiUrl` only when shown (`BuiltView.tsx`, `workingsGraph.ts`, `ReportDoc.tsx`). Stored values stay relative:
+    `document.py` recognises the `/api/built/` prefix.
+  - Static files (tour JSON, demo clips, logos, wasm) still come from the page's own host.
 - **Transport.** `call<T>(path, init)` sends JSON to `/api{path}` and throws `ApiError(detail, status)` on a non-2xx
   reply. `ndjson<T>(path, body, onEvent, signal, method)` POSTs (or GETs) and reads the body line by line; it stops
   when `onEvent` returns `true` or the signal aborts, and cancels the reader in `finally`. `proposeStream` has its own
   reader (it resolves on `result`, throws on `error`, and throws if the stream ends first). `uploadModelsStream` uses
   `XMLHttpRequest` for upload progress and parses `responseText` as it grows. `file`, `uploadReport` and `linkCapture` use
-  plain `fetch` (`saveView` goes through `send`); `leaveLink` uses `navigator.sendBeacon` so it still goes while the page unloads.
+  `apiFetch` directly (`saveView` goes through `send`); `leaveLink` uses `navigator.sendBeacon` so it still goes while the page unloads.
 - **Headers.** `settingsHeader()` adds `X-Iris-Settings` (the owner's own settings as JSON, set by
   `OwnerSettingsMenu` through `setOwnerSettings` only once the owner is unlocked) and `X-Iris-Requirements`
   (the registered requirements id, set by `App` through `setRequirements`). Every `call`, `ndjson`, `proposeStream`,
@@ -590,7 +606,8 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
   selected row under a verdict filter for the same reason.
 - **`clashImage.ts`:** `readClashImage(url)` reads a Navisworks picture on a 512 grid by colour (red A, green B, their
   blend or seam where they meet), cached per URL; `focusSquare` crops thumbnails to the meeting zone, `drawOverlay`
-  draws outlines in the image dialog.
+  draws outlines in the image dialog. A picture from another origin gets `crossOrigin = "anonymous"`: it is drawn to a
+  canvas and read, and without CORS the canvas is tainted. The API's CORS answer allows it.
 - **`fixKinds.ts`:** the client half of the fix-kind registry ([07](07-fixes-and-edits.md)). `framePieces` says what
   to frame (a split run's middle pieces, a penetration's provision for void, every piece of a combined fix; none for a
   move, trim or seat, which frame where they meet the other side); `clearanceText` says "butt joint" for a trim and
@@ -615,8 +632,8 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
 - **`uploads.ts`:** `uploadRefusal` (at most 8 files, `.ifc`/`.step`/`.stp`, the server's cap from `api.models`
   counted before packing), `uploadStatus` (the busy line per upload event), `localFile` (an uploaded IFC is drawn from
   the visitor's own file, a STEP comes back converted). Design: [docs/uploads.md](../uploads.md).
-- **`voice.ts`:** `LiveVoice` streams 16 kHz PCM from an AudioWorklet over `/api/voice/live` (hold to talk, or
-  hands-free); `VoiceRecorder` records a clip and converts it to 16 kHz mono WAV for `api.transcribe` when the socket
+- **`voice.ts`:** `LiveVoice` streams 16 kHz PCM from an AudioWorklet over `/api/voice/live`, opened with
+  `new WebSocket(wsUrl("/api/voice/live"))` so it reaches the API's origin (hold to talk, or hands-free); `VoiceRecorder` records a clip and converts it to 16 kHz mono WAV for `api.transcribe` when the socket
   can't open. Design: [docs/voice.md](../voice.md).
 - **`chatRequest.ts`:** `ChatRequestOwner.begin()` gives a turn its `AbortSignal` and an `isCurrent()` check;
   `invalidate()` closes the boundary and aborts; `capture()` lets voice callbacks check they are still current.
@@ -685,6 +702,9 @@ No `sessionStorage` or IndexedDB is used.
   [docs/panels.md](../panels.md)), and `three-mesh-bvh` 0.9.16, which nothing in `web/src` imports at HEAD.
 - **`vite.config.ts`:** the React plugin, and a dev proxy sending `/api` (WebSockets included, for live voice) to
   `http://localhost:8000`, keeping the Host header so the server's same-origin check passes.
+- **`VITE_API_BASE`:** read at build time by `api.ts` (above). Unset for local dev and the image Cloud Run serves;
+  set to the Cloud Run `iris-api` URL when `deploy.yml` builds the page for Firebase Hosting, which checks the bundle
+  contains it.
 - **`tsconfig.json`:** strict, `noUnusedLocals`/`noUnusedParameters`, includes `src` and `vite.config.ts` only, so
   `web/spikes/` (the Show it built spike, `built.ts` / `built.html`) is outside the build.
 - **`web/scripts/copy-wasm.mjs`:** copies `web-ifc.wasm` (and `web-ifc-mt.wasm` when present) from
@@ -715,8 +735,9 @@ No `sessionStorage` or IndexedDB is used.
 - **`web/index.html`:** the shell (`#root`, `viewport-fit=cover`, the IBM Plex fonts from Google Fonts, title "Iris ·
   AI design coordination", theme colour navy `#052640`, the icon and manifest links, the Open Graph image). `#root`
   starts with the boot splash: the wordmark's letters arrive once (inline CSS) until React mounts and replaces it.
-- **Serving:** in production the server mounts `web/dist` at `/` when `index.html` exists (`app.WEB_DIST`, env
-  `IRIS_WEB_DIST`); see [17](17-deployment-and-operations.md).
+- **Serving:** on one origin the server mounts `web/dist` at `/` when `index.html` exists (`app.WEB_DIST`, env
+  `IRIS_WEB_DIST`). Split, Firebase Hosting serves `web/dist` and the server is the API only; see
+  [17](17-deployment-and-operations.md).
 - **Tests:** `web/tests/` runs on Node's test runner without a browser. `app-host.mjs` compiles a source file with the
   TypeScript transpiler into a data URL, replacing named imports, and `appHost()` runs the real `App` render and its
   effects with React hooks, the API and the viewer replaced. **A new import in `App.tsx` must be added to both stub
@@ -725,7 +746,8 @@ No `sessionStorage` or IndexedDB is used.
   the rest are stubbed (`./dock`'s `inSlot` returns what it is given, so the tests see each panel's content in place).
   The transform cannot read `for (const [a, b] of …)` in `App`: iterate keys. Other tests cover `dockLayout.ts`, `layout.ts`,
   `uploads.ts`, `signoffs.ts`, `reqFile.ts`, `fixKinds.ts`, and `Viewer.load` / `viewer/patch.ts` with real three.js
-  batches. More in [18](18-testing-and-evals.md).
+  batches. `built-view.test.mjs` and `workings.test.mjs` map `./api` to the compiled `api.ts` (for `apiUrl`). More in
+  [18](18-testing-and-evals.md).
 
 ## When to update this doc
 
@@ -734,7 +756,8 @@ No `sessionStorage` or IndexedDB is used.
 - A new state group, handler or data effect in `App`, or a change to how `viewPlan`, `shownTriage`, `listFocus`,
   `keepPlaces` or `sceneRevision` behave.
 - A new stream consumer, tracker, chat `ui` action or agent-link event handled by the page.
-- A new `api.ts` function group, request header, retry rule or transport.
+- A new `api.ts` function group, request header, retry rule or transport, or a server call or server URL that does
+  not go through `apiUrl` / `wsUrl` / `apiFetch`.
 - A new `localStorage` key.
 - A change to the breakpoints, `follow()`, the sheet's snaps, or the Responsive CSS's structure.
 - A new or renamed panel, a change to the default layout, the side bars' buttons, what is saved, or how `setTab` and

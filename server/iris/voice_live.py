@@ -28,7 +28,7 @@ from urllib.parse import urlsplit
 
 from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 
-from . import model_client
+from . import model_client, origins
 
 RATE = 16_000
 RATE_BYTES = 32_000  # 16 kHz x 16-bit mono
@@ -52,10 +52,11 @@ def label() -> str:
 
 
 def same_origin(headers) -> bool:
-    """A browser on another site may not open the relay (it would spend our model budget). Non-browser clients send no
-    Origin; they are held to the same caps as everyone."""
+    """A browser on another site may not open the relay (it would spend our model budget), except the web app's own
+    pages on another origin (`IRIS_ALLOWED_ORIGINS`, origins.py). Non-browser clients send no Origin; they are held to
+    the same caps as everyone."""
     origin = headers.get("origin")
-    return not origin or urlsplit(origin).netloc.lower() == (headers.get("host") or "").lower()
+    return not origin or urlsplit(origin).netloc.lower() == (headers.get("host") or "").lower() or origins.allows(origin)
 
 
 def rms(pcm: bytes) -> float:

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Building2, ChevronsLeftRight, Info, PenLine, RotateCcw, ShieldCheck } from "lucide-react";
-import type { BuiltEvent, BuiltResult } from "./api";
+import { apiUrl, type BuiltEvent, type BuiltResult } from "./api";
 import { aiName } from "./aiNames";
 
 /** Show it built (docs/show-it-built.md): one fix's picture, while it is drawn and checked, then beside Iris's view. */
@@ -112,10 +112,10 @@ export function BuiltView({ run, onRetry, reopen }: { run: BuiltRun; onRetry?: (
           <span className="built-tag right" aria-hidden>Iris's view</span>
         </div>}
         <div className="built-side" style={wiping ? { clipPath: left } : undefined}>
-          <img className="built-pic" src={r.image_url} alt="The fix as it could look built: an illustration" draggable={false} />
+          <img className="built-pic" src={apiUrl(r.image_url)} alt="The fix as it could look built: an illustration" draggable={false} />
           {wiping && <span className="built-tag left" aria-hidden>Built</span>}
         </div>
-        {lines && r.lines_url && <img className="built-lines" src={r.lines_url} alt="" aria-hidden draggable={false} />}
+        {lines && r.lines_url && <img className="built-lines" src={apiUrl(r.lines_url)} alt="" aria-hidden draggable={false} />}
         {wiping && <span className="built-wipe" style={{ left: `${wipe}%` }} aria-hidden>
           <span className="built-knob"><ChevronsLeftRight size={14} /></span></span>}
       </div>

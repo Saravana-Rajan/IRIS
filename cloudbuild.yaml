@@ -3,8 +3,8 @@
 # Manual (deploy/deploy.sh does this for you):
 #   gcloud builds submit --config cloudbuild.yaml --ignore-file deploy/.gcloudignore \
 #     --substitutions _REGION=asia-south1,_REPO=iris,_TAG=manual-$(date +%Y%m%d-%H%M%S) .
-# CI: a Cloud Build trigger on the main branch with this file; with _TAG empty the tag is the commit's short SHA
-# (or the build ID when there is no commit).
+# Pushes to main do not use this: GitHub Actions builds the same Dockerfile itself (.github/workflows/deploy.yml). With
+# _TAG empty the tag is the commit's short SHA (or the build ID when there is no commit).
 #
 # Image: ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:<tag> and :latest
 # Shell variables are written $$NAME so Cloud Build does not treat them as substitutions.

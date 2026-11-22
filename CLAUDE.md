@@ -45,8 +45,9 @@ The headline is verified model edits. Image-only explanation is a fallback, neve
   and report text; Flash for bulk triage, titles, STEP part names, voice (buffered segments, transcribed when silence
   ends one) and the lighter Show it built judges; an escalation model for second tries and the full judges; the image
   model for Show it built. Edits made by the model are logged with source `model`.
-- Hosting: one Cloud Run service (`deploy/deploy.sh`) serving the web app and API from one origin; Cloud Storage for
-  persisted files.
+- Hosting: the API on Cloud Run service `iris-api`, the web app on Firebase Hosting, deployed on every push to `main`
+  (`.github/workflows/deploy.yml`; one-time `deploy/github-setup.sh`). `deploy/deploy.sh` still deploys by hand, one
+  origin (web app and API together) when `IRIS_ALLOWED_ORIGINS` is unset. Cloud Storage for persisted files.
 
 ## Geometry facts learned the hard way
 
@@ -110,9 +111,11 @@ Findings (Oct 27):
 - Demo models: the eight public IFC/STEP files are already in `samples/`; ordinary local setup needs no private repo.
   Generator-side evals and Navisworks packages need a separate demo-models checkout at `../demo-models`, or set
   `DEMO_MODELS` to it. Preserve model bytes; see `samples/README.md`.
-- Deploy: Cloud Run, public, with proposal caps. Credentials come from the environment or Secret Manager, never chat.
-  Build the web app, run `deploy/deploy.sh` (`docs/architecture/17-deployment-and-operations.md`), open the service
-  URL, load Northbank, try one proposal.
+- Deploy: public, with proposal caps. A push to `main` tests and deploys (`.github/workflows/deploy.yml`, after a
+  one-time `deploy/github-setup.sh`): the API to Cloud Run service `iris-api`, the web app to Firebase Hosting.
+  Credentials come from the environment, Secret Manager or Workload Identity Federation, never chat. By hand, run
+  `deploy/deploy.sh` (`docs/architecture/17-deployment-and-operations.md`); then open the web app, load Northbank, try
+  one proposal.
 
 
 ## Where things are

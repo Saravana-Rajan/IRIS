@@ -1,7 +1,8 @@
 # 04 · Server code map
 
-> **Covers:** `server/iris/*.py` (35 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** re-branded on 2026-11-11 · **Deeper design:** the feature docs linked
+> **Covers:** `server/iris/*.py` (44 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
+> `server/tests/` · **Checked against code:** re-branded on 2026-11-11; `origins.py`, `owner.py`, `voice_live.py` and
+> `app.py`'s middleware and imports on 2026-11-22 · **Deeper design:** the feature docs linked
 > from each module below ([detection](../detection.md), [edits](../edits.md), [escalation](../escalation.md),
 > [mcp](../mcp.md), [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md),
 > [uploads](../uploads.md), [voice](../voice.md))
@@ -30,7 +31,7 @@ imports made inside functions, which are drawn dotted below).
 | Report jobs | `triage.py`, `titles.py`, `built.py` | Bulk verdicts, model-written titles, Show it built pictures: work over a whole report or one picture, no scene edits |
 | Documents and inputs | `reports.py`, `document.py` | Navisworks XML in; PDF and BCF out |
 | Geometry | `scene.py`, `verify.py`, `edits.py`, `detect.py`, `step.py`, `context_eval.py` | The federated IFC scene, the geometric check, model edits, Iris's own detection, STEP conversion, whole-arrangement checks |
-| Policy and request context | `requirements.py`, `settings.py`, `owner.py`, `limits.py`, `spend.py`, `domains.py`, `demos.py` | Coordination requirements, settings for everyone, the owner's context, demo caps, the escalation budget, a scene's domain and what stays in place by default, the demo projects |
+| Policy and request context | `requirements.py`, `settings.py`, `owner.py`, `origins.py`, `limits.py`, `spend.py`, `domains.py`, `demos.py` | Coordination requirements, settings for everyone, the owner's context, the other origins allowed to call the API, demo caps, the escalation budget, a scene's domain and what stays in place by default, the demo projects |
 | Model client | `model_client.py` | Gemini calls (JSON, chat, images, transcription); model choice, thinking level, usage and price |
 | Test support | `fixtures.py` | Small synthetic IFC models for tests and spikes |
 
@@ -43,7 +44,7 @@ flowchart TB
     jobs["Report jobs: triage, titles, built"]
     docio["Documents and inputs: reports, document"]
     geo["Geometry: scene, verify, edits, detect, step, context_eval"]
-    policy["Policy: requirements, settings, owner, limits, spend, domains"]
+    policy["Policy: requirements, settings, owner, origins, limits, spend, domains"]
     client["Model client: model_client"]
     support["Test support: fixtures"]
     entry --> flows
@@ -124,7 +125,8 @@ Three edges go "up" and are worth knowing before you add an import:
 | `manual.py` | Operations | Hand edits as ops (push/pull, align, move, and the rest as they are built): `resolve`, the requirements' `gate`, Iris's rules as warnings, `check` in a trial (cleared, new, worse, nearest), `apply` checked again and kept through the edit log, the clash measured again ([docs/manual-edits.md](../manual-edits.md)) |
 | `mcp_server.py` | Entry points | Iris as an MCP server: remote at `/mcp` by link token, or local over stdio |
 | `model_client.py` | Model client | `GeminiModel` and the model factories: the main model, the fast model, the escalation model; transcription; prices |
-| `owner.py` | Policy | The owner token, signed cookie, owner settings in context variables, `spawn` / `submit` that carry them |
+| `origins.py` | Policy | The other origins whose pages may call the API from a browser (`IRIS_ALLOWED_ORIGINS`): `allowed`, `allows`; read by the CORS middleware, the owner cookie and the voice socket's Origin check |
+| `owner.py` | Policy | The owner token, signed cookie (`set_cookie`, `clear_cookie`), owner settings in context variables, `spawn` / `submit` that carry them |
 | `plans.py` | Workflows | Fix together, root causes, patterns; the plan check; `KEEP` and `apply` for every kept fix |
 | `reports.py` | Inputs | Navisworks XML reports: `Report`, `ReportClash`, `ReportElement`, numbering, image sets |
 | `requirements.py` | Policy | The `iris-requirements/1` file: parse, ids, registry, what it compiles into, policies, prompt lines |
@@ -153,7 +155,7 @@ flowchart LR
     fixer["agent, escalation"]
     geo["detect, edits, step, verify, context_eval"]
     jobs["triage, titles, built, document"]
-    policy["requirements, settings, owner, spend, limits"]
+    policy["requirements, settings, owner, origins, spend, limits"]
     client["model_client.py"]
     appPy --> agentsPy
     appPy --> chatPy
@@ -188,16 +190,21 @@ flowchart LR
     plansPy -->|"owner, requirements"| policy
     ctxPy -->|"context_eval, edits, verify"| geo
     voicePy --> client
+    voicePy -->|"origins"| policy
 ```
 
 ### `app.py`: the web server
 
 The FastAPI app (`app = FastAPI(title="Iris")`) and the one `Workspace` (`ws`) everything shares. It defines every
 route and stream (inventory in [10](10-http-api-and-streams.md)), mounts the MCP server at `/mcp` and serves the
-built web app from `web/dist` (`IRIS_WEB_DIST`) last, so `/api` wins.
+built web app from `web/dist` (`IRIS_WEB_DIST`) last, so `/api` wins. Split, with the web app on another origin
+(`IRIS_ALLOWED_ORIGINS`, `origins.py`), it serves no web app: `GET /` (`front_door`) answers `API_ROOT`, a small JSON
+naming the service, `/docs` and `/api/health`.
 
 - **Main symbols:** `app`, `ws`; middleware `_OwnerContext` (owner cookie and `X-Iris-Settings` into
-  `owner.enter`; `X-Iris-Requirements` into `requirements.enter`, or a 409 `requirements_unknown`);
+  `owner.enter`; `X-Iris-Requirements` into `requirements.enter`, or a 409 `requirements_unknown`) and `_CrossOrigin`
+  (outermost: CORS with credentials for the origins in `origins.allowed`, none when there are none); `health`
+  (`GET /api/health`), `front_door` and `API_ROOT` (`GET /`);
   `_ndjson` and `NDJSON_HEADERS` (every stream goes out with `Content-Encoding: identity`); `_RequestEvents` (a
   bounded 64-event queue per streamed request that never makes a worker wait for a reader); the caps
   (`propose_limit`, `escalate_limit`, `chat_limit`, `built_limit`, `unlock_limit`, `title_limit`, `detect_limit`,
@@ -205,12 +212,14 @@ built web app from `web/dist` (`IRIS_WEB_DIST`) last, so `/api` wins.
   `_take`; the shared jobs and caches `_triage_jobs`, `_title_jobs`, `_documents`, `_previews`, `_chat` (pattern
   readings live on the Workspace: `plans.read_patterns`); `links` (`agents.Links`), `mcp_hooks`, `_McpGate`, `_mcp_transport`, `_lifespan`; folders `EXPORTS`,
   `UPLOADS`; `_receive_models` / `_unpack` (gzipped uploads).
-- **Imports:** `agents.py`, `built.py`, `chat.py`, `context_planner.py`, `detect.py`, `document.py`, `domains.py`,
-  `edits.py`, `escalation.py`, `limits.py`, `mcp_server.py`, `model_client.py`, `owner.py`, `plans.py`, `requirements.py`,
+- **Imports:** `agents.py`, `built.py`, `chat.py`, `checks.py`, `context_planner.py`, `demos.py`, `detect.py`,
+  `document.py`, `domains.py`, `edits.py`, `escalation.py`, `faces.py`, `journal.py`, `limits.py`, `manual.py`,
+  `mcp_server.py`, `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `property_edits.py`, `requirements.py`,
   `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
   **Imported by:** `mcp_server.py` (lazily, for the stdio entry point).
 - **Rules:** `.env` is already loaded when it runs (the package's `__init__.py`), and its caps and sizes are read with
-  `limits.env_int` / `env_float`; `ws.keep = links.kept` so live links' scenes and reports are evicted last; a kept
+  `limits.env_int` / `env_float`; it calls `origins.allowed()` once at import, so a malformed `IRIS_ALLOWED_ORIGINS`
+  stops the server at start; `ws.keep = links.kept` so live links' scenes and reports are evicted last; a kept
   fix goes through `_with_patch`, which holds `ws.lock` from the revision read to the
   patch so another tab's edit cannot land in between; blocking work runs in threads (`run_in_threadpool`,
   `owner.spawn`) so the event loop stays free.
@@ -243,9 +252,10 @@ when it ends. No partial words are sent mid-speech. Deeper design: [docs/voice.m
 - **Main symbols:** `relay`, `same_origin`, `label`, `rms`, `Segmenter` (`feed`, `flush`), `_Session` (`listen`,
   `take`, `event`, `sentence`, `finish`), `_transcribe`, `MODES`, `RATE`, `MAX_FRAME`, `END_WAIT_S` (90),
   `PRE_ROLL_S`, `MIN_SPEECH_S`.
-- **Imports:** `model_client.py`. **Imported by:** `app.py` (`voice_live_socket`).
-- **Rules:** a failed transcription says only the kind of error, once per session; hands-free sentences are said in
-  order (each waits for the one before).
+- **Imports:** `model_client.py`, `origins.py`. **Imported by:** `app.py` (`voice_live_socket`).
+- **Rules:** `same_origin` lets a browser open the relay only from this server's own host or an origin in
+  `IRIS_ALLOWED_ORIGINS` (a page on another site would spend the model budget); a failed transcription says only the
+  kind of error, once per session; hands-free sentences are said in order (each waits for the one before).
 
 ### `agents.py`: pairing links
 
@@ -583,6 +593,7 @@ flowchart LR
     reqPy["requirements.py"]
     settingsPy["settings.py"]
     ownerPy["owner.py"]
+    originsPy["origins.py"]
     spendPy["spend.py"]
     limitsPy["limits.py"]
     modelPy["model_client.py"]
@@ -612,6 +623,8 @@ flowchart LR
     modelPy -.-> settingsPy
     modelPy -.-> spendPy
     appPy --> limitsPy
+    appPy --> originsPy
+    ownerPy --> originsPy
 ```
 
 ### `triage.py`: bulk triage
@@ -736,15 +749,35 @@ them too). Deeper detail: [19](19-demo-data.md).
 ### `owner.py`: the owner
 
 The owner token (`IRIS_OWNER_TOKEN`, at least 24 characters), the signed `iris_owner` cookie, and the
-owner's settings from `X-Iris-Settings` in context variables. Imports nothing from the package.
+owner's settings from `X-Iris-Settings` in context variables. From the package it imports only `origins.py`.
 
-- **Main symbols:** `available`, `check_token`, `cookie_value`, `cookie_ok`, `settings`, `enter`, `leave`,
+- **Main symbols:** `available`, `check_token`, `cookie_value`, `cookie_ok`, `set_cookie`, `clear_cookie`
+  (both through `_cookie`), `settings`, `enter`, `leave`,
   `is_owner`, `no_caps`, `effort`, `escalation`, `built_views`, `spawn`, `submit`, `COOKIE`,
   `HEADER`, `DAYS` (30).
 - **Imported by:** `app.py`, `built.py`, `document.py`, `model_client.py` (lazily), `plans.py`, `settings.py`
   (lazily), `titles.py`, `triage.py`.
 - **Rules:** the header is read only when the cookie checks out; work that leaves the request's thread must use
-  `spawn` or `submit` or it loses the owner's settings (and the requirements).
+  `spawn` or `submit` or it loses the owner's settings (and the requirements). The cookie is HttpOnly, Secure,
+  `Path=/api`, 30 days, and `SameSite=Strict` on one origin; with `IRIS_ALLOWED_ORIGINS` set it is
+  `SameSite=None; Secure; Partitioned`, so it travels on the web app's cross-site calls (`Partitioned` is appended by
+  hand: Starlette writes it only on Python 3.14+). `clear_cookie` expires it with the same attributes.
+
+### `origins.py`: other origins allowed to call
+
+The origins whose pages may call this server from a browser: the web app on Firebase Hosting, built with
+`VITE_API_BASE` set to this server's URL ([12](12-web-app.md), [17](17-deployment-and-operations.md)). Empty (the
+default) means one origin: no CORS, a strict cookie, the voice socket from this host only. Imports nothing from the
+package.
+
+- **Main symbols:** `allowed()` (the configured origins as a tuple: lower case, trailing slash dropped, duplicates
+  dropped; read from the environment on each call, parsed once per raw value), `allows(origin)`, `ENV`
+  (`IRIS_ALLOWED_ORIGINS`).
+- **Imported by:** `app.py` (`_CrossOrigin`, `front_door` and the static mount), `owner.py` (`_cookie`),
+  `voice_live.py` (`same_origin`).
+- **Rules:** each entry is `scheme://host[:port]`; a path, a `*` or a malformed entry raises `ValueError`, and `app.py`
+  reads the value at import, so a typo stops the server at start instead of opening the API to every site or quietly
+  closing it. Tests: `tests/test_origins.py`.
 
 ### `limits.py`: demo caps
 
@@ -819,7 +852,7 @@ for, is in [08](08-ai-models-prompts-and-spend.md).
 local MCP server as `python -m iris.mcp_server`. Pytest runs from `server/` with `pythonpath = ["."]` and
 `testpaths = ["tests"]`.
 
-**`server/tests/`** has 38 test files plus `conftest.py`, which gives every test its own settings store (so no test
+**`server/tests/`** has 63 test files plus `conftest.py`, which gives every test its own settings store (so no test
 reads the developer's `server/.iris-settings.json`). Most build their models with `fixtures.py`.
 `test_docs_map.py` reads this doc and fails when a module in `server/iris/` is not named here. Run them with
 `cd server && uv run pytest -q`; the suites, evals and the delivery checklist are in
@@ -852,8 +885,8 @@ reads the developer's `server/.iris-settings.json`). Most build their models wit
 - **Lazy imports keep the graph acyclic.** `requirements.py`, `model_client.py`, `settings.py`, `hosts.py`,
   `verify.py`, `document.py` and `detect.py` import some package modules inside functions. Do not hoist those imports
   to the top of the file.
-- **`scene.py`, `reports.py`, `limits.py`, `owner.py`, `spend.py` and `domains.py` import nothing from the
-  package.** Keep them leaves.
+- **`scene.py`, `reports.py`, `limits.py`, `origins.py`, `spend.py` and `domains.py` import nothing from the
+  package, and `owner.py` only `origins.py`.** Keep them leaves.
 
 ## When to update this doc
 

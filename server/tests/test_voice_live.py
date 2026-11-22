@@ -173,6 +173,21 @@ def test_another_site_cannot_open_the_relay(heard):
     assert voice_live.same_origin({"host": "iris.example"})  # no Origin: not a browser
 
 
+def test_the_web_app_on_another_origin_may_open_the_relay(heard, monkeypatch):
+    """The web app on Firebase Hosting talks to the server on Cloud Run: its origin is let in (IRIS_ALLOWED_ORIGINS)."""
+    site, run = "https://iris-test.web.app", "iris-1.asia-south1.run.app"
+    monkeypatch.delenv("IRIS_ALLOWED_ORIGINS", raising=False)
+    assert not voice_live.same_origin({"origin": site, "host": run})
+    monkeypatch.setenv("IRIS_ALLOWED_ORIGINS", f"{site},https://iris-test.firebaseapp.com")
+    assert voice_live.same_origin({"origin": site, "host": run})
+    assert voice_live.same_origin({"origin": f"https://{run}", "host": run})  # the page Cloud Run serves itself
+    assert not voice_live.same_origin({"origin": "https://elsewhere.example", "host": run})
+    with TestClient(app).websocket_connect("/voice", headers={"origin": site}) as sock:
+        _open(sock, "hold")
+        sock.send_json({"type": "end"})
+        _events(sock)
+
+
 def test_the_page_leaving_ends_the_session_without_transcribing(heard):
     with TestClient(app).websocket_connect("/voice") as sock:
         _open(sock, "hold")

@@ -1,10 +1,12 @@
 # 16 · Security, caps and cost controls
 
-> **Covers:** `server/iris/owner.py`, `server/iris/limits.py`, `server/iris/spend.py`, the token side
-> of `server/iris/agents.py`, the gates in `server/iris/app.py` (`_OwnerContext`, `_take`,
+> **Covers:** `server/iris/owner.py`, `server/iris/origins.py`, `server/iris/limits.py`, `server/iris/spend.py`, the
+> token side of `server/iris/agents.py`, the gates in `server/iris/app.py` (`_OwnerContext`, `_CrossOrigin`, `_take`,
 > `escalation_refused`, `built_stream`, `_receive_models`, `_McpGate`, `mcp_hooks`), `voice_live.same_origin` and
 > `voice_live.relay`, `model_client.load_env` and `PRICES`, the budget in `server/iris/built.py`,
-> `web/src/Owner.tsx` · **Checked against code:** re-branded on 2026-11-11 · **Deeper design:**
+> `web/src/Owner.tsx`, the deploy identity in `deploy/github-setup.sh` · **Checked against code:** re-branded on
+> 2026-11-11; origins, the owner cookie, the voice socket's Origin rule, deploy identity and the cloud footprint
+> re-checked on 2026-11-22 · **Deeper design:**
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/uploads.md](../uploads.md)
 
 Iris is a public demo that spends money on every model call, on one shared set of credentials, in one process. This doc is
@@ -22,11 +24,19 @@ memory, disk and time any one request can take. Environment variables are listed
   by `model_client.load_env` (real variables win; [15](15-requirements-settings-and-config.md)). On Cloud Run they
   come from the service's environment and Secret Manager ([17](17-deployment-and-operations.md)). The checked-in
   `.env.example` holds names only.
+- **No Gemini API key in the cloud.** The GitHub deploy runs `deploy/deploy.sh` with `GEMINI_API_KEY_SECRET=""`, so
+  the service gets no key secret. It calls Vertex AI as its runtime service account, `iris-run`, which holds
+  `roles/aiplatform.user`. `deploy/github-setup.sh` also removes `GEMINI_API_KEY` from `deploy/setup.sh`'s
+  environment.
+- **The owner token in the cloud** lives in Secret Manager (`iris-owner-token`). Cloud Run reads it as `iris-run`.
+  When the secret has no version yet, `deploy/github-setup.sh` makes a random one (`secrets.token_urlsafe(32)`) and
+  hands it to `setup.sh` in the environment only. It is never printed; the owner reads it with
+  `gcloud secrets versions access latest --secret iris-owner-token`.
 - **The rule** (CLAUDE.md, AGENTS.md): secrets and `.env` contents never enter git, chat or tool output.
 - **Only the server calls Gemini.** Every authenticated model request is made on the server: `GeminiModel` and its
   streaming variants, `model_client.transcribe`, `built.restyle`, and the live voice relay. The page talks only to
-  Iris's own origin. What the page can learn about credentials is a boolean: whether second tries are available
-  (`escalation_info.available`).
+  Iris's own server: its own origin, or the API's origin when the web app is hosted apart (below). What the page can
+  learn about credentials is a boolean: whether second tries are available (`escalation_info.available`).
 - **Live voice keeps credentials on the server.** The browser cannot open the model session itself, so
   `/api/voice/live` relays: `voice_live.relay` opens the session with the server's credentials (never logged, never
   sent to the browser), and a failure reaches the browser as a short message naming only the error type, never the
@@ -34,6 +44,29 @@ memory, disk and time any one request can take. Environment variables are listed
 - **The owner token is sent once** and never kept in the browser: the server answers with a cookie scripts cannot
   read (below).
 - **Link tokens are shown once**; the server keeps only their sha256 (`agents._hash`).
+
+### Deploys hold no keys
+
+GitHub Actions deploys on a push to `main` without any stored Google key. There are no JSON service account keys
+anywhere. `deploy/github-setup.sh` sets this up once ([17](17-deployment-and-operations.md)):
+
+- **Workload Identity Federation.** Pool `github-actions`, OIDC provider `iris-github`, issuer
+  `https://token.actions.githubusercontent.com`. The attribute condition admits only this repository's `main`:
+  `assertion.repository == 'Saravana-Rajan/IRIS' && assertion.ref == 'refs/heads/main'`, plus the repository id when
+  `gh` can read it (so a reused name is not let in). The workflow exchanges GitHub's OIDC token for short-lived
+  Google credentials.
+- **Who it may act as.** Only that repository's principal set holds `roles/iam.workloadIdentityUser` on the deploy
+  service account, `iris-deploy`.
+- **What the deploy account may do** (least privilege):
+
+| Role | Granted on | Why |
+|---|---|---|
+| `roles/run.admin` | the project | Deploy the `iris-api` service and keep it public |
+| `roles/firebasehosting.admin` | the project | Release the web app to Firebase Hosting |
+| `roles/serviceusage.serviceUsageConsumer` | the project | Call the project's APIs |
+| `roles/artifactregistry.writer` | the `iris` repository only | Push images |
+| `roles/iam.serviceAccountUser` | `iris-run` only | Deploy the service as its runtime account, and no other |
+| No Secret Manager role | | Cloud Run reads the owner token as `iris-run` |
 
 ## Who is asking
 
@@ -57,14 +90,30 @@ caps.
 - **Never the left end.** Taking the first entry would let a visitor choose their own identity and with it a
   fresh set of caps.
 
-### Same origin
+### Same origin, and the web app's own other origins
 
-- **The live voice socket** checks it: `voice_live.same_origin` refuses an `Origin` whose host is not the request's
-  `Host`, before accepting (close 1008), because another site's page could otherwise spend the model budget. A client
-  that sends no `Origin` (not a browser) is let in and held to the same caps.
-- **Everything else** relies on the browser's rules: there is no CORS middleware, so another site's scripts cannot
-  read API responses, and the owner cookie is `SameSite=Strict` and scoped to `/api`, so a request from another site
-  never carries the owner's rights.
+Iris runs in one of two modes. With `IRIS_ALLOWED_ORIGINS` empty (the default: local dev and the plain deploy), one
+server serves the web app and the API from one origin. With it set (split mode: the web app on Firebase Hosting, the
+API on the Cloud Run service `iris-api`), the page calls the API across origins. `origins.allowed()` reads the list;
+`origins.allows(origin)` checks one ([15](15-requirements-settings-and-config.md)).
+
+- **The live voice socket** checks it: `voice_live.same_origin` lets in an `Origin` whose host is the request's
+  `Host`, an `Origin` in `IRIS_ALLOWED_ORIGINS`, or no `Origin` at all (not a browser; held to the same caps). It
+  refuses any other site before accepting (close 1008), because another site's page could otherwise spend the model
+  budget.
+- **CORS only for the configured origins.** `_CrossOrigin` (the outermost middleware in `app.py`) answers CORS with
+  credentials for exactly those origins: methods GET, POST, PUT, DELETE; request headers `Content-Type`,
+  `X-Iris-Settings`, `X-Iris-Requirements`; exposed headers `X-Iris-Gone` and `Content-Disposition`; `Vary: Origin`.
+  It never answers `*`. Another origin's preflight gets 400, and its plain requests are answered without
+  `Access-Control-Allow-Origin`, so the browser keeps the answer from that page. With no origins configured there are
+  no CORS headers at all. WebSockets bypass it (the voice socket checks its own `Origin`, above).
+- **A bad list stops the server.** `origins.py` refuses `*`, a path, or any entry that is not
+  `scheme://host[:port]` with `ValueError`. `app.py` reads the list once at import, so a typo stops the server at
+  start: it never opens the API to every site, nor silently closes it.
+- **The owner cookie** is scoped to `/api` and follows the mode (below). On one origin it is `SameSite=Strict`, so a
+  request from another site never carries the owner's rights. In split mode it is `SameSite=None` and `Partitioned`:
+  where the browser supports CHIPS it is kept only for pages under the site that unlocked. A request with a JSON body
+  or Iris's own headers needs a preflight, which other origins fail.
 - **`/mcp`** is gated by link token instead; its transport's DNS-rebinding check (meant for servers on localhost) is
   off (`app._mcp_transport`).
 
@@ -87,7 +136,7 @@ sequenceDiagram
         S-->>P: 403, or 429 once capped
     else right token
         O-->>S: cookie_value v1.expires.signature
-        S-->>P: Set-Cookie iris_owner, HttpOnly, Secure, SameSite Strict, Path /api, 30 days
+        S-->>P: Set-Cookie iris_owner, HttpOnly, Secure, Path /api, 30 days, SameSite Strict (split mode: None, Partitioned)
     end
     P->>S: later calls with the cookie and X-Iris-Settings
     S->>O: _OwnerContext - cookie_ok, then enter(is_owner, header)
@@ -96,7 +145,19 @@ sequenceDiagram
 
 - **The cookie** is `v1.<expiry>.<HMAC-SHA256>` signed with a key derived from the token, so changing the token
   logs every browser out. `owner.cookie_ok` checks the version, the signature (constant time) and the expiry.
-  `POST /api/owner/lock` deletes it.
+  `POST /api/owner/unlock` sets it with `owner.set_cookie`; `POST /api/owner/lock` clears it with
+  `owner.clear_cookie`, with the same flags and expired (a browser replaces a cookie only when the flags match).
+- **Its flags** come from `owner._cookie` and depend on the mode:
+
+| Mode | Flags | Why |
+|---|---|---|
+| One origin (`IRIS_ALLOWED_ORIGINS` empty) | `HttpOnly; Secure; SameSite=Strict; Path=/api`, 30 days | The page and the API share an origin; no other site's request carries it |
+| Split (`IRIS_ALLOWED_ORIGINS` set) | `HttpOnly; Secure; SameSite=None; Partitioned; Path=/api`, 30 days | The page on Firebase Hosting calls Cloud Run cross-site, so the cookie must travel on cross-site calls (`None` needs `Secure`). `Partitioned` (CHIPS) keeps it per top-level site and lets it through where third-party cookies are blocked, if the browser supports CHIPS |
+
+`Partitioned` is appended by hand: Starlette writes it only on Python 3.14+. A browser that blocks third-party
+cookies and lacks CHIPS may not send the cookie at all. Putting the web app and the API on custom domains under one
+site makes the cookie first-party again ([17](17-deployment-and-operations.md); the limit is in
+[20](20-decisions-limits-and-roadmap.md)).
 - **Per request.** `_OwnerContext` (ASGI middleware, HTTP and WebSocket) reads the cookie and calls `owner.enter`;
   the `X-Iris-Settings` header is read only when the cookie checks out
   ([15](15-requirements-settings-and-config.md)). `owner.spawn` and `owner.submit` carry the context into stream
@@ -257,6 +318,22 @@ Main-model and fast-model calls (proposals, chat, plans, reports, drafts, triage
 are bounded by count, through the caps above, not by money; triage runs at most `IRIS_TRIAGE_WORKERS` calls at a
 time. Triage, titles and part names always run on the fast model: there is no switch to move them. Voice is bounded by its cap and the clip and session limits below.
 
+### The cloud footprint
+
+The Google Cloud footprint is kept minimal (owner decision, 2026-11-22; [20](20-decisions-limits-and-roadmap.md)).
+How to deploy and change it: [17](17-deployment-and-operations.md).
+
+| What | Setting | Cost effect |
+|---|---|---|
+| Cloud Run service `iris-api` | min 0 / max 1 instance (`MIN_INSTANCES` default 0) | Scales to zero when idle: nothing billed then. The first request after an idle spell waits for a cold start and finds no open models |
+| CPU | only while a request is open (`CPU_THROTTLING` default 1, `--cpu-throttling`) | Billed per request. Work that outlives its request runs slowly until the next one |
+| Size | 2 vCPU, 4 GiB, unchanged | |
+| Artifact Registry | one repository, `iris`; a cleanup policy keeps the newest `KEEP_IMAGES` (5) images | Old images are deleted, about once a day |
+| Web app | Firebase Hosting only | |
+| Not used | no load balancer, no Cloud Build trigger, no database; no custom domain unless one is added (optional) | |
+
+`MIN_INSTANCES=1` and `CPU_THROTTLING=0` restore the always-warm service, billed all the time.
+
 ## Resource limits
 
 | What | Limit | Where |
@@ -298,4 +375,8 @@ time. Triage, titles and part names always run on the fast model: there is no sw
 - A change to the owner: token rules, the cookie (name, flags, signature), what the owner skips.
 - A change to link tokens (format, lifetime, what renews them, `_McpGate`).
 - A new secret, a new place that makes an authenticated model request, or a change to the voice relay.
+- A change to `origins.py`, `_CrossOrigin` (methods, headers, exposed headers) or the voice socket's `Origin` rule.
+- A change to the deploy identity: the Workload Identity pool or its attribute condition, the deploy service
+  account's roles, or where the Gemini key and owner token come from in the cloud.
+- A change to the cloud footprint: instances, CPU allocation, images kept, a new paid service.
 - A new upload or input size limit, eviction rule or in-memory bound.

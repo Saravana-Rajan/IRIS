@@ -27,6 +27,20 @@ echo "Artifact Registry repository $AR_REPO in $REGION"
 gcloud artifacts repositories describe "$AR_REPO" --location "$REGION" >/dev/null 2>&1 ||
   gcloud artifacts repositories create "$AR_REPO" --repository-format docker --location "$REGION" \
     --description "Iris container images"
+# Keep storage minimal: the newest KEEP_IMAGES images stay, older ones are deleted (Artifact Registry applies cleanup
+# policies about once a day). The image a revision serves is one of the newest, so it is never removed.
+KEEP_IMAGES="${KEEP_IMAGES:-5}"
+POLICY="$(mktemp -t iris-cleanup.XXXXXX)"
+trap 'rm -f "$POLICY"' EXIT
+cat > "$POLICY" <<JSON
+[
+  {"name": "keep-newest", "action": {"type": "Keep"}, "mostRecentVersions": {"keepCount": $KEEP_IMAGES}},
+  {"name": "delete-older", "action": {"type": "Delete"}, "condition": {"tagState": "any"}}
+]
+JSON
+gcloud artifacts repositories set-cleanup-policies "$AR_REPO" --location "$REGION" --policy "$POLICY" \
+  --no-dry-run >/dev/null
+echo "Cleanup policy: keep the newest $KEEP_IMAGES images"
 
 echo "Service account $SA"
 gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 ||

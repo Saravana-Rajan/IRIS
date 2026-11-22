@@ -922,3 +922,20 @@ they will be re-measured on Gemini. The final env set adds `GEMINI_FAST_THINKING
 level), `IRIS_IMAGE_USD` (each picture's cost charged to the day's budget) and segment voice (speech found by loudness,
 `IRIS_VOICE_VAD_RMS`, each segment transcribed once `IRIS_VOICE_SILENCE_MS` of quiet ends it), and removes the
 open-weights switch (`open_weights`, `IRIS_OPEN_WEIGHTS`): titles, triage and part names always run on the fast model.
+
+**Nov 22, auto-deploy on push to `main`, and the web app on Firebase Hosting** ([17](17-deployment-and-operations.md);
+[10](10-http-api-and-streams.md); [16](16-security-caps-and-cost.md); [18](18-testing-and-evals.md);
+[20](20-decisions-limits-and-roadmap.md)). A push to `main` now tests and deploys through GitHub Actions
+(`.github/workflows/ci.yml`, `deploy.yml`), signed in by Workload Identity Federation with no JSON key;
+`deploy/github-setup.sh` sets up the project and the repository variables once. Hosting is split: Firebase Hosting
+serves the page (`firebase.json`, `.firebaserc`), Cloud Run service `iris-api` serves only the API, and the browser
+calls it directly. `IRIS_ALLOWED_ORIGINS` (`origins.py`) turns on CORS with credentials for those origins, makes the
+owner cookie `SameSite=None; Secure; Partitioned` (`owner.py`) and lets their pages open the voice socket
+(`voice_live.py`); `GET /api/health` reports `IRIS_VERSION`, and in split mode `GET /` answers JSON instead of the page
+(`app.py`). The page reaches the server through `apiUrl`, `wsUrl` and `apiFetch`, set by `VITE_API_BASE` at build time
+(`api.ts`, `voice.ts`, `BuiltView.tsx`, `workingsGraph.ts`, `ReportDoc.tsx`, `clashImage.ts`). `deploy.sh` deploys a
+given `IMAGE`, names the service `iris-api`, and defaults to minimum instances 0 and CPU only during requests
+(`CPU_THROTTLING`); `setup.sh` gives Artifact Registry a cleanup policy keeping the newest 5 images. Checked:
+`test_origins.py` (new) and a voice relay origin test, `npm test`, web builds with and without `VITE_API_BASE` (the
+bundle grepped for the URL), `bash -n`, actionlint and shellcheck on the scripts and workflows. Not yet run against
+Google Cloud: the dev machine is not signed in to gcloud.

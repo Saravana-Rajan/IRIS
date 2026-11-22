@@ -28,12 +28,13 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection
 from starlette.routing import Route
 
 from . import (agents, built, chat, checks, context_planner, demos, detect, document, domains, edits, escalation,
-               faces, journal, manual, mcp_server, model_client, owner, plans, property_edits, requirements, settings, spend,
-               step, titles, triage, voice_live)
+               faces, journal, manual, mcp_server, model_client, origins, owner, plans, property_edits, requirements, settings,
+               spend, step, titles, triage, voice_live)
 from .model_client import escalation_info, labels as model_labels, transcribe, triage_model, triage_model_info
 from .limits import ProposeLimit, client_id, env_float, env_int
 from .service import MODEL_SUFFIXES, MODELS, StaleLayout, Workspace, project_name
@@ -83,6 +84,35 @@ class _OwnerContext:
 
 
 app.add_middleware(_OwnerContext)
+
+
+class _CrossOrigin:
+    """CORS, with credentials, for pages on the other origins in `IRIS_ALLOWED_ORIGINS` (origins.py: the web app on
+    Firebase Hosting calling the API here); with none configured, no CORS headers at all. Added last, so it is the
+    outermost: an answer `_OwnerContext` gives itself (409 requirements_unknown) carries the headers too. It only adds
+    headers, so streams keep `Content-Encoding: identity` and flow as before."""
+
+    METHODS = ("GET", "POST", "PUT", "DELETE")
+    HEADERS = ("Content-Type", owner.HEADER, requirements.HEADER)
+    EXPOSE = ("X-Iris-Gone", "Content-Disposition")   # what the page reads from an answer (api.ts goneOf), downloads
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.cors: dict[tuple[str, ...], CORSMiddleware] = {}
+
+    async def __call__(self, scope, receive, send):
+        allowed = origins.allowed() if scope["type"] == "http" else ()   # the voice socket checks its own Origin
+        if not allowed:
+            return await self.inner(scope, receive, send)
+        if allowed not in self.cors:
+            self.cors[allowed] = CORSMiddleware(self.inner, allow_origins=allowed, allow_methods=self.METHODS,
+                                                allow_headers=self.HEADERS, allow_credentials=True,
+                                                expose_headers=self.EXPOSE, max_age=3600)
+        await self.cors[allowed](scope, receive, send)
+
+
+app.add_middleware(_CrossOrigin)
+origins.allowed()  # a malformed IRIS_ALLOWED_ORIGINS stops the server at start, not at its first request
 ws = Workspace()
 EXPORTS = Path(tempfile.gettempdir()) / "iris-exports"
 EXPORTS.mkdir(exist_ok=True)
@@ -355,6 +385,12 @@ class Unlock(BaseModel):
     token: str
 
 
+@app.get("/api/health")
+def health():
+    """For deploys and uptime checks: cheap, no auth, no model call. `version`: the deployed commit (`IRIS_VERSION`)."""
+    return {"status": "ok", "version": os.environ.get("IRIS_VERSION") or "dev"}
+
+
 @app.get("/api/owner")
 def owner_state():
     return {"available": owner.available(), "owner": owner.is_owner()}
@@ -368,14 +404,13 @@ def owner_unlock(body: Unlock, request: Request, response: Response):
     if not owner.check_token(body.token.strip()):
         refused = unlock_limit.take(client_id(request.headers, request.client.host if request.client else None))
         raise HTTPException(429 if refused else 403, refused or "That is not the owner token.")
-    response.set_cookie(owner.COOKIE, owner.cookie_value(), max_age=owner.DAYS * 86400, httponly=True, secure=True,
-                        samesite="strict", path="/api")
+    owner.set_cookie(response)
     return {"owner": True}
 
 
 @app.post("/api/owner/lock")
 def owner_lock(response: Response):
-    response.delete_cookie(owner.COOKIE, path="/api", secure=True, httponly=True, samesite="strict")
+    owner.clear_cookie(response)
     return {"owner": False}
 
 
@@ -2393,6 +2428,18 @@ async def _lifespan(_app):
 
 app.router.lifespan_context = _lifespan
 
-# Last, so /api routes win over static files.
-if (WEB_DIST / "index.html").exists():
+API_ROOT = {"service": "iris-api", "docs": "/docs", "health": "/api/health"}
+
+
+@app.get("/")
+def front_door():
+    """The web app when this server serves it (one origin). Split, with the web app on another origin
+    (`IRIS_ALLOWED_ORIGINS`, origins.py: Firebase Hosting), this server is the API only, and `/` says so."""
+    if not origins.allowed() and (WEB_DIST / "index.html").exists():
+        return FileResponse(WEB_DIST / "index.html")
+    return API_ROOT
+
+
+# Last, so /api routes win over static files. Split (origins.py), no web app is served here at all.
+if not origins.allowed() and (WEB_DIST / "index.html").exists():
     app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

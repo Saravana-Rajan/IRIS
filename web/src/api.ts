@@ -2,6 +2,26 @@ import type { Action, Condition, FacetIndex, Rule } from "./filters";
 import type { Graph } from "./links";
 import type { ElementMesh } from "./viewer/patch";
 import type { Datums } from "./viewer/views";
+
+/** Where the server is: empty when it serves this page (local dev through Vite's proxy, or Cloud Run), else its origin
+ *  from `VITE_API_BASE` at build time (the page on Firebase Hosting). `?.`: tests run this in Node, without the env. */
+const API_BASE: string = (import.meta.env?.VITE_API_BASE ?? "").replace(/\/+$/, "");
+
+/** A server path ("/api/…") at the server; anything else (data:, blob:, a full URL) as it is. Every server URL goes
+ *  through here, including the paths the server sends back (pictures, documents), when they are shown. */
+export function apiUrl(path: string): string {
+  return API_BASE && path.startsWith("/") && !path.startsWith("//") ? API_BASE + path : path;
+}
+
+/** A server path as a WebSocket URL: wss: when the server (or this page) is on https. */
+export function wsUrl(path: string): string {
+  if (API_BASE) return API_BASE.replace(/^http/, "ws") + path;
+  return `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${path}`;
+}
+
+/** fetch at the server. On another origin the owner cookie goes too; on this one the request is as it always was. */
+const apiFetch = (path: string, init?: RequestInit) => fetch(apiUrl(path), API_BASE ? { credentials: "include", ...init } : init);
+
 export interface Hit { other: string; other_class: string; kind: string; distance_m: number }
 export interface Verdict {
   passed: boolean; hits: Hit[]; min_clearance_m: number | null; checked_against: number;
@@ -489,7 +509,7 @@ const jsonHeaders = () => ({ "Content-Type": "application/json", ...settingsHead
 /** Register the requirements in use again (the server forgot their id: a restart); true when it took them. */
 async function reRegister(): Promise<boolean> {
   if (!requirementsId || !requirementsDoc) return false;
-  const again = await fetch("/api/requirements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requirementsDoc) });
+  const again = await apiFetch("/api/requirements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requirementsDoc) });
   if (!again.ok) return false;
   requirementsId = ((await again.json()) as Registered).id;
   return true;
@@ -508,13 +528,13 @@ export function goneOf(r: Pick<Response, "status" | "headers">): Gone | null {
 /** fetch, registering the requirements again and retrying once when the server has forgotten them, and telling the
  *  page when a scene or report is gone. */
 async function send(url: string, init: RequestInit = {}): Promise<Response> {
-  const r = await fetch(url, init);
+  const r = await apiFetch(url, init);
   const gone = goneOf(r);
   if (gone && goneHandler) goneHandler({ ...gone, detail: (await r.clone().json().catch(() => null))?.detail });
   if (r.status !== 409 || !requirementsId || !requirementsDoc) return r;
   const detail = (await r.clone().json().catch(() => null))?.detail;
   if (detail !== "requirements_unknown" || !(await reRegister())) return r;
-  return fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), "X-Iris-Requirements": requirementsId! } });
+  return apiFetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), "X-Iris-Requirements": requirementsId! } });
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -649,7 +669,8 @@ async function streamUpload<T extends OpenedScene>(url: string, files: File[], o
   }
   const post = (retry: boolean) => new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
+    xhr.open("POST", apiUrl(url));
+    if (API_BASE) xhr.withCredentials = true;
     for (const [k, v] of Object.entries(settingsHeader())) xhr.setRequestHeader(k, v);
     let seen = 0, opened: T | null = null, failed: Error | null = null;
     const read = () => {
@@ -753,13 +774,13 @@ export const api = {
   linkContext: (token: string, ctx: LinkContext) =>
     call<unknown>(`/links/${encodeURIComponent(token)}/context`, { method: "PUT", body: JSON.stringify(ctx) }),
   /** The page is closing: a beacon, which the browser still sends while it unloads. */
-  leaveLink: (token: string, stream: string) => navigator.sendBeacon?.(`/api/links/${encodeURIComponent(token)}/leave/${stream}`),
+  leaveLink: (token: string, stream: string) => navigator.sendBeacon?.(apiUrl(`/api/links/${encodeURIComponent(token)}/leave/${stream}`)),
   revokeLink: (token: string) => call<{ revoked: boolean }>(`/links/${encodeURIComponent(token)}`, { method: "DELETE" }),
   /** Follow the link until the server ends the stream (a few minutes) or `signal` aborts; the caller reconnects. */
   linkEvents: (token: string, onEvent: (e: LinkEvent) => void, signal?: AbortSignal) =>
     ndjson<LinkEvent>(`/links/${encodeURIComponent(token)}/events`, null, (e) => { onEvent(e); }, signal, "GET"),
   linkCapture: (token: string, id: string, png: Blob | null) =>
-    fetch(`/api/links/${encodeURIComponent(token)}/captures/${id}`, { method: "POST", body: png ?? new Blob([]) }),
+    apiFetch(`/api/links/${encodeURIComponent(token)}/captures/${id}`, { method: "POST", body: png ?? new Blob([]) }),
   contextStream: async (sceneId: string, objective: ContextObjective, onEvent: (e: ContextEvent) => void, signal?: AbortSignal) => {
     let finished = false;
     try {
@@ -870,7 +891,7 @@ export const api = {
   removeModel: (sceneId: string, index: number, name: string) =>
     call<RemovedModel>(`/scenes/${sceneId}/models/${index}?name=${encodeURIComponent(name)}`, { method: "DELETE" }),
   file: async (id: string, index: number) => {
-    const r = await fetch(`/api/scenes/${id}/files/${index}`, { cache: "no-store" });
+    const r = await apiFetch(`/api/scenes/${id}/files/${index}`, { cache: "no-store" });
     if (!r.ok) throw new ApiError(`Model download failed (${r.status})`, r.status);
     return new Uint8Array(await r.arrayBuffer());
   },
@@ -907,7 +928,7 @@ export const api = {
       if (done) throw new Error("The server stopped before Iris finished. Try again.");
     }
   },
-  exportUrl: (id: string) => `/api/scenes/${id}/export`,
+  exportUrl: (id: string) => apiUrl(`/api/scenes/${id}/export`),
   element: (id: string, globalId: string) => call<Record<string, unknown>>(`/scenes/${id}/elements/${encodeURIComponent(globalId)}`),
   /** Everything the model says about one element, for the Properties panel (properties.py). */
   properties: (id: string, globalId: string, file?: number) =>
@@ -942,7 +963,7 @@ export const api = {
       accept_joints: acceptJoints, clash_id: clash?.id ?? null, pair: clash?.pair ?? null }) }),
   /** The scene's edit log: every kept edit, oldest first, and whether undo and redo can go now. */
   journal: (id: string) => call<Journal>(`/scenes/${id}/edits`),
-  journalCsvUrl: (id: string) => `/api/scenes/${id}/edits?format=csv`,
+  journalCsvUrl: (id: string) => apiUrl(`/api/scenes/${id}/edits?format=csv`),
   /** A picture of a kept edit, for the report's "After the edits". */
   editPicture: (id: string, entry: string, png: string) =>
     call<{ ok: boolean }>(`/scenes/${id}/edits/${encodeURIComponent(entry)}/picture`, { method: "POST", body: JSON.stringify({ png }) }),
@@ -989,7 +1010,7 @@ export const api = {
   uploadReport: async (files: File[]) => {
     const form = new FormData();
     for (const f of files) form.append("files", f, f.webkitRelativePath || f.name);
-    const r = await fetch("/api/reports/upload", { method: "POST", body: form });
+    const r = await apiFetch("/api/reports/upload", { method: "POST", body: form });
     if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `Upload failed (${r.status})`);
     return r.json() as Promise<Report>;
   },
@@ -1003,7 +1024,7 @@ export const api = {
     if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `Transcription failed (${r.status})`);
     return r.json() as Promise<{ transcript: string; duration_ms: number | null }>;
   },
-  imageUrl: (reportId: string, clashId: string, index: number) => `/api/reports/${reportId}/clashes/${clashId}/images/${index}`,
+  imageUrl: (reportId: string, clashId: string, index: number) => apiUrl(`/api/reports/${reportId}/clashes/${clashId}/images/${index}`),
   match: (reportId: string, sceneId: string) => call<Matches>(`/reports/${reportId}/match/${sceneId}`),
   measure: (reportId: string, clashId: string, sceneId: string) => call<Measure>(`/reports/${reportId}/clashes/${clashId}/measure/${sceneId}`),
 

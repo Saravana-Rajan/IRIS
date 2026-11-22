@@ -1,13 +1,16 @@
 # 10 · HTTP API and streams
 
-> **Covers:** `server/iris/app.py`, `server/iris/voice_live.py`, the request side of
+> **Covers:** `server/iris/app.py`, `server/iris/voice_live.py`, `server/iris/origins.py`, the request side of
 > `server/iris/owner.py` and `server/iris/limits.py`, `web/src/api.ts`, `LiveVoice` in `web/src/voice.ts`,
-> `web/src/uploads.ts`, the container entry deployed by `deploy/deploy.sh` · **Checked against code:** re-branded 2026-11-11 ·
+> `web/src/uploads.ts`, the container entry deployed by `deploy/deploy.sh` · **Checked against code:** re-branded 2026-11-11;
+> the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health` and the voice origin check re-checked 2026-11-22 ·
 > **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md)
 
 Iris's server is one FastAPI app, `app` in `server/iris/app.py`, that the page, the MCP server and anything
-else talk to. It serves 83 decorated routes under `/api/`, one WebSocket (live voice), the MCP endpoint at `/mcp`,
-and the built web app from the same origin. Long work answers as newline-delimited JSON (NDJSON) so the page can
+else talk to. It serves 84 decorated routes under `/api/`, `GET /`, one WebSocket (live voice) and the MCP endpoint
+at `/mcp`. On one origin it also serves the built web app. Split, with the web app on another origin (Firebase
+Hosting, `IRIS_ALLOWED_ORIGINS` set, `origins.py`), it serves the API only and answers CORS for exactly those
+origins. Long work answers as newline-delimited JSON (NDJSON) so the page can
 show the agent working. This doc is the inventory of every route, stream event, header and error, and how
 `web/src/api.ts` reads them. Other docs link here rather than list routes again. What each route's work does
 inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the caps' meaning is in
@@ -25,17 +28,23 @@ inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the ca
   package is watched: a package install in `server/.venv` would otherwise restart it and drop every scene). On
   Cloud Run the container serves the same `app` with uvicorn (`deploy/deploy.sh`); concurrency (linked pages each hold
   an events stream) and the request timeout are set there ([17](17-deployment-and-operations.md)).
-- **Middleware:** only `_OwnerContext` (below). There is no CORS middleware and no compression middleware: the page,
-  the API and `/mcp` share one origin. In development Vite proxies `/api` (with `ws: true`, Host kept) to
-  `localhost:8000` (`web/vite.config.ts`); `/mcp` is not proxied there.
+- **Middleware:** `_OwnerContext` and `_CrossOrigin` (both below). `_CrossOrigin` is added last, so it is the
+  outermost. There is no compression middleware. With `IRIS_ALLOWED_ORIGINS` empty (the default) the page, the API and
+  `/mcp` share one origin and no CORS header is sent. In development Vite proxies `/api` (with `ws: true`, Host
+  kept) to `localhost:8000` (`web/vite.config.ts`); `/mcp` is not proxied there.
+- **Start-up check:** `app.py` calls `origins.allowed()` once at import, so a malformed `IRIS_ALLOWED_ORIGINS` (a
+  path, a `*`, not `scheme://host[:port]`) raises `ValueError` and stops the server at start.
 - **Routing order:** the `/mcp` Starlette `Route` is inserted first (`app.router.routes.insert(0, …)`), then
   FastAPI's own `/openapi.json`, `/docs` and `/redoc` (added when the app is made, left at their defaults), the `/api`
-  routes in the order they are declared, and last the static mount at `/`. No paths overlap, so the order matters
-  only for the static mount, which must come after everything else.
-- **Static files:** when `IRIS_WEB_DIST/index.html` exists (default `web/dist`, the output of
-  `cd web && npm run build`), `app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")` serves it,
-  declared last so `/api` wins. There is **no SPA fallback** and none is needed: the app is one page with no client
-  routes (the owner's `#owner` is a hash), so an unknown path is a plain 404.
+  routes in the order they are declared, `GET /` (`front_door`, declared after them), and last the static mount at
+  `/`. No paths overlap, so the order matters only for the static mount, which must come after everything else.
+- **Front door and static files:** `GET /` is `front_door`. On one origin (`IRIS_ALLOWED_ORIGINS` empty) and when
+  `IRIS_WEB_DIST/index.html` exists (default `web/dist`, the output of `cd web && npm run build`), it returns that
+  `index.html`, and `app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")` serves the rest,
+  declared last so `/api` wins. Split, nothing is mounted and `/` answers `API_ROOT`:
+  `{"service": "iris-api", "docs": "/docs", "health": "/api/health"}` (also the answer when there is no build).
+  There is **no SPA fallback** on the server and none is needed: the app is one page with no client routes (the
+  owner's `#owner` is a hash), so an unknown path is a plain 404.
 - **Lifespan:** `_lifespan` replaces the router's lifespan. On start it builds the MCP transport
   (`_mcp_gate.inner = _mcp_transport()`) and runs `_mcp.session_manager.run()` for the server's life
   ([11](11-mcp-and-agent-links.md)).
@@ -45,7 +54,9 @@ flowchart TD
     client["Browser, MCP agent or script"] --> edge["Cloud Run front end (dev: Vite proxy for /api)"]
     edge --> uv["uvicorn running iris.app:app"]
     uv --> err["Starlette ServerErrorMiddleware"]
-    err --> ownerMw["_OwnerContext: owner cookie, X-Iris-Settings, X-Iris-Requirements"]
+    err --> crossMw["_CrossOrigin: CORS for IRIS_ALLOWED_ORIGINS only, HTTP only"]
+    crossMw -->|"preflight from another origin, split only"| r400["400 Disallowed CORS origin"]
+    crossMw --> ownerMw["_OwnerContext: owner cookie, X-Iris-Settings, X-Iris-Requirements"]
     ownerMw -->|"unknown requirements id on an /api path"| r409["409 requirements_unknown"]
     ownerMw --> exc["ExceptionMiddleware: HTTPException to JSON detail"]
     exc --> router["Router, first match wins"]
@@ -54,7 +65,8 @@ flowchart TD
     router -->|"/api routes"| routes["FastAPI routes in app.py"]
     router -->|"WebSocket /api/voice/live"| voice["voice_live.relay: segments to the fast model"]
     router -->|"/openapi.json, /docs, /redoc"| fastapiDocs["FastAPI defaults"]
-    router -->|"anything else, when web/dist is built"| staticFiles["StaticFiles at /, html=True"]
+    router -->|"GET /"| front["front_door: index.html on one origin, API_ROOT JSON when split"]
+    router -->|"anything else, one origin only, when web/dist is built"| staticFiles["StaticFiles at /, html=True"]
 ```
 
 ### `_OwnerContext`
@@ -78,18 +90,44 @@ Work that leaves the request's thread keeps this context: `owner.spawn` starts e
 requirements together. `/mcp` passes through `_OwnerContext` too, but MCP tools take their requirements from the link
 (`requirements.using`, [11](11-mcp-and-agent-links.md)) and their caps from who made the link.
 
+### `_CrossOrigin`
+
+A plain ASGI middleware (`app.add_middleware(_CrossOrigin)`, after `_OwnerContext`) for the split deployment: the
+web app on Firebase Hosting, built with `VITE_API_BASE` set to this server's URL, calls the API across origins
+([12](12-web-app.md), [17](17-deployment-and-operations.md)).
+
+- **None configured** (`origins.allowed()` empty, the default): it passes every request straight on. No CORS
+  header is sent, as before.
+- **Origins configured** (`IRIS_ALLOWED_ORIGINS`, a comma list of `scheme://host[:port]`, lower-cased, trailing
+  slash and duplicates dropped): it wraps Starlette's `CORSMiddleware` with exactly those origins and
+  `allow_credentials=True`. Methods `GET`, `POST`, `PUT`, `DELETE`; request headers `Content-Type`,
+  `X-Iris-Settings`, `X-Iris-Requirements`; exposed headers `X-Iris-Gone` and `Content-Disposition` (what the page
+  reads from an answer: `goneOf`, a download's name); `max_age` 3600. It never answers `*`.
+- **An allowed origin** gets `Access-Control-Allow-Origin` set to that origin, `Access-Control-Allow-Credentials:
+  true` and `Vary: Origin`, so the page can read the answer and the owner cookie travels.
+- **Another origin:** a preflight is refused with 400 (`Disallowed CORS origin`, plain text). A simple request is
+  answered, but without `Access-Control-Allow-Origin`, so the browser keeps the reply from that page.
+- **Only HTTP.** WebSockets pass straight through: the voice socket checks its own `Origin` (below).
+- **Outermost**, so an answer `_OwnerContext` gives itself (409 `requirements_unknown`) carries the headers too.
+- **It only adds headers**, so NDJSON streams keep `Content-Encoding: identity` and flow as before.
+
+The origins are read on each request (cached per raw value) and one `CORSMiddleware` is kept per set of origins.
+
 ## Headers and cookies
 
 | Name | Direction | Set by | Read by | What it carries |
 |---|---|---|---|---|
 | `X-Iris-Settings` | request | `api.ts` `settingsHeader()` when the owner has settings (`setOwnerSettings`) | `_OwnerContext` → `owner.settings` | The owner's own settings as JSON. Ignored unless the owner cookie checks out. |
 | `X-Iris-Requirements` | request | `api.ts` `settingsHeader()` once `setRequirements(id, doc)` | `_OwnerContext` → `requirements.enter` | The id of a registered requirements file ([15](15-requirements-settings-and-config.md)). |
-| `iris_owner` cookie | both | `POST /api/owner/unlock` | `_OwnerContext` | Signed `v1.<expiry>.<sig>`; HttpOnly, Secure, SameSite=Strict, Path=/api, 30 days (`owner.DAYS`). Path=/api: it never reaches `/mcp` or the static files. |
+| `iris_owner` cookie | both | `POST /api/owner/unlock` (`owner.set_cookie`); `POST /api/owner/lock` clears it (`owner.clear_cookie`: the same flags, expired) | `_OwnerContext` | Signed `v1.<expiry>.<sig>`; HttpOnly, Secure, Path=/api, 30 days (`owner.DAYS`). One origin: SameSite=Strict. Split (`IRIS_ALLOWED_ORIGINS` set): SameSite=None; Secure; Partitioned, so it travels on the page's cross-site calls and is kept per top-level site (CHIPS). `owner._cookie` appends `Partitioned` by hand: Starlette writes it only on Python 3.14+. Path=/api: it never reaches `/mcp` or the static files. |
 | `Authorization: Bearer <token>` or `?key=<token>` | request | the MCP client | `_McpGate`, `agents.token_from` | An agent link token ([11](11-mcp-and-agent-links.md)). |
 | `X-Forwarded-For` | request | a proxy in front | `limits.client_id` | The visitor's address for per-visitor caps only with `IRIS_TRUST_FORWARDED=N`: the N-th entry from the right. Else the socket peer. |
 | `X-Forwarded-Host`, `X-Forwarded-Proto` | request | the proxy | `create_link`, `mcp_server.base_url` | The public `mcp_url` and download links. |
 | `Content-Length` | request | the browser | `_receive_models` | Required on model uploads (411 without it); checked against the cap before the body is read. |
-| `Origin`, `Host` | request | the browser | `voice_live.same_origin` | The live-voice socket opens only when they match (or no Origin is sent). |
+| `Origin`, `Host` | request | the browser | `voice_live.same_origin`, `_CrossOrigin` | The live-voice socket opens only when they match, when the Origin is in `IRIS_ALLOWED_ORIGINS`, or when no Origin is sent. `_CrossOrigin` answers CORS only for an Origin in that list. |
+| `Access-Control-Request-Method`, `Access-Control-Request-Headers` | request | the browser, on a preflight `OPTIONS` | `_CrossOrigin` | Split only: allowed for `GET`, `POST`, `PUT`, `DELETE` and `Content-Type`, `X-Iris-Settings`, `X-Iris-Requirements`; another origin's preflight is a 400. |
+| `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials: true`, `Vary: Origin` | response | `_CrossOrigin` | the browser | Split only, and only for an allowed origin: the origin itself, never `*`. A preflight also gets `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers` and `Access-Control-Max-Age: 3600`. |
+| `Access-Control-Expose-Headers: X-Iris-Gone, Content-Disposition` | response | `_CrossOrigin` | the browser | Split only: lets the page on the other origin read those two headers. |
 | `Content-Encoding: identity`, `Cache-Control: no-store, no-transform`, `X-Accel-Buffering: no` | response | `_ndjson` (`NDJSON_HEADERS`), and `_McpGate` adds the first | the edge | Keep streams flowing (below). |
 | `X-Iris-Gone` | response | `_gone` on the 404 of `_scene` and `_report` | `api.ts` `send` → `goneOf`, App's handler | What the server no longer holds: `scene:<id>` or `report:<id>` (a restart, a redeploy or eviction). Only an id the server could have made (hex) goes back. |
 | `Cache-Control: no-store` | response | `GET /api/scenes/{scene_id}/files/{index}` | the browser | The same URL serves the edited model after a kept fix. |
@@ -105,9 +143,9 @@ is a 422 whose `detail` is a list, not a string.
 
 | Status | When | Examples of `detail` |
 |---|---|---|
-| 400 | A request the server cannot use | an upload that is not IFC/STEP, a file given twice, a truncated `.gz`, a model IfcOpenShell cannot read, a report upload with no XML, a fix with no element, a fix that does not say which clash it is for ("Not a fix Iris can apply: the fix does not say which clash it is for (pair: [A, B])"), or whose changed element is neither side of it, a STEP conversion error, a bad setting value |
+| 400 | A request the server cannot use | a CORS preflight from an origin not in `IRIS_ALLOWED_ORIGINS`, split only (`Disallowed CORS origin`, plain text from `CORSMiddleware`, not `detail`); an upload that is not IFC/STEP, a file given twice, a truncated `.gz`, a model IfcOpenShell cannot read, a report upload with no XML, a fix with no element, a fix that does not say which clash it is for ("Not a fix Iris can apply: the fix does not say which clash it is for (pair: [A, B])"), or whose changed element is neither side of it, a STEP conversion error, a bad setting value |
 | 401 | `/mcp` without a live link token | `{"error": "An Iris agent link token is required: …"}` (the gate's own body, not `detail`) |
-| 403 | Not allowed | owner-only settings; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin (closed before the handshake, which the server answers as HTTP 403) |
+| 403 | Not allowed | owner-only settings; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin not in `IRIS_ALLOWED_ORIGINS` (closed before the handshake, which the server answers as HTTP 403) |
 | 404 | Gone or never there | "Model not loaded. Open it again." (`_scene`), "Clash report not loaded. Open it again." (`_report`), both with `X-Iris-Gone`; "This agent link has expired or was revoked." (`_link`), "That report has expired. Build it again.", "No such picture.", "No such image.", "No such clash.", "No owner is configured on this server.", "Proposal expired or unknown. Generate a new wider fix." |
 | 409 | The state does not allow it | `requirements_unknown` (middleware); "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
 | 411 | Model upload without `Content-Length` | "Send the upload with its length (Content-Length)." |
@@ -126,7 +164,13 @@ is a 422 whose `detail` is a list, not a string.
 
 ### How `web/src/api.ts` handles replies
 
-- **`send(url, init)`** wraps `fetch`: on a 409 whose `detail` is `requirements_unknown`, it registers the file again
+- **Where the server is:** `API_BASE` is `VITE_API_BASE` at build time, trailing slash dropped; empty means this
+  page's own origin (local dev through Vite's proxy, or the web app Cloud Run serves itself). `apiUrl(path)` puts a
+  `/api/…` path on the server (data:, blob: and full URLs pass as they are); `wsUrl(path)` makes the `ws:`/`wss:`
+  URL for the voice socket; `apiFetch` is `fetch(apiUrl(path))` and adds `credentials: "include"` only when
+  `API_BASE` is set, so the owner cookie travels cross-origin. Every call below goes through them
+  ([12](12-web-app.md)).
+- **`send(url, init)`** wraps `apiFetch`: on a 409 whose `detail` is `requirements_unknown`, it registers the file again
   (`reRegister`: `POST /api/requirements` with the saved document, no requirements header) and retries the request
   once with the new id. On a 404 with `X-Iris-Gone` (`goneOf`) it calls the page's handler (`setGoneHandler`)
   with the kind, the id and the server's words, then returns the reply as usual: App shows one notice that offers to
@@ -145,10 +189,11 @@ is a 422 whose `detail` is a list, not a string.
   `Proposal`, and passes every other event to the pilot.
 - **`uploadModelsStream`** gzips each file over 1 MB (`pack`, `CompressionStream`), posts with `XMLHttpRequest` for
   upload progress (`upload` events made in the browser, after `packing` ones), parses the NDJSON from
-  `responseText` as it grows, and retries once on a 409 `requirements_unknown`. `uploads.uploadRefusal` checks size
-  and count against `GET /api/models` before anything is sent.
-- Raw `fetch` (no headers) for downloads and small posts that need neither header: model files, `saveView`,
-  `uploadReport`, `linkCapture`; `navigator.sendBeacon` for `leaveLink`.
+  `responseText` as it grows, and retries once on a 409 `requirements_unknown`. Cross-origin it sets
+  `withCredentials`. `uploads.uploadRefusal` checks size and count against `GET /api/models` before anything is sent.
+- Plain `apiFetch` (no Iris headers) for downloads and small posts that need neither header: model files,
+  `uploadReport`, `linkCapture`, re-registering requirements; `navigator.sendBeacon(apiUrl(…))` for `leaveLink`.
+  Export, CSV and image URLs are built with `apiUrl`.
 
 ## Route inventory
 
@@ -156,13 +201,20 @@ Every route in `app.py`, grouped by area. Paths are exactly as declared. "Caps" 
 means no cap. All caps are skipped for the owner unless noted. Body models (`Move`, `Propose`, …) are the pydantic
 classes in `app.py`.
 
+### Service
+
+| Method | Path | What it does | Body / params | Reply | Caps / auth |
+|---|---|---|---|---|---|
+| `GET` | `/` | `front_door`: the web app's `index.html` when this server serves it (one origin, `web/dist` built); split (`IRIS_ALLOWED_ORIGINS` set) or with no build, says this is the API | none | `index.html`, or `API_ROOT` `{"service": "iris-api", "docs": "/docs", "health": "/api/health"}` | free |
+| `GET` | `/api/health` | For deploys and uptime checks: no auth, no model call. The deploy's smoke test checks it reports the commit just deployed | none | `{"status": "ok", "version"}`; `version` is `IRIS_VERSION` (set by `deploy/deploy.sh`: the image tag, the commit SHA in CI), else `"dev"` | free |
+
 ### Owner and settings
 
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
 | `GET` | `/api/owner` | Whether an owner is configured and whether this request is the owner's | none | `{available, owner}` | free |
-| `POST` | `/api/owner/unlock` | Checks the owner token once (`owner.check_token`, constant time) and sets the signed cookie | `{token}` | `{owner: true}` and `Set-Cookie: iris_owner` | 404 with no token configured; wrong token 403, capped by `unlock_limit` (5 per visitor per hour, 50 a day) → 429 |
-| `POST` | `/api/owner/lock` | Clears the cookie | none | `{owner: false}` | free |
+| `POST` | `/api/owner/unlock` | Checks the owner token once (`owner.check_token`, constant time) and sets the signed cookie (`owner.set_cookie`: SameSite=Strict on one origin; SameSite=None, Secure, Partitioned when split) | `{token}` | `{owner: true}` and `Set-Cookie: iris_owner` | 404 with no token configured; wrong token 403, capped by `unlock_limit` (5 per visitor per hour, 50 a day) → 429 |
+| `POST` | `/api/owner/lock` | Clears the cookie (`owner.clear_cookie`: the same flags as it was set with, expired, since a browser only replaces a cookie with matching ones) | none | `{owner: false}` | free |
 | `GET` | `/api/models` | Which model titles and triage use (`triage_model_info`: always the fast model), the escalation model and mode (`escalation_info`), whether Show it built is on, each role's model name for the words on screen (`model_client.labels`), triage's calls at a time, the upload cap | none | `{triage: {model, label, images}, escalation: {model, label, mode, available}, built_views, labels: {proposal, escalation, triage, image, voice}, triage_workers, model_upload_max_mb, model_upload_max_files}` | free |
 | `GET` | `/api/settings` | The settings for everyone (`settings.current`: `effort`, `triage_effort`, `escalation`, `escalation_effort`, `built_views`), their defaults (`settings.defaults`), whether a model is configured (`model_client.configured`) | none | `{everyone, defaults, configured}` | owner only (403) |
 | `PUT` | `/api/settings` | Changes settings for everyone (`settings.update`) | partial settings dict | as `GET` | owner only (403); 400 on a bad value |
@@ -291,7 +343,7 @@ triage jobs (`_triage_jobs`) and 32 titling jobs (`_title_jobs`).
 |---|---|---|---|---|---|
 | `POST` | `/api/chat` | One chat message, answered by Gemini Pro with tools (`chat.Chat.turn`); the message is cut to 4,000 characters | `ChatTurn {message, session_id?, scene_id?, report_id?, clash_id?, fixed=[], filters=[], filter_view, check?}` (`check`: the kept check the list shows) (`filters`: the user's own, `PageFilter {id, name, when, invert, on, origin, action, by}`, at most 100, for `detect_clashes` by name; `filter_view`: `FilterView {hide_rest, colours}`, how they show together, for its `{"shown": true}` side) | NDJSON | `chat_limit` (`IRIS_CHAT_PER_HOUR`/`_DAY`) per message; the tools charge proposals and second tries as the page's own buttons do; 422 on an empty message |
 | `POST` | `/api/transcribe` | A recorded clip to text with the fast model (`model_client.transcribe`, `GEMINI_FAST_MODEL`), biased to coordination words, the domain's (`domains.VOICE`), the open models' levels and systems and the open report's element names and titles (`_voice_words`) | multipart `audio` (WAV, mono 16-bit, 16 or 24 kHz, at most 3 MB), optional `report_id`, `scene_id` | `{transcript, duration_ms}` | `voice_limit` (`IRIS_VOICE_PER_HOUR`/`_DAY`); 413, 422, 502 |
-| `WEBSOCKET` | `/api/voice/live` | Live voice: the microphone buffered on the server, each segment transcribed on the fast model and the words sent back (below) | JSON first frame (`mode`, `report_id`, `scene_id`), then PCM | JSON frames | one `voice_limit` use per session; same origin only |
+| `WEBSOCKET` | `/api/voice/live` | Live voice: the microphone buffered on the server, each segment transcribed on the fast model and the words sent back (below) | JSON first frame (`mode`, `report_id`, `scene_id`), then PCM | JSON frames | one `voice_limit` use per session; same origin, or an origin in `IRIS_ALLOWED_ORIGINS` |
 
 ### Documents
 
@@ -325,7 +377,7 @@ triage jobs (`_triage_jobs`) and 32 titling jobs (`_title_jobs`).
 | Method | Path | What it is |
 |---|---|---|
 | `GET`, `POST`, `DELETE` | `/mcp` | The MCP endpoint: a Starlette `Route` inserted first, `_McpGate` in front of the streamable HTTP app. 401 without a live link token. See [11](11-mcp-and-agent-links.md). |
-| `GET` | `/` and every other path | `StaticFiles(directory=WEB_DIST, html=True)`: the built web app, when `web/dist/index.html` exists. |
+| `GET` | every other path | `StaticFiles(directory=WEB_DIST, html=True)`: the built web app, when `web/dist/index.html` exists and `IRIS_ALLOWED_ORIGINS` is empty (one origin). Split, nothing is mounted. |
 | `GET` | `/openapi.json`, `/docs`, `/redoc` | FastAPI's defaults, not switched off. |
 
 ## NDJSON streams
@@ -336,7 +388,8 @@ Every stream goes out through `_ndjson(events)`: a `StreamingResponse` with medi
 `NDJSON_HEADERS` (`Cache-Control: no-store, no-transform`, `X-Accel-Buffering: no`, `Content-Encoding: identity`).
 An edge in front of the server may compress responses for browsers that accept it and hold a stream back until a
 buffer fills, so the first events arrive only with the result. Such an edge can ignore `no-transform`; an explicit
-`Content-Encoding: identity` makes it pass the stream through. `_McpGate` adds the same header to `/mcp` replies. Test a stream with
+`Content-Encoding: identity` makes it pass the stream through. `_McpGate` adds the same header to `/mcp` replies.
+`_CrossOrigin` only adds CORS headers, so a stream to the page on another origin keeps it too. Test a stream with
 `Accept-Encoding: gzip, deflate, br, zstd`, as browsers send.
 
 ### How a stream is fed
@@ -530,9 +583,9 @@ sequenceDiagram
     participant relay as voice_live.relay
     participant gem as Fast model, model_client.transcribe
     mic->>sock: WebSocket handshake with Origin
-    alt Origin host differs from Host
+    alt Origin host differs from Host and is not an allowed origin
         sock-->>mic: closed with 1008 before accept, HTTP 403
-    else same origin
+    else same origin, an allowed origin, or no Origin
         sock-->>mic: accepted
         mic->>sock: first frame mode, report_id, scene_id, within 10 s
         sock->>sock: _take voice_limit, one use per session
@@ -566,8 +619,9 @@ sequenceDiagram
 | Iris → browser | `error {detail}` | A refused cap, no model configured, a bad frame, or a failed transcription (said once per session, naming only the kind of error, never its details). |
 
 - **Origin check** (`voice_live.same_origin`): an `Origin` whose host differs from `Host` is closed before accepting,
-  so another site cannot spend the model budget. A client that sends no Origin (not a browser) is let through and
-  held to the same caps.
+  so another site cannot spend the model budget. An Origin in `IRIS_ALLOWED_ORIGINS` (`origins.allows`) is let in:
+  the web app on Firebase Hosting opens the socket on Cloud Run (`wsUrl`). A client that sends no Origin (not a
+  browser) is let through and held to the same caps. `_CrossOrigin` does not touch the socket.
 - **Caps:** one session is one `voice_limit` use, hands-free included; a refusal is an `error` frame then close 1000.
   The owner has no cap (the cookie reaches the socket through `_OwnerContext`).
 - **Segments** (`voice_live.Segmenter`, hands-free only): a frame whose loudness (`rms` of the 16-bit samples) is at
@@ -591,7 +645,9 @@ sequenceDiagram
   `Workspace.open_paths`, `Workspace.add_models`, or `Link.publish`.
 - A change to `_ndjson`, `NDJSON_HEADERS`, `_RequestEvents` (size, what counts as progress), keep-alives, or how
   long the link events stream lives.
-- A new header or cookie, or a change to `_OwnerContext`, `_McpGate`, the lifespan or the static mount.
+- A new header or cookie, or a change to `_OwnerContext`, `_McpGate`, the lifespan, `front_door` or the static mount.
+- A change to `_CrossOrigin` (methods, request or exposed headers), to how `origins.py` reads
+  `IRIS_ALLOWED_ORIGINS`, or to the owner cookie's flags (`owner._cookie`).
 - A change to the live-voice protocol, its limits or its origin check in `voice_live.py`.
 - A change to how `web/src/api.ts` reads replies or streams (`send`, `call`, `ndjson`, `proposeStream`,
   `uploadModelsStream`).

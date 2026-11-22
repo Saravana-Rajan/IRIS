@@ -2,9 +2,10 @@
 
 > **Covers:** `server/iris/requirements.py`, `server/iris/settings.py`, the settings side of
 > `server/iris/owner.py`, `model_client.load_env` and `server/iris/__init__.py`, `limits.env_int` /
-> `env_float`, every environment variable the server, deploy and evals read,
-> `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing in `web/src/api.ts` ·
-> **Checked against code:** re-branded on 2026-11-11 · **Deeper design:** [docs/requirements.md](../requirements.md)
+> `env_float`, every environment variable the server, deploy and evals read, `server/iris/origins.py`,
+> `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing and `VITE_API_BASE` in
+> `web/src/api.ts` · **Checked against code:** re-branded on 2026-11-11; the deploy variables and the web build
+> variable on 2026-11-22 · **Deeper design:** [docs/requirements.md](../requirements.md)
 
 Three layers decide how Iris behaves for a request. **Coordination requirements** are a project's own standard
 (what is checked, how strictly, who may move), sent by the page as a file id. **Settings** are the owner's switches
@@ -237,7 +238,8 @@ with). Details of the model side: [08](08-ai-models-prompts-and-spend.md).
   read at import. `GeminiModel`, `transcribe`, `voice_live` and `built` call it again before reading settings
   (harmless: a value already set is kept).
 - **Read once.** Variables marked "import" below, and what `app.py` reads at module level (the caps, the upload
-  sizes, `IRIS_VOICE_LIVE_MAX_S`, `IRIS_WEB_DIST`), are read once, when their module is imported: a change
+  sizes, `IRIS_VOICE_LIVE_MAX_S`, `IRIS_WEB_DIST`, and `IRIS_ALLOWED_ORIGINS` for whether the web app is mounted),
+  are read once, when their module is imported: a change
   to them needs a server restart. The rest are read each time they are used.
 - **Empty values.** Numbers are read with `limits.env_int` / `env_float`: unset or empty (`NAME=`) is the default,
   so an empty cap is no limit, or its own default for requirements files (120 an hour) and previews (60 an hour).
@@ -247,8 +249,8 @@ with). Details of the model side: [08](08-ai-models-prompts-and-spend.md).
   `IRIS_BUILT_CACHE` is its default. Elsewhere an empty string is a value: `IRIS_SAMPLE_EXCLUDE=` keeps
   every class, `GEMINI_THINKING_LEVEL=` sends no thinking level, `IRIS_OWNER_TOKEN=` means no owner.
 - **Cloud Run** gets the deploy's values from `deploy/deploy.sh` (the caps in `deploy/env.yaml`, plus the Gemini
-  and Google Cloud settings) and the owner token and any key from Secret Manager
-  ([17](17-deployment-and-operations.md)). Locally, Vertex AI uses Application Default Credentials.
+  and Google Cloud settings, `IRIS_PUBLIC_URL`, `IRIS_VERSION` and, when set, `IRIS_ALLOWED_ORIGINS`) and the owner
+  token and any key from Secret Manager (the CI deploy sets no key) ([17](17-deployment-and-operations.md)). Locally, Vertex AI uses Application Default Credentials.
 - **Never** print or commit a value. The browser never sees a key ([16](16-security-caps-and-cost.md)).
 
 ### Reference
@@ -369,8 +371,18 @@ its default, so a bad value fails the wider-fix run with a `ValueError` rather t
 
 | Variable | Default | Cloud Run | Read in | What it does |
 |---|---|---|---|---|
-| `IRIS_PUBLIC_URL` | unset | the deploy's URL | `mcp_server.build` (import) | The address MCP clients show as Iris's website; unset, none is sent |
+| `IRIS_PUBLIC_URL` | unset | the web app's URL: the service's own, or with the CI deploy the Firebase Hosting URL (or `WEB_URL`) | `mcp_server.build` (import) | The address MCP clients show as Iris's website; unset, none is sent |
 | `IRIS_TRUST_FORWARDED` | unset | `1` | `limits.client_id` | N proxies in front that each append to `X-Forwarded-For`: visitors are keyed by the N-th entry from the right instead of the peer. 1 on Cloud Run, whose front end appends the visitor's address |
+| `IRIS_ALLOWED_ORIGINS` | empty (one origin) | the plain deploy: not set; the CI deploy: `https://SITE.web.app`, `https://SITE.firebaseapp.com`, plus `WEB_URL` and `EXTRA_ORIGINS` when set | `origins.allowed` (each request: `app._CrossOrigin`, `app.front_door`, `owner._cookie`, `voice_live.same_origin`); at import for the web app's mount | The web app's other origins, comma-separated `scheme://host[:port]` (no path, no `*`). For exactly those: CORS with credentials, the owner cookie `SameSite=None; Secure; Partitioned`, the voice socket; and the server is the API only (no web app mounted, `GET /` answers JSON). Empty: one origin, no CORS headers, `SameSite=Strict`. A malformed entry raises, so the server stops at start ([10](10-http-api-and-streams.md), [16](16-security-caps-and-cost.md)) |
+| `IRIS_VERSION` | `dev` | the image tag (`deploy.sh`'s `TAG`); the CI deploy: the commit SHA | `app.health` (each request) | What `GET /api/health` reports as `version`; the CI deploy's smoke test checks it is the commit just deployed |
+
+**Web build**
+
+Read by Vite when the web app is built (`npm run build`), not by the server; the value is baked into the bundle.
+
+| Variable | Default | Set by | Read in | What it does |
+|---|---|---|---|---|
+| `VITE_API_BASE` | empty (same origin) | `.github/workflows/deploy.yml`: the Cloud Run URL from `deploy.sh`, or the `API_URL` repository variable | `web/src/api.ts` (`API_BASE`, trailing slash dropped) | The API's origin for a web app hosted elsewhere (Firebase Hosting): server paths go through `apiUrl`, the voice socket through `wsUrl`, and fetches send credentials. Empty: the page calls its own origin (local dev through Vite's proxy, and the web app Cloud Run serves itself, whose Docker build leaves it empty) ([12](12-web-app.md)) |
 
 **Removed.** No longer read, and safe to delete from an old `.env`: the previous provider's model, key and URL variables, `TRIAGE_API_KEY`, `TRIAGE_API_BASE_URL`, `TRIAGE_MODEL`, `TRIAGE_IMAGES`, `TRIAGE_REASONING_EFFORT`, the separate triage host's key and `IRIS_OPEN_WEIGHTS` (with the `open_weights` setting: triage, titles and part names always run on `GEMINI_FAST_MODEL`).
 
@@ -391,7 +403,8 @@ out, with their defaults: the optional `GEMINI_API_KEY`, the four model ids (`GE
 `GEMINI_FAST_THINKING_LEVEL`, `GEMINI_ESCALATION_THINKING_LEVEL`, `IRIS_ESCALATION_MAX_USD_DAY`,
 `IRIS_TRIAGE_WORKERS`, the propose, chat and voice caps and the requirements and preview caps (0 is no limit; unset
 or empty is the default, which is no limit except requirements files and previews), `IRIS_VOICE_LIVE_MAX_S` and
-the `IRIS_CONTEXT_*` bounds. Any other variable in the tables above can go there too. Copy it to `.env` and fill
+the `IRIS_CONTEXT_*` bounds, and `IRIS_ALLOWED_ORIGINS` (empty: one origin). Any other variable in the tables above
+can go there too. Copy it to `.env` and fill
 in only what you need; it never holds a secret.
 
 ## When to update this doc

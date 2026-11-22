@@ -1,0 +1,167 @@
+# Every push to main: run the tests (ci.yml), then deploy the FastAPI server to Cloud Run (the service "iris-api", the
+# API only) and the React app to Firebase Hosting. The browser calls Cloud Run directly (VITE_API_BASE): Firebase never proxies the API, because its rewrites
+# to Cloud Run cut requests at 60 s and carry no WebSockets, and Iris streams for longer and talks voice on a socket.
+#
+# Keyless: GitHub's OIDC token is exchanged through Workload Identity Federation for the deploy service account; no
+# JSON key exists anywhere. One-time setup, and the repository variables it reads: deploy/github-setup.sh.
+#   GCP_PROJECT_ID, GCP_REGION, WIF_PROVIDER, DEPLOY_SA, FIREBASE_SITE   (required, set by github-setup.sh)
+#   BUCKET          optional: the Cloud Storage bucket deploy.sh mounts (settings survive restarts)
+#   API_URL         optional: the API's URL for the web build when it is not the Cloud Run URL (a custom domain)
+#   WEB_URL         optional: the web app's own URL when it has a custom domain (https://iris.techjays.com)
+#   EXTRA_ORIGINS   optional: more web origins for CORS, comma-separated
+#   MIN_INSTANCES / CPU_THROTTLING   optional: 1 / 0 keep one instance warm with CPU between requests (billed all the
+#                   time); unset keeps the minimal 0 / 1
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false   # never stop a deploy halfway; a newer push waits its turn
+
+jobs:
+  ci:
+    name: Tests
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Cloud Run + Firebase Hosting
+    needs: ci
+    if: github.ref == 'refs/heads/main'   # the identity pool only trusts main; a dispatch elsewhere would fail to sign in
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write   # the OIDC token Workload Identity Federation exchanges
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+      SITE: ${{ vars.FIREBASE_SITE || 'iris-techjays' }}
+      WEB_URL: ${{ vars.WEB_URL }}
+      SERVICE: iris-api
+      IMAGE: ${{ vars.GCP_REGION || 'asia-south1' }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/iris/iris:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the repository variables
+        env:
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          DEPLOY_SA: ${{ vars.DEPLOY_SA }}
+        run: |
+          missing=""
+          for v in PROJECT WIF_PROVIDER DEPLOY_SA; do [ -n "${!v}" ] || missing="$missing $v"; done
+          if [ -n "$missing" ]; then
+            echo "::error::Repository variables missing:$missing. Run deploy/github-setup.sh once (deploy/README.md, 'Deploy on every push')."
+            exit 1
+          fi
+
+      - name: Sign in to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # ---- 1. The server image (the root Dockerfile: the web app it serves itself, the API, samples/) -----------
+      - name: Let Docker push to Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false   # one image per push, nothing else for the cleanup policy to count
+          sbom: false
+
+      # ---- 2. Cloud Run: deploy.sh with the image above (no Cloud Build), its env.yaml caps and secrets -----------
+      - name: Deploy the server to Cloud Run
+        id: run
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          BUCKET: ${{ vars.BUCKET }}
+          EXTRA_ORIGINS: ${{ vars.EXTRA_ORIGINS }}
+          GEMINI_API_KEY_SECRET: ""   # no API key in the cloud: Vertex AI through the runtime service account
+          IRIS_VERSION: ${{ github.sha }}
+          MIN_INSTANCES: ${{ vars.MIN_INSTANCES }}
+          CPU_THROTTLING: ${{ vars.CPU_THROTTLING }}
+        run: |
+          export IRIS_PUBLIC_URL="${WEB_URL:-https://${SITE}.web.app}"
+          origins="https://${SITE}.web.app,https://${SITE}.firebaseapp.com"
+          [ -z "$WEB_URL" ] || origins="${origins},${WEB_URL%/}"
+          export IRIS_ALLOWED_ORIGINS="${origins}${EXTRA_ORIGINS:+,$EXTRA_ORIGINS}"
+          deploy/deploy.sh
+
+      # ---- 3. The web app on Firebase Hosting, calling the Cloud Run URL directly ------------------------------
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the web app for Firebase Hosting
+        id: web
+        working-directory: web
+        env:
+          API_URL: ${{ vars.API_URL || steps.run.outputs.url }}
+        run: |
+          [ -n "$API_URL" ] || { echo "::error::No Cloud Run URL from the deploy step"; exit 1; }
+          echo "api=${API_URL%/}" >> "$GITHUB_OUTPUT"
+          npm ci --no-audit --no-fund
+          VITE_API_BASE="${API_URL%/}" npm run build
+          grep -rqF "${API_URL%/}" dist/assets || { echo "::error::VITE_API_BASE did not reach the bundle"; exit 1; }
+
+      - name: Deploy the web app to Firebase Hosting
+        run: |
+          # The hosting target "web" (firebase.json) points at this project's site.
+          cat > .firebaserc <<JSON
+          {"projects": {"default": "${PROJECT}"}, "targets": {"${PROJECT}": {"hosting": {"web": ["${SITE}"]}}}}
+          JSON
+          npx --yes firebase-tools@15.35.0 deploy --only hosting:web --project "$PROJECT" --non-interactive \
+            --message "iris ${GITHUB_SHA::7}"
+
+      # ---- 4. Check both ends and say where they are ---------------------------------------------------------
+      - name: Smoke test
+        env:
+          API: ${{ steps.web.outputs.api }}
+        run: |
+          WEB="https://${SITE}.web.app"
+          curl -fsS --retry 5 --retry-all-errors --max-time 60 -o /dev/null "$WEB/"
+          # The new revision answers (a cold start may take a few seconds: min-instances is 0).
+          health="$(curl -fsS --retry 5 --retry-all-errors --max-time 60 "$API/api/health")"
+          echo "$health"
+          echo "$health" | grep -q "\"version\":\"${GITHUB_SHA}\"" ||
+            { echo "::error::$API/api/health does not report this commit"; exit 1; }
+          # The web app's preflight is allowed (CORS with credentials for the Firebase origin).
+          curl -fsS --max-time 60 -o /dev/null -D headers.txt -X OPTIONS "$API/api/owner/unlock" \
+            -H "Origin: $WEB" -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,x-iris-settings"
+          grep -qi "^access-control-allow-origin: $WEB" headers.txt ||
+            { echo "::error::Cloud Run does not allow $WEB (IRIS_ALLOWED_ORIGINS)"; cat headers.txt; exit 1; }
+
+      - name: Summary
+        if: always()
+        env:
+          API: ${{ steps.web.outputs.api || steps.run.outputs.url }}
+        run: |
+          {
+            echo "### Iris deployed"
+            echo
+            echo "| | URL |"
+            echo "|---|---|"
+            echo "| Web app (Firebase Hosting) | ${WEB_URL:-https://${SITE}.web.app} |"
+            echo "| API and MCP (Cloud Run \`${SERVICE}\`) | ${API:-not deployed} |"
+            echo "| Image | \`${IMAGE}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

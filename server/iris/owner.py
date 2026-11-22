@@ -2,8 +2,10 @@
 
 The owner token is a long random secret in the environment (`IRIS_OWNER_TOKEN`, in Secret Manager on Cloud Run), never in git,
 chat or the browser's scripts. Unlocking sends it once; the server answers with a signed cookie that scripts cannot read
-(HttpOnly, Secure, SameSite=Strict, /api only) and keeps it 30 days. The cookie is signed with a key made from the token,
-so changing the token logs every browser out. With no token configured, nobody is the owner.
+(HttpOnly, Secure, SameSite=Strict, /api only) and keeps it 30 days. When the web app is served from another origin
+(`IRIS_ALLOWED_ORIGINS`, origins.py) the cookie must travel cross-site: SameSite=None and Partitioned (`set_cookie`).
+The cookie is signed with a key made from the token, so changing the token logs every browser out. With no token
+configured, nobody is the owner.
 
 The owner's settings ride on each request in a header (`X-Iris-Settings`, JSON), read only when the cookie checks
 out, and reach the model calls through context variables. Work that leaves the request's thread (a stream's worker, a
@@ -20,6 +22,8 @@ import threading
 import time
 from concurrent.futures import Executor, Future
 from typing import Any, Callable
+
+from . import origins
 
 COOKIE = "iris_owner"
 HEADER = "x-iris-settings"
@@ -67,6 +71,28 @@ def cookie_ok(value: str | None, now: float | None = None) -> bool:
         return False
     good = hmac.new(_key(), f"{version}.{expires}".encode(), hashlib.sha256).hexdigest()
     return version == "v1" and hmac.compare_digest(sig, good) and int(expires) > (now or time.time())
+
+
+def set_cookie(response) -> None:
+    """Give the browser the signed cookie (a Starlette response)."""
+    _cookie(response, cookie_value(), DAYS * 86400)
+
+
+def clear_cookie(response) -> None:
+    """Take it back: the same attributes, expired (a browser only replaces a cookie set with the same ones)."""
+    _cookie(response, "", 0, expires=0)
+
+
+def _cookie(response, value: str, max_age: int, expires: int | None = None) -> None:
+    """One origin: SameSite=Strict. A web app on another origin (origins.py) calls this server cross-site, so its
+    cookie is SameSite=None (which needs Secure) and Partitioned: kept only for pages on the site that unlocked
+    (CHIPS), which is also how it gets through where third-party cookies are blocked."""
+    cross = bool(origins.allowed())
+    response.set_cookie(COOKIE, value, max_age=max_age, expires=expires, httponly=True, secure=True,
+                        samesite="none" if cross else "strict", path="/api")
+    if cross:  # Starlette writes Partitioned only on Python 3.14+
+        name, header = response.raw_headers[-1]
+        response.raw_headers[-1] = (name, header + b"; Partitioned")
 
 
 def settings(header: str | None) -> dict:

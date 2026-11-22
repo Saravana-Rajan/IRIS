@@ -2,7 +2,7 @@
  * steps sit in columns in the order they happened, so nothing jumps as events land; edges join a step to the steps it
  * led to. Everything shown comes from the run's own events: times are when each arrived, numbers are the server's,
  * Gemini's words are its own. Pure, so each builder is tested against the tour's recorded runs. */
-import type { Option as FixOption } from "./api";
+import { apiUrl, type Option as FixOption } from "./api";
 import { clearanceText, editText, kindLabel } from "./fixKinds";
 import type { Run, RunEvent } from "./runlog";
 import { aiName } from "./aiNames";
@@ -630,7 +630,7 @@ function built(run: Run, at: number): Graph {
       detail: [text(ok ? "JPEG, outline and verdicts cached for this view" : `${result.tried ?? 0} pictures tried`, { tone: "muted" })] });
     edges.push({ from: prev, to: "kept", win: true });
     add({ id: "ready", lane: "you", col: cols.next(262), actor: "you", t0: result.t, status: ok ? "ok" : "fail", time: sec(result.seconds ?? result.t), ev: "result",
-      title: ok ? "Built view ready" : "No picture this time", body: ok && result.image_url ? [{ kind: "image", src: result.image_url, alt: `${aiName("image")}'s picture of the fix` }] : [],
+      title: ok ? "Built view ready" : "No picture this time", body: ok && result.image_url ? [{ kind: "image", src: apiUrl(result.image_url), alt: `${aiName("image")}'s picture of the fix` }] : [],
       detail: [text(ok ? "Checked against the model before you see it" : "The option card says why", { tone: "muted" })] });
     edges.push({ from: "kept", to: "ready", win: true });
     ticks.push({ lane: "you", at: result.t, tone: ok ? "ok" : "fail" });

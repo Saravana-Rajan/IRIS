@@ -11,6 +11,7 @@ import { compiled } from "./app-host.mjs";
 const { BuiltView, wipeAt } = await import(await compiled("../src/BuiltView.tsx", {
   react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
   "lucide-react": import.meta.resolve("lucide-react"), "./aiNames": await compiled("../src/aiNames.ts"),
+  "./api": await compiled("../src/api.ts"),
 }));
 
 const result = { status: "done", image_url: "/pic.jpg", lines_url: "/lines.png", gate: { f: 0.93 },
