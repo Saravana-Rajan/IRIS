@@ -1,8 +1,9 @@
 # 08 · AI models, prompts and spend
 
 > **Covers:** `server/iris/model_client.py`, `server/iris/spend.py`, the model parts of `settings.py`,
-> `owner.py`, `built.py`, `voice_live.py`, `hosts.py` and `step.py`, and every prompt in
-> `server/iris/domain_packs/` and `domains.py` · **Checked against code:** re-branded on 2026-11-11 ·
+> `owner.py`, `built.py`, `voice_live.py`, `hosts.py`, `step.py` and `drawing_reader.py`, and every prompt in
+> `server/iris/domain_packs/` and `domains.py` · **Checked against code:** re-branded on 2026-11-11; the drawing
+> reader's spend and saved readings checked 2026-11-22 ·
 > **Deeper design:** [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md),
 > [docs/voice.md](../voice.md)
 
@@ -68,7 +69,7 @@ call. Env var meanings are in [15](15-requirements-settings-and-config.md); caps
 | Show it built: judges | `built.judge` with `built.judge_model` (`JUDGES`, 2) | Escalation model | as above | `judge`, fixed at `medium` | Strict `built.JUDGE` |
 | Show it built: lighter judges | `built.judge` with `built.main_judge_model` (`MAIN_JUDGES`, 3) | Gemini Flash (fast model) | used when the day's budget cannot cover the escalation judges | `judge`, fixed at `low` | Strict `built.JUDGE` |
 | Voice clip | `model_client.transcribe` (`POST /api/transcribe`) | Gemini Flash (fast model) | `GEMINI_FAST_MODEL` | fixed at `minimal` | `{transcript, duration_ms}` |
-| Drawing reader (2D sheets) | `drawing_reader.read_drawing` with `GeminiReader` (its own request: "Image k:" labels, `media_resolution` HIGH, no temperature; not `GeminiModel.complete_json`) | Gemini Flash (fast model) | `GEMINI_FAST_MODEL` | fixed at `high` (`drawing_reader.THINKING`) | Strict `drawing_reader.schema(n)`; a page's reply cached on disk; each call charged to `IRIS_ESCALATION_MAX_USD_DAY` as it lands, a read refused (`ReadRefused`) when the day cannot cover its estimate ([docs/drawings.md](../drawings.md)) |
+| Drawing reader (2D sheets) | `drawing_reader.read_drawing` with `GeminiReader` (its own request: "Image k:" labels, `media_resolution` HIGH, no temperature; not `GeminiModel.complete_json`) | Gemini Flash (fast model) | `GEMINI_FAST_MODEL` | fixed at `high` (`drawing_reader.THINKING`) | Strict `drawing_reader.schema(n)`; a page's reply cached on disk; each call charged to `IRIS_ESCALATION_MAX_USD_DAY` as it lands, a read refused (`ReadRefused`) when the day cannot cover its estimate; a sample sheet's saved reading (`saved_reading`) is replayed instead, with no call, no charge and no budget check; those were made by `evals/save_drawing_readings.py` at thinking `low` with an output cap, as each file's `settings` say, since `high` did not finish the A1 sample sheet within the deadline ([docs/drawings.md](../drawings.md), [19](19-demo-data.md)) |
 | Live voice | `voice_live.relay` (`/api/voice/live`): segments transcribed with `model_client.transcribe` | Gemini Flash (fast model) | `GEMINI_FAST_MODEL`, `IRIS_VOICE_VAD_RMS`, `IRIS_VOICE_SILENCE_MS` | fixed at `minimal` | One `final` per segment (hold: one for the whole clip); no partial words |
 
 `Workspace.model` is one Gemini Pro client for the whole process, built lazily in `service.Workspace.model`; the
@@ -323,6 +324,7 @@ shared with `evals/navisworks_triage.py`, so its scores describe the app. Eval s
 | Escalation-model tokens (second tries, full-check judges) | Each call lands: `GeminiModel._count` → `on_cost` → `spend.charge` | `cost()` from `PRICES` / `IRIS_MODEL_PRICES` |
 | Fast-model tokens of the lighter judges (`main_judge_model`) | The same way | The same |
 | Gemini image model pictures | Each picture returned: `built.restyle` → `spend.charge(IMAGE_USD)` | `built.IMAGE_USD`: `IRIS_IMAGE_USD`, default 0.04 |
+| Fast-model tokens of the drawing reader | Each page's call lands: `read_drawing` → `DayBudget.charge` → `spend.charge` (a page read before, or replayed from a saved reading, makes no call and costs nothing) | `model_client.cost` from `PRICES` / `IRIS_MODEL_PRICES` |
 | The main model, and the fast model's other work (triage, titles, part names, host readings, voice) | Never | Held by count caps instead ([16](16-security-caps-and-cost.md)) |
 
 No price numbers are kept in these docs: they come from `IRIS_MODEL_PRICES` (over the defaults in `PRICES`) and the
@@ -383,6 +385,7 @@ sequenceDiagram
 | A second try | `escalation.ESTIMATE_USD` | `app.escalation_refused` (button requests, automatic second tries through `_escalation_check`, chat, MCP) | `Workspace.escalate` runs inside `spend.held` |
 | Show it built, full check | `built.ESTIMATE_USD` (pictures plus escalation-model judgements) | `app.built_stream` | `built.make` runs inside `spend.held` |
 | Show it built, lighter check | `built.LIGHTER_ESTIMATE_USD` (the pictures plus fast-model judgements at `built.LIGHT_JUDGE_USD` each) | `app.built_stream` | three fast-model judges (`built.MAIN_JUDGES`, `built.main_judge_model`), the judge named in the result's `judge` (`built.main_judge_label`) |
+| A drawing read | `GeminiReader.estimate_usd` per page to read (`IMAGE_TOKENS` per image, one or five, plus `TEXT_TOKENS` in and `OUTPUT_TOKENS` out); pages cached or with a saved reading count nothing | `drawing_reader.read_drawing` (`DayBudget`: `spend.refused` for the whole read before its first event, again before each page; `budget=` a number adds a run's own cap, `RunBudget`) | each page's call runs inside `spend.held` and is charged as it lands; a replayed page skips the check, the hold and the charge, its `done.cost_usd` share is 0, and the stream says it is a saved reading (`page.saved`, `evidence.saved_reading`, `done.saved`, labelled by `model_name`) |
 
 How Show it built degrades: `built_stream` asks `spend.refused(built.ESTIMATE_USD)`. If the full check fits, it
 claims that and the escalation model judges. If not, it claims `built.LIGHTER_ESTIMATE_USD` and three fast-model
@@ -410,7 +413,8 @@ its env vars and who is exempt are owned by [16 · Security, caps and cost contr
   it is held to, or a new prompt written in code (`server/tests/test_docs_map.py` checks the inventory).
 - A new domain, a change to how `domains.of` picks one, or a new placeholder in the shared prompts.
 - A change to `PRICES` / `IRIS_MODEL_PRICES`, `Usage`, `spend.py`, an estimate (`escalation.ESTIMATE_USD`,
-  `built.ESTIMATE_USD`, `built.LIGHTER_ESTIMATE_USD`, `built.IMAGE_USD` / `IRIS_IMAGE_USD`) or how Show it built
-  falls back to lighter judges.
+  `built.ESTIMATE_USD`, `built.LIGHTER_ESTIMATE_USD`, `built.IMAGE_USD` / `IRIS_IMAGE_USD`, the drawing reader's
+  `IMAGE_TOKENS`, `TEXT_TOKENS`, `OUTPUT_TOKENS`), how Show it built falls back to lighter judges, or when the
+  drawing reader replays a saved reading instead of calling the model.
 - A change to the voice request shapes or segmenting (`transcribe`, `voice_live`, `IRIS_VOICE_VAD_RMS`,
   `IRIS_VOICE_SILENCE_MS`).

@@ -1,17 +1,13 @@
 # 04 · Server code map
 
-> **Covers:** `server/iris/*.py` (44 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** re-branded on 2026-11-11; `origins.py`, `owner.py`, `voice_live.py` and
-> `app.py`'s middleware and imports on 2026-11-22 · **Deeper design:** the feature docs linked
-> from each module below ([detection](../detection.md), [edits](../edits.md), [escalation](../escalation.md),
-> [mcp](../mcp.md), [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md),
-> [uploads](../uploads.md), [voice](../voice.md))
-> **Covers:** `server/iris/*.py` (47 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings; re-branded on
-> 2026-11-11) · **Deeper design:** the feature docs linked
-> from each module below ([detection](../detection.md), [edits](../edits.md), [engineer-workflow](../engineer-workflow.md),
-> [escalation](../escalation.md), [mcp](../mcp.md), [requirements](../requirements.md),
-> [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [voice](../voice.md))
+> **Covers:** `server/iris/*.py` (48 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
+> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings, the
+> sample drawings and saved readings; `origins.py`, `owner.py`, `voice_live.py` and `app.py`'s middleware and imports;
+> re-branded on 2026-11-11) · **Deeper design:** the feature docs linked
+> from each module below ([detection](../detection.md), [drawings](../drawings.md), [edits](../edits.md),
+> [engineer-workflow](../engineer-workflow.md), [escalation](../escalation.md), [mcp](../mcp.md),
+> [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md),
+> [voice](../voice.md))
 
 The server is one Python package, `iris` (the internal name, kept on purpose; the product is Iris). It is a
 FastAPI app and an MCP server over one shared `Workspace`, which holds the open models and clash reports in memory
@@ -119,11 +115,11 @@ Three edges go "up" and are worth knowing before you add an import:
 | `context_eval.py` | Geometry | Whole-arrangement geometry and connection checks on a scene snapshot (wider fixes) |
 | `context_planner.py` | Workflows | The bounded, revision-pinned wider-fix search, and its accept |
 | `detect.py` | Geometry | Iris's own clash detection: tests (sides by file, team, class, system, id or a filter), sort and sweep, triangle tree, exact box depth, stable ids (`_assign_ids`: a clash keeps the id first issued for its pair and kind, whatever check finds it, given what the scene `known`), rerun diff against the same check's last run |
-| `demos.py` | Policy | The demo projects in one place: their sample files, start labels, tours, default requirements (`demos/*.json`), and what only the demo models need (their property set, their Navisworks smart tags) |
+| `demos.py` | Policy | The demo projects in one place: their sample files, start labels, tours, default requirements (`demos/*.json`), sample PDF drawings (`Demo.drawings`), and what only the demo models need (their property set, their Navisworks smart tags) |
 | `domains.py` | Policy | Which domain a scene is in (`of`: the effective requirements' `domain`, else opened wholly from STEP is `machines`), the classes that stay in place by default (`STAYS`), who reviews a seat (`SEAT_REVIEW`), voice words, and the shared prompts in that domain's voice (`prompt` fills `{role}`, `{meeting}`, `{teams}`, `{examples}`) |
 | `document.py` | Documents | Coordination reports: PDF (combined, per team, per model) and BCF 2.1, team guessing, who acts and reviews |
-| `drawing_reader.py` | Inputs | The 2D drawing reader ([docs/drawings.md](../drawings.md)): `read_drawing` streams `page`, `item`, `done`; `GeminiReader` sends each sheet (and on a large one its four overlapping quarters, `tiles`, boxes mapped back by `to_page`) to the fast model with `domain_packs/drawing_reader.md` and a strict schema; `reconcile` (no AI) checks each item's tag and size against the page's text layer: `confirmed`, `ai_only`, `text_only`; replies cached on disk by file hash, page, model and prompt hash; charged to the day's budget (`ReadRefused`); `FakeReader` for offline tests |
-| `drawings.py` | Inputs | 2D PDF drawings in ([docs/drawings.md](../drawings.md)): `ingest` (sha256, each page rendered to PNG with pypdfium2 at 150 dpi, the exact text layer read with pdfplumber as words with pixel boxes, `has_text_layer`, the title block's SHEET / SCALE / TITLE / DRAWING NO. as printed in the bottom-right quarter), `Word` / `Page` / `Drawing`; `STORE` holds each open scene's drawings and their last read items, its files deleted with the scene; `compare_scene` runs `drawing_compare.compare` drawing by drawing with the level from each title block (`storey_of`) |
+| `drawing_reader.py` | Inputs | The 2D drawing reader ([docs/drawings.md](../drawings.md)): `read_drawing` streams `page`, `item`, `done`; `GeminiReader` sends each sheet (and on a large one its four overlapping quarters, `tiles`, boxes mapped back by `to_page`) to the fast model with `domain_packs/drawing_reader.md` and a strict schema; `reconcile` (no AI) checks each item's tag and size against the page's text layer: `confirmed`, `ai_only`, `text_only`; replies cached on disk by file hash, page, model and prompt hash; charged to the day's budget (`ReadRefused`); saved readings (`SAVED`, the repo's `samples/drawings/*.reading.json`, `SAVED_SUFFIX`): `saved_reading` replays a page's shipped reply when the PDF's sha256, `prompt_hash` and the page's pixel size match (no call, no cost, said in `page.saved`, `evidence.saved_reading` and `done.saved`), `saved_info` says a drawing has one for every page, `write_saved` writes one from the cache (`evals/save_drawing_readings.py`), `model_name` labels the model; `FakeReader` for offline tests |
+| `drawings.py` | Inputs | 2D PDF drawings in ([docs/drawings.md](../drawings.md)): `ingest` (sha256, each page rendered to PNG with pypdfium2 at 150 dpi, the exact text layer read with pdfplumber as words with pixel boxes, `has_text_layer`, the title block's SHEET / SCALE / TITLE / DRAWING NO. as printed in the bottom-right quarter), `Word` / `Page` / `Drawing`; `STORE` holds each open scene's drawings and their last read items, its files deleted with the scene; `compare_scene` runs `drawing_compare.compare` drawing by drawing with the level from each title block (`storey_of`), an element one drawing leaves out not missing when another sheet shows it (two issues of one sheet, `sheet_key`, each compared whole); `sample_names` lists the sample PDFs in `samples/drawings/` |
 | `edits.py` | Geometry | Model edits: offsets with bends, routes, resizes, trims, penetrations; trial and keep transactions; meshes |
 | `escalation.py` | Fix agent | The brief a second try on the escalation model reads (first try, neighbourhood, blockers) |
 | `fixtures.py` | Test support | Synthetic IFC models: clash, run, joint, context, detection, route, penetration, resize, edit and parametric fixtures |
@@ -226,16 +222,15 @@ naming the service, `/docs` and `/api/health`.
   `voice_limit`, `model_upload_limit`, `requirements_limit`, `preview_limit`, `link_limit`, `agent_call_limit`) and
   `_take`; the shared jobs and caches `_triage_jobs`, `_title_jobs`, `_documents`, `_previews`, `_chat` (pattern
   readings live on the Workspace: `plans.read_patterns`); `links` (`agents.Links`), `mcp_hooks`, `_McpGate`, `_mcp_transport`, `_lifespan`; folders `EXPORTS`,
-  `UPLOADS`; `_receive_models` / `_unpack` (gzipped uploads).
-- **Imports:** `agents.py`, `built.py`, `chat.py`, `checks.py`, `context_planner.py`, `demos.py`, `detect.py`,
-  `document.py`, `domains.py`, `edits.py`, `escalation.py`, `faces.py`, `journal.py`, `limits.py`, `manual.py`,
-  `mcp_server.py`, `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `property_edits.py`, `requirements.py`,
-  `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
   `UPLOADS`; `_receive_models` / `_unpack` (gzipped uploads); `_optional` (a module this build may not have: the
-  drawing reader and comparison) and `_drawing` (a drawing by id, 404 when no open scene holds it).
-- **Imports:** `agents.py`, `built.py`, `chat.py`, `context_planner.py`, `detect.py`, `document.py`, `domains.py`,
-  `drawings.py` (and, when present, `drawing_reader.py` and `drawing_compare.py`, through `_optional`), `edits.py`, `escalation.py`, `limits.py`, `mcp_server.py`, `model_client.py`, `owner.py`, `plans.py`, `projects.py`,
-  `requirements.py`, `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
+  drawing reader and comparison), `_drawing` (a drawing by id, 404 when no open scene holds it), `_drawing_out` (a
+  drawing as the page gets it, with `saved_reading` from `drawing_reader.saved_info`, or None) and `_samples_lock`
+  (one attach of a demo's sample drawings at a time, `POST /api/scenes/{scene_id}/drawings/samples`).
+- **Imports:** `agents.py`, `built.py`, `chat.py`, `checks.py`, `context_planner.py`, `demos.py`, `detect.py`,
+  `document.py`, `domains.py`, `drawings.py` (and, when present, `drawing_reader.py` and `drawing_compare.py`, through
+  `_optional`), `edits.py`, `escalation.py`, `faces.py`, `journal.py`, `limits.py`, `manual.py`, `mcp_server.py`,
+  `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `projects.py`, `property_edits.py`, `requirements.py`,
+  `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
   **Imported by:** `mcp_server.py` (lazily, for the stdio entry point).
 - **Rules:** `.env` is already loaded when it runs (the package's `__init__.py`), and its caps and sizes are read with
   `limits.env_int` / `env_float`; it calls `origins.allowed()` once at import, so a malformed `IRIS_ALLOWED_ORIGINS`
@@ -247,7 +242,9 @@ naming the service, `/docs` and `/api/health`.
   turn `projects.NotFound` into 404, `projects.Full` into 409 and a `ValueError` into a 400 with its words (`_project`);
   the drawing routes sweep the drawings of scenes no longer open first (`drawings.STORE.prune`), answer 501 while the
   reader or the comparison is not in the build, and run the reader up to its first event before the stream starts, so
-  a read the budget refuses is a plain 429.
+  a read the budget refuses is a plain 429; the sample drawings route attaches only the open demo's own
+  (`demos.drawings_for`, else 409), each sheet once by sha256 under `_samples_lock`, and takes no upload from the
+  allowance.
 
 ### `mcp_server.py`: Iris for agents
 
@@ -744,7 +741,8 @@ labels at the start of a text run in the bottom-right quarter, the value beside 
 The PDF is kept as `source.pdf`. `Page.index` is 0-based.
 
 - **Main symbols:** `Word`, `Page`, `Drawing` (`to_dict`; a `folder` attribute that is not a field), `ingest`,
-  `title_block`, `page_path`, `folder_of`, `storey_of`, `compare_scene`, `merge_items`, `plain`, `Store` / `STORE`, errors
+  `title_block`, `page_path`, `folder_of`, `storey_of`, `compare_scene`, `sheet_key`, `sample_names`, `merge_items`,
+  `plain`, `Store` / `STORE`, errors
   `DrawingError` (400) and `TooBig` (413); `max_pages()` (`IRIS_DRAWING_MAX_PAGES`, 40) and `max_mb()`
   (`IRIS_DRAWING_MAX_MB`, 50), read each call; `MAX_FILES` (10 a request), `MAX_PER_SCENE` (30).
 - **Imports:** `limits.py`; pypdfium2, pdfplumber (never PyMuPDF: AGPL). **Imported by:** `app.py`, `projects.py`,
@@ -753,7 +751,10 @@ The PDF is kept as `source.pdf`. `Page.index` is 0-based.
   restrictions opens); a text layer pdfminer cannot parse is logged and treated as none. `STORE` keeps files under
   `iris-drawings/<scene id>/<drawing id>/`: `watch` deletes a scene's folder when its scene object is garbage (an
   eviction), and every call first forgets such scenes (a finalizer never takes the store's lock); `prune(live)` drops
-  any scene not open.
+  any scene not open. In `compare_scene` a `missing_in_drawing` is dropped when another drawing with another sheet
+  number shows the element (`sheet_key`: the title block's sheet, else drawing number, without case, spaces or
+  punctuation; a drawing with neither is a sheet of its own), kept when only another issue of the same sheet shows
+  it, and listed once when several leave it out.
 
 ### `document.py`: PDF and BCF
 
@@ -817,8 +818,10 @@ Iris works on buildings and on machine cells. A scene whose every model was open
 Everything that knows a demo by name, so the rest of the server does not (the tour, the landing and the evals name
 them too). Deeper detail: [19](19-demo-data.md).
 
-- **Main symbols:** `Demo`, `DEMOS` (Northbank, the PC-03 cell), `find(files)`, `listing(samples)` (for
-  `GET /api/samples`), `requirements_for(files)` (a demo's own `demos/<name>.json`), `PSET_NAMES`,
+- **Main symbols:** `Demo` (`drawings`: its sample PDFs in `samples/drawings/`), `DEMOS` (Northbank, the PC-03 cell),
+  `find(files)`, `listing(samples, drawings)` (for `GET /api/samples`: each demo with those of its sample drawings
+  there are), `drawings_for(files)` (the sample drawings of the demo the open files are, for
+  `POST /api/scenes/{scene_id}/drawings/samples`), `requirements_for(files)` (a demo's own `demos/<name>.json`), `PSET_NAMES`,
   `HIDDEN_PROPERTIES`, `SMART_TAG_SET`, `HERE`.
 - **Imports:** nothing at load; lazily `requirements.py`. **Imported by:** `app.py`, `properties.py`, `reports.py`,
   `service.py`.
@@ -932,8 +935,7 @@ and tests), `uvicorn[standard]` (which brings `websockets`, used by `voice_live.
 local MCP server as `python -m iris.mcp_server`. Pytest runs from `server/` with `pythonpath = ["."]` and
 `testpaths = ["tests"]`.
 
-**`server/tests/`** has 63 test files plus `conftest.py`, which gives every test its own settings store (so no test
-**`server/tests/`** has 68 test files plus `conftest.py`, which gives every test its own settings store (so no test
+**`server/tests/`** has 71 test files plus `conftest.py`, which gives every test its own settings store (so no test
 reads the developer's `server/.iris-settings.json`). Most build their models with `fixtures.py`.
 `test_docs_map.py` reads this doc and fails when a module in `server/iris/` is not named here. Run them with
 `cd server && uv run pytest -q`; the suites, evals and the delivery checklist are in

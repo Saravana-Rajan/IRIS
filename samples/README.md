@@ -30,6 +30,14 @@ page pixels at 150 dpi and GlobalId, plus the planted mismatches). They are synt
 `uv run --directory server python ../evals/make_drawings.py`; `server/tests/test_make_drawings.py` fails when they are
 stale.
 
+Each sheet also has a saved reading, `<stem>.reading.json`: the drawing reader's Gemini reply for each page, made once
+by `evals/save_drawing_readings.py` (hard cap `--max-usd`, default $0.30) with the PDF's sha256, the prompt's hash
+and how the call was made (`settings`); `--check` replays them against the models with no model call.
+The server replays it instead of calling the model when that exact PDF is read with that prompt, says it is a saved
+reading, and charges nothing ([docs/drawings.md](../docs/drawings.md), "Saved readings"). Run the script again,
+from the repo root with `uv run --directory server python ../evals/save_drawing_readings.py`, after regenerating the
+PDFs or changing the reader's prompt; until then those sheets are read live.
+
 ## Open the demos
 
 Follow [the local setup](../README.md#run-locally), then use the landing page's demo cards. The server lists every

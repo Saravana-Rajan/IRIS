@@ -4,14 +4,11 @@
 > `deploy/github-setup.sh`, `deploy/env.yaml`, `deploy/.gcloudignore`, `deploy/README.md`,
 > `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `firebase.json`, `.firebaserc`,
 > `server/iris/origins.py`, `server/iris/app.py` (static files, `/`, `/api/health`, CORS, streams, exports),
-> `server/iris/settings.py` (the settings file), `server/iris/service.py` (eviction), `.env.example`,
-> `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
-> **Checked against code:** 2026-11-22 (the deploy files, CI/CD).
-> `deploy/env.yaml`, `deploy/.gcloudignore`, `deploy/README.md`, `server/iris/app.py` (static files, streams,
-> exports), `server/iris/settings.py` (the settings file), `server/iris/projects.py` (the projects folder),
+> `server/iris/settings.py` (the settings file), `server/iris/projects.py` (the projects folder),
 > `server/iris/service.py` (eviction), `.env.example`, `.gitignore`,
 > `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
-> **Checked against code:** 2026-11-22 (the Cloud Run deploy files, the projects folder).
+> **Checked against code:** 2026-11-22 (the deploy files, CI/CD, the projects folder, what `samples/` puts in the
+> image).
 > **Deeper design:** [docs/uploads.md](../uploads.md) (memory and uploads), [docs/mcp.md](../mcp.md),
 > [docs/voice.md](../voice.md) (the voice socket), [deploy/README.md](../../deploy/README.md) (every command)
 
@@ -93,7 +90,7 @@ The image is built in two stages.
 | `uv sync --frozen --no-dev --no-install-project` in `/app/server` | the server's locked Python dependencies | they come from `server/pyproject.toml` and `server/uv.lock` ([02](02-system-architecture.md#technology-stack)). The venv is `/app/server/.venv`. |
 | `COPY server/iris` | the server package | its prompts (`domain_packs/*.md`) come with it |
 | `COPY --from=web /app/web/dist /app/web/dist` | the built web app | `app.WEB_DIST` resolves to `/app/web/dist`, so it is mounted at `/`, except in split mode (below), where it stays unused |
-| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, and `samples/step-cache`. The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. |
+| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg`, and `samples/drawings/*.pdf` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, `samples/step-cache`, and the sample PDF drawings with their answer keys and saved readings (`*.reading.json`, replayed instead of a model call: [docs/drawings.md](../drawings.md)). The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. |
 | `USER iris` (uid 10001) | not root | `/app/server` and `/mnt/iris` belong to it |
 | `CMD uvicorn iris.app:app --host 0.0.0.0 --port $PORT --workers 1` | one process | all state is in this process's memory (below) |
 
@@ -375,7 +372,9 @@ flowchart TD
    site, `.firebaserc` and the repository variables (above). For a deploy by hand only, `deploy/setup.sh` alone is
    enough. The manual commands are in `deploy/README.md`.
 3. **Samples** ([samples/README.md](../../samples/README.md)):
-   - six Northbank IFCs and the cell's `PC-03-Palletising-Cell-RevA.step` and `-RevB.step` are bundled;
+   - six Northbank IFCs and the cell's `PC-03-Palletising-Cell-RevA.step` and `-RevB.step` are bundled, and so are
+     the sample drawings in `samples/drawings/` (two PDFs, their answer keys and saved readings), so the pipeline's
+     image has them too;
    - optional `samples/step-cache/` stays gitignored. To fill it, create the directory and open each STEP once with
      the server running locally;
    - optional clash reports in `samples/reports/<name>/` stay gitignored (XML at the top, with linked images).

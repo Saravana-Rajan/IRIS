@@ -171,6 +171,7 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     "./importRows": await compiled("../src/importRows.ts", {}), "./coordination": await compiled("../src/coordination.ts", {}),
     "./proposalState": await compiled("../src/proposalState.ts", { "./fixKinds": kinds }), "./projectRoute": await compiled("../src/projectRoute.ts", {}),
     "./drawingsApi": await compiled("../src/drawingsApi.ts", { "./api": apiModule }),
+    "./sampleDrawings": await compiled("../src/sampleDrawings.ts", {}),
     "./projectsApi": projectsModule };
   for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons",
     "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ProjectsHome", "./ProjectOverview"]) dependencies[name] = mocks;

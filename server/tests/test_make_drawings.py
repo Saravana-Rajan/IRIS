@@ -215,7 +215,10 @@ def test_shipped_samples_are_what_the_generator_writes(built):
     if not shipped.exists():
         pytest.skip("samples/drawings/ not generated")
     names = sorted(p.name for p in out.iterdir())
-    assert sorted(p.name for p in shipped.iterdir() if not p.name.startswith(".")) == names
+    # Beside them: each sheet's saved Gemini reading (evals/save_drawing_readings.py, test_drawings.py checks them).
+    readings = sorted(p.name for p in shipped.glob("*.reading.json"))
+    assert readings == sorted(f"{Path(n).stem}.reading.json" for n in names if n.endswith(".pdf"))
+    assert sorted(p.name for p in shipped.iterdir() if not p.name.startswith(".") and p.name not in readings) == names
     for n in names:
         assert (shipped / n).read_bytes() == (out / n).read_bytes(), (
             f"samples/drawings/{n} is stale: cd server && uv run python ../evals/make_drawings.py")

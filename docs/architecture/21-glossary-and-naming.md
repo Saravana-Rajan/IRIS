@@ -3,7 +3,7 @@
 > **Covers:** the words used across Iris's code, UI and docs, and the naming rules: `server/iris/*.py` (the
 > symbols named below), `web/src/api.ts` (shared types), `web/src/fixKinds.ts` (`KIND_LABEL`), `web/src/Triage.tsx`
 > (`TRIAGE`), `web/src/reqFile.ts`, `web/src/About.tsx` ("Words you'll see") · **Checked against code:** re-branded on
-> 2026-11-11
+> 2026-11-11; "Saved reading" and the fast model's drawing reads checked 2026-11-22
 
 A newcomer to Iris meets two vocabularies at once: the building and machine design world's (IFC, MEP, ports, provision
 for void) and Iris's own (scene, option, trial, basis, hub). This doc defines both, maps each Iris term to the code
@@ -164,7 +164,8 @@ each feature see [01](01-product-and-journeys.md).
 | **Params, policy** | The numbers a level and strictness compile into; what the requirements allow on one element. | `requirements.Params`, `requirements.resolve`, `requirements.Policy`, `requirements.policy` |
 | **Domain pack** | A prompt file of construction rules of thumb and instructions for one workflow. | `server/iris/domain_packs/*.md` ([08](08-ai-models-prompts-and-spend.md)) |
 | **Effort, thinking level** | The thinking level sent to a model: minimal, low, medium, high (`GEMINI_THINKING_LEVEL`; the fast model's `GEMINI_FAST_THINKING_LEVEL`, the setting `triage_effort`). | `settings.EFFORTS`; `GeminiModel` |
-| **Fast model** | The model titles, triage, STEP part names, voice and Show it built's lighter judges always run on (Gemini Flash, `GEMINI_FAST_MODEL`). | `model_client.triage_model`, `built.main_judge_model` |
+| **Fast model** | The model titles, triage, STEP part names, voice, the drawing reader and Show it built's lighter judges always run on (Gemini Flash, `GEMINI_FAST_MODEL`). | `model_client.triage_model`, `built.main_judge_model`, `drawing_reader.GeminiReader` |
+| **Saved reading** | A sample drawing's AI reading, made once with Gemini and shipped beside the PDF; reading that very sheet replays it at no cost, and the page says so ("Saved reading", naming the model). Never shown as a live reading. | `drawing_reader.saved_reading`, `samples/drawings/*.reading.json` ([19](19-demo-data.md)) |
 | **Owner** | The site's owner, unlocked by a token; gets owner settings and no demo caps. | `owner.py` (`cookie_ok`, `HEADER`, `COOKIE`); `Owner.tsx` |
 | **Settings for everyone** | Settings the owner sets for every visitor, kept across restarts. | `settings.Settings` |
 | **Cap** | A per-visitor-per-hour and per-day limit on a paid or heavy action. | `limits.ProposeLimit`; `*_limit` in `app.py` ([16](16-security-caps-and-cost.md)) |

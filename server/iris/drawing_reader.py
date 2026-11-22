@@ -18,6 +18,11 @@ AI reads, data checks, the engineer decides. Per page:
    the prompt's hash (`prompt_hash`), so a sheet is paid for once; reconciling runs again on every read. A page not
    cached is refused before any call when the day's budget (spend.py, `IRIS_ESCALATION_MAX_USD_DAY`) or a run's own
    cap (`budget=` USD) cannot cover its estimate (`ReadRefused`), and each call's real cost is charged as it lands.
+4. **Saved readings** (`saved_reading`): a sample sheet ships with the model's reply to it
+   (`samples/drawings/<stem>.reading.json`, made once by `evals/save_drawing_readings.py` through `write_saved`). A page
+   whose PDF has that sha256, read with the prompt as it is now (`prompt_hash`) at the same page size, replays it: no
+   call, no cost, and the stream says so (`page.saved`, each AI item's `evidence.saved_reading`, `done.saved`), so the
+   page never shows it as a live reading. Any other PDF, or a changed prompt, is read by the model as before.
 
 `FakeReader` reads a page from its own text layer with deterministic mistakes, so the whole pipeline runs offline in
 tests. `read_drawing` yields the stream the route sends: `page` progress, one `item` per item, then `done`.
@@ -28,15 +33,19 @@ import contextlib
 import hashlib
 import io
 import json
+import logging
 import math
 import re
 import tempfile
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Protocol
 
 from . import model_client, spend
+
+log = logging.getLogger(__name__)
 
 PROMPT = Path(__file__).parent / "domain_packs" / "drawing_reader.md"
 VERSION = "1"            # part of the prompt hash: bump when the reply is read differently
@@ -46,12 +55,17 @@ TILE_ABOVE_PX = 2000     # a page whose longest side is over this is also sent a
 TILE_OVERLAP = 0.10      # neighbouring quarters overlap by this share of the page (each reaches half of it past the middle)
 RADIUS_FRAC = 0.03       # text counts as "near" an item within this share of the page's longest side
 RADIUS_MIN_PX = 40.0
+LABEL_STEP = 0.75        # of the text height: the most space between two stacked lines of one label
+SHIFT_ANCHORS = 3        # tags printed once on the page that an image's shifted boxes are measured from, at least
+SHIFT_AGREE = 0.6        # the share of them that must agree on one shift
 THINKING = "high"        # fixed, as the picture judges' are: dense visual reading (docs/research, Gemini settings)
 TIMEOUT_S = 240
 # The estimate a page is held at before its call (the real cost is charged when it lands): HIGH media resolution is
 # 1,120 tokens an image, the prompt and schema about 1,500, the reply with HIGH thinking about 6,000 output tokens.
 IMAGE_TOKENS, TEXT_TOKENS, OUTPUT_TOKENS = 1120, 1500, 6000
 CACHE = Path(tempfile.gettempdir()) / "iris-drawing-reads"
+SAVED = Path(__file__).resolve().parents[2] / "samples" / "drawings"   # the sample sheets' saved readings
+SAVED_SUFFIX = ".reading.json"
 QUARTERS = ("top left", "top right", "bottom left", "bottom right")
 PAGE_TEXT = "Image 1 is the whole sheet. List its items and read its title block."
 TILE_TEXT = ("Image 1 is the whole sheet; Images 2 to 5 are its top-left, top-right, bottom-left and bottom-right "
@@ -319,6 +333,40 @@ def _lines(words) -> list[list[int]]:
     return lines
 
 
+def label_blocks(words) -> list[int]:
+    """Each word's printed label (a block id): words next to each other on a line (as `phrases` joins them), and lines
+    stacked under each other, overlapping across, with less than LABEL_STEP of a text height between them, are one
+    label ("SA-BR-1 / SA-BR-2 / 300x200" stacked; a size printed beside it is another label)."""
+    parent = list(range(len(words)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def join(a: int, b: int) -> None:
+        parent[find(a)] = find(b)
+    for line in _lines(words):
+        for a, b in zip(line, line[1:]):
+            wa, wb = words[a], words[b]
+            if wb.x0 - wa.x1 <= 1.5 * max(wa.y1 - wa.y0, wb.y1 - wb.y0, 1.0):
+                join(a, b)
+    order = sorted(range(len(words)), key=lambda i: words[i].y0)
+    tallest = max((w.y1 - w.y0 for w in words), default=1.0)
+    for n, a in enumerate(order):
+        wa = words[a]
+        for b in order[n + 1:]:
+            wb = words[b]
+            if wb.y0 - wa.y1 > LABEL_STEP * tallest:
+                break
+            h = max(wa.y1 - wa.y0, wb.y1 - wb.y0, 1.0)
+            if 0 <= wb.y0 - wa.y1 + 0.25 * h and wb.y0 - wa.y1 <= LABEL_STEP * h \
+                    and min(wa.x1, wb.x1) - max(wa.x0, wb.x0) > 0:
+                join(a, b)
+    return [find(i) for i in range(len(words))]
+
+
 def phrases(words, max_words: int = 3) -> list[Phrase]:
     """Every run of 1 to `max_words` words next to each other on a line ("600", "x", "300" → "600 x 300")."""
     out = []
@@ -419,20 +467,63 @@ def _merge_duplicates(items: list[dict], radius: float) -> list[dict]:
     return kept
 
 
+def _register(items: list[dict], ps: list[Phrase], radius: float) -> list[dict]:
+    """Boxes the model placed on one image all shifted the same way (seen once on a quarter: every box 966 px too low,
+    as if the quarter were placed half a sheet down) are moved back. Per image, the offset from each box's top left to
+    its tag's, where the text layer prints the tag once on the page; when at least SHIFT_ANCHORS of them, and SHIFT_AGREE of all, agree
+    within `radius` on one offset longer than `radius`, every box read on that image moves by it, and the item says so
+    (`shift`: dx, dy, anchors). Nothing moves otherwise: a scattered reading stays as read, and reconcile judges it."""
+    where: dict[str, list] = {}
+    for p in ps:
+        where.setdefault(canon_tag(p.text), []).append(p.box)
+    once = {t: boxes[0] for t, boxes in where.items() if len(boxes) == 1 and looks_like_tag(t)}
+    offsets: dict[int, list[tuple[float, float]]] = {}
+    for it in items:
+        b = once.get(canon_tag(it.get("tag"))) if it.get("tag") else None
+        if b is not None:
+            a = it["box"]
+            offsets.setdefault(it.get("image", 1), []).append((b[0] - a[0], b[1] - a[1]))   # top left to top left
+    shifts = {}
+    for image, offs in offsets.items():
+        if len(offs) < SHIFT_ANCHORS:
+            continue
+        dx = sorted(o[0] for o in offs)[len(offs) // 2]
+        dy = sorted(o[1] for o in offs)[len(offs) // 2]
+        agree = [o for o in offs if math.hypot(o[0] - dx, o[1] - dy) <= radius]
+        if math.hypot(dx, dy) > radius and len(agree) >= max(SHIFT_ANCHORS, SHIFT_AGREE * len(offs)):
+            dx = sum(o[0] for o in agree) / len(agree)
+            dy = sum(o[1] for o in agree) / len(agree)
+            shifts[image] = {"dx": round(dx, 1), "dy": round(dy, 1), "anchors": len(agree)}
+    if not shifts:
+        return items
+    out = []
+    for it in items:
+        s = shifts.get(it.get("image", 1))
+        if s:
+            x0, y0, x1, y1 = it["box"]
+            it = dict(it, box=[round(x0 + s["dx"], 1), round(y0 + s["dy"], 1), round(x1 + s["dx"], 1),
+                               round(y1 + s["dy"], 1)], shift=s)
+        out.append(it)
+    return out
+
+
 def reconcile(ai_items: list[dict], words, *, width: float, height: float, has_text_layer: bool = True,
               radius: float | None = None, exclude: tuple[str, ...] = ()) -> list[dict]:
     """Check what the model read against the page's text layer (no AI). `ai_items`: {tag, kind, size, box (page
     pixels), image} each. Returns the page's items as dicts (no id or page yet), the model's first, then the text
-    layer's own (`text_only`).
+    layer's own (`text_only`). An image whose boxes are all shifted the same way is moved back first (`_register`).
 
     An item is `confirmed` when every field it printed (tag, size) is found, normalised, in a phrase of the text layer
-    within `radius` pixels of its box; each phrase confirms one item (nearest first). Otherwise it is `ai_only`, and
-    a tag or size printed nearby that says something else is kept in its evidence as `text_says`. Tags and sizes in
-    the text layer that nothing claimed become `text_only` items."""
+    within `radius` pixels of its box, its size on the same printed label as its tag when both are found
+    (`label_blocks`: a size printed on the label beside it is another item's); each phrase confirms one item (nearest
+    first; tags first, then sizes), except a size printed once under
+    several tags of one label (items with the same `label`, `_ai_items`), which confirms each of them. Otherwise it is
+    `ai_only`, and a tag or size printed nearby that says something else is kept in its evidence as `text_says`. Tags
+    and sizes in the text layer that nothing claimed become `text_only` items."""
     r = radius if radius is not None else radius_px(width, height)
     words = list(words or []) if has_text_layer else []
-    items = _merge_duplicates(ai_items, r)
     ps = phrases(words)
+    items = _merge_duplicates(_register(ai_items, ps, r) if ps else ai_items, r)
     tags = [canon_tag(p.text) for p in ps]
     sizes = [parse_size(p.text) for p in ps]
     cands = []
@@ -447,14 +538,25 @@ def reconcile(ai_items: list[dict], words, *, width: float, height: float, has_t
                 cands.append((d, i, "tag", -len(p.words), j))
             if want_size and sizes[j] is not None and want_size.same(sizes[j]):
                 cands.append((d, i, "size", -len(p.words), j))
-    cands.sort()
+    cands.sort(key=lambda c: (c[2] != "tag", c))   # tags first: a size is then looked for on its tag's label
+    block = label_blocks(words) if words else []
     claimed: set[int] = set()
+    shared: dict[int, Any] = {}   # word → the label whose tags share the size printed there
     found: dict[tuple[int, str], tuple[int, float]] = {}
     for d, i, what, _, j in cands:
-        if (i, what) in found or claimed & set(ps[j].words):
+        if (i, what) in found:
+            continue
+        if what == "size" and (i, "tag") in found and block[ps[j].words[0]] != block[ps[found[(i, "tag")][0]].words[0]]:
+            continue   # printed near, but on another label
+        words_j = set(ps[j].words)
+        label = items[i].get("label")
+        if claimed & words_j and not (what == "size" and label is not None
+                                      and all(shared.get(w, object()) == label for w in words_j)):
             continue
         found[(i, what)] = (j, d)
-        claimed.update(ps[j].words)
+        claimed.update(words_j)
+        if what == "size" and label is not None:
+            shared.update(dict.fromkeys(words_j, label))
 
     def words_of(j: int) -> list[dict]:
         return [{"text": words[w].text, "box": [words[w].x0, words[w].y0, words[w].x1, words[w].y1]}
@@ -463,7 +565,11 @@ def reconcile(ai_items: list[dict], words, *, width: float, height: float, has_t
     out = []
     for i, it in enumerate(items):
         fields = [f for f in ("tag", "size") if it.get(f)]
-        ev: dict[str, Any] = {"images": it["images"], "radius_px": round(r, 1)}
+        ev: dict[str, Any] = {"images": it["images"], "radius_px": round(r, 1), "text_layer": bool(has_text_layer)}
+        if it.get("shift"):
+            ev["box_shift"] = it["shift"]   # the image's boxes were moved back by this (`_register`)
+        if it.get("label_tags"):
+            ev["label_tags"] = it["label_tags"]   # one of this many tags printed on one label, sharing its size
         for f in fields:
             if (i, f) in found:
                 j, d = found[(i, f)]
@@ -476,11 +582,17 @@ def reconcile(ai_items: list[dict], words, *, width: float, height: float, has_t
         elif not confirmed:
             missing = [f for f in fields if (i, f) not in found]
             ev["why"] = f"{' and '.join(missing)} not found in the text layer within {r:.0f} px"
+            own = block[ps[found[(i, "tag")][0]].words[0]] if (i, "tag") in found else None
+            if own is not None and missing == ["size"]:
+                ev["why"] = "size not found on the item's label in the text layer"
             says = {}
-            for f in missing:   # what the text layer prints there instead, if anything
+            for f in missing:   # what the text layer prints there instead, if anything (on its label, when known)
                 best = None
                 for j, p in enumerate(ps):
-                    if claimed & set(p.words):
+                    if f == "size" and own is not None:
+                        if block[p.words[0]] != own:
+                            continue
+                    elif claimed & set(p.words):
                         continue
                     if f == "size" and sizes[j] is None or f == "tag" and not looks_like_tag(p.text):
                         continue
@@ -771,6 +883,99 @@ def _cache_write(path: Path | None, data: dict) -> None:
     tmp.replace(path)   # whole or not at all
 
 
+# ------------------------------------------------------------------------------------------------- saved readings
+
+def model_name(model_id: str | None) -> str:
+    """A model id as people read it, version and all: "gemini-3.8-flash" → "Gemini 3.8 Flash"."""
+    words = [w for w in re.split(r"[-_\s]+", str(model_id or "")) if w]
+    return " ".join(w if w[0].isdigit() else w[0].upper() + w[1:] for w in words) or str(model_id or "")
+
+
+_saved_lock = threading.Lock()
+_saved_index: dict = {"key": None, "by_sha": {}}
+
+
+def _saved(folder: Path) -> dict[str, dict]:
+    """The saved readings in `folder` by their PDF's sha256, read again only when a file there changes."""
+    try:
+        files = sorted(folder.glob(f"*{SAVED_SUFFIX}")) if folder.is_dir() else []
+        key = (str(folder), tuple((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files))
+    except OSError:
+        return {}
+    with _saved_lock:
+        if _saved_index["key"] == key:
+            return _saved_index["by_sha"]
+        by_sha: dict[str, dict] = {}
+        for f in files:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as e:
+                log.warning("saved drawing reading %s not read (%s)", f.name, e)
+                continue
+            if isinstance(data, dict) and isinstance(data.get("drawing_sha256"), str) and isinstance(data.get("pages"), list):
+                by_sha[data["drawing_sha256"]] = data
+        _saved_index.update(key=key, by_sha=by_sha)
+        return by_sha
+
+
+def saved_reading(drawing: DrawingLike, page: PageLike, *, phash: str | None = None,
+                  folder: Path | None = None) -> dict | None:
+    """The saved reading of a page (`SAVED`: the sample sheets' `*.reading.json`) when it was made from this very PDF
+    (its sha256), with the prompt as it is now (`prompt_hash`), at this page size: {tiles, reply, usage, model, at}.
+    None otherwise: the page is then read by the model as any other."""
+    data = _saved(SAVED if folder is None else Path(folder)).get(drawing.sha256)
+    if not data or data.get("prompt_hash") != (phash or prompt_hash()):
+        return None
+    for rec in data["pages"]:
+        if not isinstance(rec, dict) or rec.get("page") != page.index or not isinstance(rec.get("reply"), dict):
+            continue
+        tiles = rec.get("tiles") or []
+        whole = tiles[0] if tiles and isinstance(tiles[0], dict) else {}
+        if (whole.get("x1"), whole.get("y1")) != (float(page.width_px), float(page.height_px)):
+            return None   # rendered at another size: its boxes would not land on this page
+        return {"tiles": tiles, "reply": rec["reply"], "usage": rec.get("usage") or {},
+                "model": data.get("model"), "at": rec.get("at") or data.get("at")}
+    return None
+
+
+def saved_info(drawing: DrawingLike, *, folder: Path | None = None) -> dict | None:
+    """{model, label, at} when every page of the drawing has a saved reading (a read replays it, at no cost); else None."""
+    phash = prompt_hash()
+    found = [saved_reading(drawing, p, phash=phash, folder=folder) for p in drawing.pages]
+    if not found or any(f is None for f in found):
+        return None
+    return {"model": found[0]["model"], "label": model_name(found[0]["model"]), "at": found[0]["at"]}
+
+
+def write_saved(drawing: DrawingLike, path: Path, *, model: str | None = None, cache_dir: Path | None = None,
+                settings: dict | None = None) -> Path:
+    """Write a drawing's saved reading to `path` from the reader's cache: each page's reply as the model gave it, read
+    with `model` (default the fast model) and the prompt as it is now, with the PDF's sha256 and the prompt's hash.
+    `settings`: how the call was made when it differs from the reader's own (thinking level, output cap), kept in the
+    file as said. ValueError when a page has not been read that way."""
+    model = model or model_client.model_id("fast")
+    store = Path(cache_dir) if cache_dir else CACHE
+    phash = prompt_hash()
+    pages = []
+    for p in drawing.pages:
+        hit = _cache_read(store / f"{cache_key(drawing.sha256, p.index, model, phash)}.json")
+        if hit is None:
+            raise ValueError(f"page {p.index} of {drawing.name} has not been read with {model} and this prompt")
+        pages.append({"page": p.index, "at": hit.get("at"), "tiles": hit["tiles"], "reply": hit["reply"],
+                      "usage": hit.get("usage") or {}})
+    data = {"about": "The drawing reader's saved reply for this sample sheet (evals/save_drawing_readings.py), replayed "
+                     "instead of a model call when this PDF is read with this prompt (drawing_reader.saved_reading).",
+            "pdf": drawing.name, "drawing_sha256": drawing.sha256, "version": VERSION, "prompt_hash": phash,
+            "model": model, "settings": dict(settings or {}), "at": max((p["at"] or "" for p in pages), default=None),
+            "pages": pages}
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
 # ------------------------------------------------------------------------------------------------- the read
 
 def page_png(drawing: DrawingLike, page: PageLike, folder: Path | None = None) -> Path:
@@ -809,11 +1014,19 @@ def _text(value) -> str | None:
     return str(value).strip() or None
 
 
+_LINES = re.compile(r"\s*[\r\n]+\s*")
+
+
 def _ai_items(reply: dict, tile_list: list[Tile]) -> tuple[list[dict], int]:
-    """The reply's items with their boxes in page pixels; and how many were dropped (no usable box or image)."""
+    """The reply's items with their boxes in page pixels; and how many were dropped (no usable box or image).
+
+    A label that lists several tags, one per line, with one size under them (short pieces of one run share a label)
+    comes back from the model as one item whose tag has line breaks: it is one item per tag, each boxed on its own line
+    of the label (the label's box cut into its lines: the tags, then the size), all carrying the label's size and its
+    `label` (the reply item's index), so reconcile lets them share the one printed size."""
     by_index = {t.index: t for t in tile_list}
     out, dropped = [], 0
-    for raw in reply.get("items") or []:
+    for n, raw in enumerate(reply.get("items") or []):
         if not isinstance(raw, dict):
             dropped += 1
             continue
@@ -828,14 +1041,22 @@ def _ai_items(reply: dict, tile_list: list[Tile]) -> tuple[list[dict], int]:
             dropped += 1
             continue
         kind = raw.get("kind") if raw.get("kind") in KINDS else "other"
-        out.append({"tag": _text(raw.get("tag")), "kind": kind, "size": _text(raw.get("size")), "box": page_box,
-                    "image": tile.index})
+        tag, size = _text(raw.get("tag")), _text(raw.get("size"))
+        tags = [t for t in _LINES.split(tag) if t] if tag else []
+        if len(tags) < 2:
+            out.append({"tag": tag, "kind": kind, "size": size, "box": page_box, "image": tile.index})
+            continue
+        x0, y0, x1, y1 = page_box
+        row = (y1 - y0) / (len(tags) + (1 if size else 0))
+        for k, t in enumerate(tags):
+            out.append({"tag": t, "kind": kind, "size": size, "image": tile.index, "label": n, "label_tags": len(tags),
+                        "box": [x0, round(y0 + k * row, 1), x1, round(y0 + (k + 1) * row, 1)]})
     return out, dropped
 
 
 def read_drawing(drawing: DrawingLike, pages: list[int] | None = None, *, model: Any = None, client: Any = None,
                  cache_dir: Path | str | bool | None = None, budget: Any = None,
-                 folder: Path | None = None) -> Iterator[dict]:
+                 folder: Path | None = None, saved: Path | bool | None = None) -> Iterator[dict]:
     """Read a drawing's pages (all, or those whose index is in `pages`) and check each against its text layer.
 
     Yields `{type: "page", index, total, cached}` before each page, `{type: "item", item}` for each of its items, and
@@ -845,7 +1066,9 @@ def read_drawing(drawing: DrawingLike, pages: list[int] | None = None, *, model:
     `budget`: None for the day's budget, a number for a cap on this run (USD) as well, or an object with
     `refused(estimate)`, `hold(estimate)` and `charge(usd)`. `folder`: the drawing's folder, when drawings.STORE does
     not hold it. Raises ReadRefused before reading a page the budget cannot cover (before anything is yielded when
-    the whole read cannot be covered)."""
+    the whole read cannot be covered). `saved`: where saved readings are (default `SAVED`; False: none): a page with
+    one is replayed (`saved_reading`), free, and marked so in the page event (`saved`), its items' evidence
+    (`saved_reading`: model, label, at) and `done.saved` ({model, label, at, pages}; None when no page was)."""
     reader = model if model is not None and not isinstance(model, str) else GeminiReader(model, client=client)
     guard = _budget(budget)
     store = None if cache_dir is False else Path(cache_dir) if cache_dir else CACHE
@@ -853,8 +1076,10 @@ def read_drawing(drawing: DrawingLike, pages: list[int] | None = None, *, model:
     system = system_prompt()
     wanted = None if pages is None else set(pages)
     chosen = [p for p in drawing.pages if wanted is None or p.index in wanted]
-    cached = {p.index: _cache_read(store / f"{cache_key(drawing.sha256, p.index, reader.model, phash)}.json"
-                                   if store else None) for p in chosen}
+    replay = {p.index: None if saved is False else saved_reading(
+        drawing, p, phash=phash, folder=None if saved in (None, True) else Path(saved)) for p in chosen}
+    cached = {p.index: replay[p.index] or _cache_read(
+        store / f"{cache_key(drawing.sha256, p.index, reader.model, phash)}.json" if store else None) for p in chosen}
     exclude = tuple(v for k, v in (drawing.title or {}).items() if k in ("sheet", "drawing_no") and v)
 
     def estimate(p) -> float:
@@ -870,9 +1095,12 @@ def read_drawing(drawing: DrawingLike, pages: list[int] | None = None, *, model:
     titles: dict[str, dict] = {}
     errors: dict[str, str] = {}
     cost = 0.0
+    replayed: list[int] = []
     for p in chosen:
-        hit = cached[p.index]
-        yield {"type": "page", "index": p.index, "total": len(chosen), "cached": hit is not None}
+        hit, rep = cached[p.index], replay[p.index]
+        yield {"type": "page", "index": p.index, "total": len(chosen), "cached": hit is not None, "saved": rep is not None}
+        if rep is not None:
+            replayed.append(p.index)
         if hit is not None:
             tile_list = [Tile(**t) for t in hit["tiles"]]
             reply, usage = hit["reply"], hit.get("usage") or {}
@@ -911,9 +1139,14 @@ def read_drawing(drawing: DrawingLike, pages: list[int] | None = None, *, model:
             if f["source"] == "ai":
                 ev.update({"model": usage.get("model", reader.model), "page_cost_usd": usage.get("usd", 0.0),
                            "cached": hit is not None})
+                if rep is not None:
+                    ev["saved_reading"] = {"model": rep["model"], "label": model_name(rep["model"]), "at": rep["at"]}
                 if dropped:
                     ev["page_dropped"] = dropped
             item = Item(id=f"{drawing.id}-p{p.index}-{n + 1:03d}", page=p.index, **f)
             all_items.append(item.to_dict())
             yield {"type": "item", "item": item.to_dict()}
-    yield {"type": "done", "items": all_items, "cost_usd": round(cost, 6), "titles": titles, "errors": errors}
+    first = replay[replayed[0]] if replayed else None
+    yield {"type": "done", "items": all_items, "cost_usd": round(cost, 6), "titles": titles, "errors": errors,
+           "saved": {"model": first["model"], "label": model_name(first["model"]), "at": first["at"],
+                     "pages": replayed} if first else None}

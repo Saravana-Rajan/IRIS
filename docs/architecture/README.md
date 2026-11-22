@@ -12,7 +12,7 @@ How this set relates to the other docs:
 
 - **`CLAUDE.md` and `AGENTS.md`** hold the rules, the traps and the current status. They point here for how things
   work.
-- **The feature designs in [`docs/`](../)** ([connections](../connections.md), [detection](../detection.md), [edits](../edits.md),
+- **The feature designs in [`docs/`](../)** ([connections](../connections.md), [detection](../detection.md), [drawings](../drawings.md), [edits](../edits.md),
   [engineer workflow](../engineer-workflow.md), [escalation](../escalation.md), [filters](../filters.md), [mcp](../mcp.md), [measure](../measure.md), [mobile](../mobile.md), [panels](../panels.md), [requirements](../requirements.md),
   [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [views](../views.md), [voice](../voice.md),
   [workings](../workings.md)) hold
@@ -145,8 +145,10 @@ deploy/deploy.sh      the public deploy to Cloud Run (17)
 deploy/github-setup.sh one-time setup for the auto-deploy: Workload Identity Federation, deploy account, Hosting site (17)
 .github/workflows/    ci.yml (tests on every PR and push) and deploy.yml (tests, then deploy on push to main) (17, 18)
 firebase.json         Firebase Hosting for the built page, with .firebaserc (17)
-evals/                evals, recorded runs, results.csv (18)
-samples/              eight bundled demo models; other models, reports and STEP cache gitignored (19)
+evals/                evals, recorded runs, results.csv, and the scripts that make the sample drawings and their
+                      saved readings (18, 19)
+samples/              eight bundled demo models, and drawings/: the sample PDF sheets, their answer keys and saved
+                      readings; other models, reports and STEP cache gitignored (14, 19)
 docs/                 feature designs; docs/architecture/ is this map
 assets/brand/iris/    approved identity, motion, exports and rebuild/check scripts (12, 18, 20, 21)
 ```

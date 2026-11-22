@@ -516,6 +516,12 @@ def _let_go(gone: collections.deque, folder: Path, scene_id: str) -> None:
     gone.append(scene_id)
 
 
+def sample_names(samples: Path) -> list[str]:
+    """The sample PDF drawings that ship in `samples/drawings/` (demos.Demo.drawings names which go with which demo)."""
+    folder = Path(samples) / "drawings"
+    return sorted(p.name for p in folder.glob("*.pdf")) if folder.is_dir() else []
+
+
 # A level as a title says it: "LEVEL 02", "L02", "LVL 3", "FLOOR 1", or a named one.
 LEVEL = re.compile(r"\b(?:(?:LEVEL|LVL|STOREY|FLOOR)\s*[-.]?\s*\d{1,3}|L\s*-?\s*\d{1,3}|GROUND\s+(?:FLOOR|LEVEL)"
                    r"|BASEMENT(?:\s*\d{1,2})?|MEZZANINE|ROOF)\b", re.I)
@@ -531,9 +537,11 @@ def storey_of(title: dict) -> str | None:
 def compare_scene(scene, held: list[Drawing], items_of, compare, model_index=None) -> dict:
     """Each read drawing's items against the model, drawing by drawing (`compare(scene, items, storey=, index=)`),
     with the level from its title block (`storey_of`) and the model's index built once. Every match, mismatch and
-    unmatched item carries its `drawing`; an element one drawing leaves out but another shows is not missing, and one
-    left out by several is listed once. `drawings`: each drawing's level and the comparison's scope; a drawing not
-    read yet is listed with `read` False and compared with nothing."""
+    unmatched item carries its `drawing`; an element one drawing leaves out but another sheet shows is not missing,
+    and one left out by several is listed once. Two drawings with the same sheet number (`sheet_key`: two issues of one
+    sheet) are each a whole sheet: one showing an element does not excuse the other leaving it out. `drawings`: each
+    drawing's level and the comparison's scope; a drawing not read yet is listed with `read` False and compared with
+    nothing."""
     index = model_index(scene) if model_index is not None else None
     out: dict = {"matches": [], "mismatches": [], "unmatched": [], "drawings": []}
     for d in held:
@@ -548,17 +556,32 @@ def compare_scene(scene, held: list[Drawing], items_of, compare, model_index=Non
         row["scope"] = result.get("scope")
         for key in ("matches", "mismatches", "unmatched"):
             out[key].extend({**r, "drawing": d.id} for r in result.get(key) or [] if isinstance(r, dict))
-    shown = {m.get("element") for m in out["matches"] if m.get("element")}
+    sheet = {d.id: sheet_key(d) for d in held}
+    shown: dict = {}   # element → the (drawing, sheet) pairs that show it
+    for m in out["matches"]:
+        if m.get("element"):
+            shown.setdefault(m["element"], set()).add((m["drawing"], sheet.get(m["drawing"])))
     listed: set = set()
     mismatches = []
     for m in out["mismatches"]:
         if m.get("kind") == "missing_in_drawing":
-            if m.get("element") in shown or m.get("element") in listed:
+            here = (m.get("drawing"), sheet.get(m.get("drawing")))
+            if any(did == here[0] or key != here[1] for did, key in shown.get(m.get("element"), ())):
+                continue   # shown on this drawing, or on another sheet of the set
+            if m.get("element") in listed:
                 continue
             listed.add(m.get("element"))
         mismatches.append(m)
     out["mismatches"] = mismatches
     return out
+
+
+def sheet_key(drawing: Drawing) -> str:
+    """Which sheet a drawing is: its sheet number (else drawing number) from the title block, without case, spaces or
+    punctuation; a drawing with neither is a sheet of its own (its id)."""
+    title = drawing.title or {}
+    number = _norm(str(title.get("sheet") or title.get("drawing_no") or ""))
+    return number or f"#{drawing.id}"
 
 
 def item_page(item) -> int | None:

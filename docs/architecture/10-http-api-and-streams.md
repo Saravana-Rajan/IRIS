@@ -2,24 +2,18 @@
 
 > **Covers:** `server/iris/app.py`, `server/iris/voice_live.py`, `server/iris/origins.py`, the request side of
 > `server/iris/owner.py` and `server/iris/limits.py`, `web/src/api.ts`, `LiveVoice` in `web/src/voice.ts`,
-> `web/src/uploads.ts`, the container entry deployed by `deploy/deploy.sh` · **Checked against code:** re-branded 2026-11-11;
-> the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health` and the voice origin check re-checked 2026-11-22 ·
-> **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md)
-
-Iris's server is one FastAPI app, `app` in `server/iris/app.py`, that the page, the MCP server and anything
-else talk to. It serves 84 decorated routes under `/api/`, `GET /`, one WebSocket (live voice) and the MCP endpoint
-at `/mcp`. On one origin it also serves the built web app. Split, with the web app on another origin (Firebase
-Hosting, `IRIS_ALLOWED_ORIGINS` set, `origins.py`), it serves the API only and answers CORS for exactly those
-origins. Long work answers as newline-delimited JSON (NDJSON) so the page can
 > `web/src/uploads.ts`, the container entry deployed by `deploy/deploy.sh` · **Checked against code:** 2026-11-22
-> (projects and decisions routes, 2D drawing routes; re-branded 2026-11-11) ·
+> (the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health`, the voice origin check, projects and
+> decisions routes, 2D drawing routes with the sample drawings and saved readings, the route count, the front door
+> and the errors table; re-branded 2026-11-11) ·
 > **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
 Iris's server is one FastAPI app, `app` in `server/iris/app.py`, that the page, the MCP server and anything
-else talk to. It serves 94 decorated routes under `/api/`, one WebSocket (live voice), the MCP endpoint at `/mcp`,
-and the built web app from the same origin. Long work answers as newline-delimited JSON (NDJSON) so the page can
-show the agent working. This doc is the inventory of every route, stream event, header and error, and how
+else talk to. It serves 102 decorated routes under `/api/`, `GET /`, one WebSocket (live voice) and the MCP endpoint
+at `/mcp`. On one origin it also serves the built web app. Split, with the web app on another origin (Firebase
+Hosting, `IRIS_ALLOWED_ORIGINS` set, `origins.py`), it serves the API only and answers CORS for exactly those
+origins. Long work answers as newline-delimited JSON (NDJSON) so the page can show the agent working. This doc is the inventory of every route, stream event, header and error, and how
 `web/src/api.ts` reads them. Other docs link here rather than list routes again. What each route's work does
 inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the caps' meaning is in
 [16](16-security-caps-and-cost.md); the MCP side of `/mcp` is in [11](11-mcp-and-agent-links.md).
@@ -48,11 +42,13 @@ inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the ca
   `/`. No paths overlap, so the order matters only for the static mount, which must come after everything else.
 - **Front door and static files:** `GET /` is `front_door`. On one origin (`IRIS_ALLOWED_ORIGINS` empty) and when
   `IRIS_WEB_DIST/index.html` exists (default `web/dist`, the output of `cd web && npm run build`), it returns that
-  `index.html`, and `app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")` serves the rest,
+  `index.html`, and `app.mount("/", _WebApp(directory=WEB_DIST, html=True), name="web")` serves the rest,
   declared last so `/api` wins. Split, nothing is mounted and `/` answers `API_ROOT`:
   `{"service": "iris-api", "docs": "/docs", "health": "/api/health"}` (also the answer when there is no build).
-  There is **no SPA fallback** on the server and none is needed: the app is one page with no client routes (the
-  owner's `#owner` is a hash), so an unknown path is a plain 404.
+  `_WebApp` is `StaticFiles` with one fallback: a browser asking for one of the app's own pages that has no file
+  (`_is_page`: GET or HEAD, a first segment in `WEB_PAGES` (`home`, `projects`, `workspace`, `about`, `settings`), no
+  file extension, no `..`, `%` or backslash, an `Accept` that takes HTML) gets `index.html`, so a reload or a shared
+  link like `/projects/<pid>/drawings` opens the app. Anything else missing stays a plain 404.
 - **Lifespan:** `_lifespan` replaces the router's lifespan. On start it builds the MCP transport
   (`_mcp_gate.inner = _mcp_transport()`) and runs `_mcp.session_manager.run()` for the server's life
   ([11](11-mcp-and-agent-links.md)).
@@ -151,18 +147,11 @@ is a 422 whose `detail` is a list, not a string.
 
 | Status | When | Examples of `detail` |
 |---|---|---|
-| 400 | A request the server cannot use | a CORS preflight from an origin not in `IRIS_ALLOWED_ORIGINS`, split only (`Disallowed CORS origin`, plain text from `CORSMiddleware`, not `detail`); an upload that is not IFC/STEP, a file given twice, a truncated `.gz`, a model IfcOpenShell cannot read, a report upload with no XML, a fix with no element, a fix that does not say which clash it is for ("Not a fix Iris can apply: the fix does not say which clash it is for (pair: [A, B])"), or whose changed element is neither side of it, a STEP conversion error, a bad setting value |
+| 400 | A request the server cannot use | a CORS preflight from an origin not in `IRIS_ALLOWED_ORIGINS`, split only (`Disallowed CORS origin`, plain text from `CORSMiddleware`, not `detail`); an upload that is not IFC/STEP, a file given twice, a truncated `.gz`, a model IfcOpenShell cannot read, a report upload with no XML, a fix with no element, a fix that does not say which clash it is for ("Not a fix Iris can apply: the fix does not say which clash it is for (pair: [A, B])"), or whose changed element is neither side of it, a STEP conversion error, a bad setting value; a drawing that is not a `.pdf` or not a PDF ("plan.pdf is not a PDF."), damaged ("… could not be read as a PDF (it may be damaged)."), password-protected ("… is password-protected: save it without a password and upload it again."), or over `IRIS_DRAWING_MAX_PAGES` ("… has 57 pages; a drawing may have at most 40."); a read of a page the drawing does not have |
 | 401 | `/mcp` without a live link token | `{"error": "An Iris agent link token is required: …"}` (the gate's own body, not `detail`) |
-| 403 | Not allowed | owner-only settings; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin not in `IRIS_ALLOWED_ORIGINS` (closed before the handshake, which the server answers as HTTP 403) |
-| 404 | Gone or never there | "Model not loaded. Open it again." (`_scene`), "Clash report not loaded. Open it again." (`_report`), both with `X-Iris-Gone`; "This agent link has expired or was revoked." (`_link`), "That report has expired. Build it again.", "No such picture.", "No such image.", "No such clash.", "No owner is configured on this server.", "Proposal expired or unknown. Generate a new wider fix." |
-| 409 | The state does not allow it | `requirements_unknown` (middleware); "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
-| 411 | Model upload without `Content-Length` | "Send the upload with its length (Content-Length)." |
-| 413 | Too big | model upload over `IRIS_MODEL_UPLOAD_MAX_MB` (checked on `Content-Length`, then on the unpacked size); report upload over `IRIS_UPLOAD_MAX_MB` or `IRIS_UPLOAD_MAX_FILES`; a requirements file over 64 KB (`requirements.MAX_BYTES`); a captured view over 4 MB; a capture reply over 6 MB; a voice clip over 3 MB; models too big for a wider fix (`IRIS_WIDER_FIX_MAX_MB`) |
-| 400 | A request the server cannot use | an upload that is not IFC/STEP, a file given twice, a truncated `.gz`, a model IfcOpenShell cannot read, a report upload with no XML, a fix with no element, a fix that does not say which clash it is for ("Not a fix Iris can apply: the fix does not say which clash it is for (pair: [A, B])"), or whose changed element is neither side of it, a STEP conversion error, a bad setting value; a drawing that is not a `.pdf` or not a PDF ("plan.pdf is not a PDF."), damaged ("… could not be read as a PDF (it may be damaged)."), password-protected ("… is password-protected: save it without a password and upload it again."), or over `IRIS_DRAWING_MAX_PAGES` ("… has 57 pages; a drawing may have at most 40."); a read of a page the drawing does not have |
-| 401 | `/mcp` without a live link token | `{"error": "An Iris agent link token is required: …"}` (the gate's own body, not `detail`) |
-| 403 | Not allowed | owner-only settings; listing every project (`GET /api/projects` without `ids`) as a visitor; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin (closed before the handshake, which the server answers as HTTP 403) |
+| 403 | Not allowed | owner-only settings; listing every project (`GET /api/projects` without `ids`) as a visitor; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin not in `IRIS_ALLOWED_ORIGINS` (closed before the handshake, which the server answers as HTTP 403) |
 | 404 | Gone or never there | "Model not loaded. Open it again." (`_scene`), "Clash report not loaded. Open it again." (`_report`), both with `X-Iris-Gone`; "This agent link has expired or was revoked." (`_link`), "That report has expired. Build it again.", "No such picture.", "No such image.", "No such clash.", "No owner is configured on this server.", "Proposal expired or unknown. Generate a new wider fix.", "No such project." (`projects.NotFound`, also for an id that is not 24 hex characters), "No such report in this project.", "No such drawing. Upload it again." (`_drawing`: no open scene holds it), "No such page." |
-| 409 | The state does not allow it | `requirements_unknown` (middleware); a new project past `IRIS_PROJECTS_MAX` (`projects.Full`); a scene's 31st drawing ("A model set holds at most 30 drawings."); "No models are attached to this project yet."; "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
+| 409 | The state does not allow it | `requirements_unknown` (middleware); a new project past `IRIS_PROJECTS_MAX` (`projects.Full`); a scene's 31st drawing ("A model set holds at most 30 drawings."), also when the sample drawings would pass it; sample drawings asked for when the open models are not a demo that has them ("The open models have no sample drawings: they go with the sample building."); "No models are attached to this project yet."; "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
 | 411 | Model or drawing upload without `Content-Length` | "Send the upload with its length (Content-Length)." |
 | 413 | Too big | model upload over `IRIS_MODEL_UPLOAD_MAX_MB` (checked on `Content-Length`, then on the unpacked size); report upload over `IRIS_UPLOAD_MAX_MB` or `IRIS_UPLOAD_MAX_FILES`; a requirements file over 64 KB (`requirements.MAX_BYTES`); a captured view over 4 MB; a capture reply over 6 MB; a voice clip over 3 MB; models too big for a wider fix (`IRIS_WIDER_FIX_MAX_MB`); a drawing over `IRIS_DRAWING_MAX_MB` ("plan.pdf is over 50 MB."), or a drawing upload whose `Content-Length` is over ten of them |
 | 415 | A captured view that is not a PNG | "Send a PNG." |
@@ -239,7 +228,7 @@ classes in `app.py`.
 
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
-| `GET` | `/api/samples` | Model files in `samples/` (`Workspace.list_samples`) and the demos among them (`demos.listing`) | none | `{files: [name], demos: [{id, name, label, kind, files, context, tour}]}` | free |
+| `GET` | `/api/samples` | Model files in `samples/` (`Workspace.list_samples`) and the demos among them (`demos.listing`), each with the sample PDF drawings of its own that are in `samples/drawings/` (`drawings.sample_names`, `Demo.drawings`) | none | `{files: [name], demos: [{id, name, label, kind, files, context, tour, drawings}]}` (`drawings`: file names, `[]` for a demo with none) | free |
 | `POST` | `/api/scenes` | Opens sample models; a STEP sample is converted first (cached by hash) with the triage model naming parts | `Open {samples}` | `{id, files, step, revision, layout}` (`app._files_of`, as every route that opens or changes the file list) | free; 404 unknown name, 400 STEP error |
 | `POST` | `/api/models/upload` | Opens the visitor's own IFC/STEP files (`_receive_models`, then `Workspace.open_paths`) | multipart `files` (each may be `<name>.gz`); `Content-Length` required | `{id, files, step, revision, layout}` | `model_upload_limit` (`IRIS_MODEL_UPLOADS_PER_HOUR`/`_DAY`); 411, 413, 400, 429 |
 | `POST` | `/api/models/upload/stream` | The same, with the opening streamed (below) | as above | NDJSON | as above; refusals before the files are in are plain HTTP errors |
@@ -284,16 +273,20 @@ limits (`ProjectNew`, `ProjectReview`, …) is FastAPI's 422.
 and `Word` shapes are in [05](05-domain-model-and-state.md). Every drawing route first forgets the drawings of scenes
 no longer open (`drawings.STORE.prune`). A drawing id is 16 hex; one no open scene holds is a 404 "No such drawing.
 Upload it again." The reader (`drawing_reader.py`) and the comparison (`drawing_compare.py`) are looked up when
-called (`_optional`): without them their routes answer 501.
+called (`_optional`): without them their routes answer 501. Every `Drawing` the upload, list and samples routes return
+goes through `_drawing_out`: its fields plus `saved_reading`, `{model, label, at}` when every page has a saved reading
+that a read would replay (`drawing_reader.saved_info`: a sample sheet's, free), else `null` (also when this build has
+no reader).
 
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
-| `POST` | `/api/scenes/{scene_id}/drawings` | Takes PDF drawings in (`drawings.ingest`): each page rendered to PNG at 150 dpi and its text layer read as words with pixel boxes, the title block as printed; all or none of the upload is kept | multipart `files` (1 to 10 `.pdf`) | `[Drawing]` | one model upload (`model_upload_limit`); 411 without a length, 413 a file over `IRIS_DRAWING_MAX_MB` (or a length over ten of them), 400 not a PDF / password-protected / over `IRIS_DRAWING_MAX_PAGES`, 409 past 30 drawings in the scene, 404 the scene |
-| `GET` | `/api/scenes/{scene_id}/drawings` | The scene's drawings, in upload order | none | `[Drawing]` | free; 404 the scene |
+| `POST` | `/api/scenes/{scene_id}/drawings` | Takes PDF drawings in (`drawings.ingest`): each page rendered to PNG at 150 dpi and its text layer read as words with pixel boxes, the title block as printed; all or none of the upload is kept | multipart `files` (1 to 10 `.pdf`) | `[Drawing]` (each with `saved_reading`) | one model upload (`model_upload_limit`); 411 without a length, 413 a file over `IRIS_DRAWING_MAX_MB` (or a length over ten of them), 400 not a PDF / password-protected / over `IRIS_DRAWING_MAX_PAGES`, 409 past 30 drawings in the scene, 404 the scene |
+| `POST` | `/api/scenes/{scene_id}/drawings/samples` | Attaches the sample PDF drawings of the demo whose models are open (`demos.drawings_for`: every open file's name in the demo's set, `Demo.drawings`, read from `samples/drawings/`) as an upload attaches them (`drawings.ingest`), so every drawing route works on them. Under `_samples_lock`, a sheet whose sha256 the scene already holds is not attached again, so calling twice is safe; all or none of the new ones are kept | none | `[Drawing]` (each with `saved_reading`): the scene's sample drawings, held already or added now | free: nothing is sent, so no upload is taken from `model_upload_limit`; 409 when the open models are not a demo with sample drawings, or the scene has no room for them (30 drawings); 404 the scene |
+| `GET` | `/api/scenes/{scene_id}/drawings` | The scene's drawings, in upload order | none | `[Drawing]` (each with `saved_reading`) | free; 404 the scene |
 | `GET` | `/api/drawings/{drawing_id}/pages/{n}.png` | One page as rendered; `n` is its `Page.index` (0-based) | none | `image/png` (`Cache-Control: private, max-age=3600`) | free; 404 the drawing or the page |
-| `POST` | `/api/drawings/{drawing_id}/read` | Reads the pages with the drawing reader (`drawing_reader.read_drawing(drawing, pages, folder=)`, the folder from `drawings.folder_of`: the fast model, checked against the text layer, cached by file hash and page); keeps the items (a read of some pages replaces only theirs) | `{pages?: int[]}` (`Page.index` values; absent or null: every page) | NDJSON (below) | the day's budget (`IRIS_ESCALATION_MAX_USD_DAY`, in the reader): 429 before the stream when it cannot cover the read; 400 an empty or unknown page; 404; 501 "reader not available" |
+| `POST` | `/api/drawings/{drawing_id}/read` | Reads the pages with the drawing reader (`drawing_reader.read_drawing(drawing, pages, folder=)`, the folder from `drawings.folder_of`: the fast model, checked against the text layer, cached by file hash and page; a page with a saved reading (`drawing_reader.saved_reading`: a sample sheet's) is replayed instead, with no model call and no cost); keeps the items (a read of some pages replaces only theirs) | `{pages?: int[]}` (`Page.index` values; absent or null: every page) | NDJSON (below) | the day's budget (`IRIS_ESCALATION_MAX_USD_DAY`, in the reader): 429 before the stream when it cannot cover the read (replayed and cached pages need none); 400 an empty or unknown page; 404; 501 "reader not available" |
 | `GET` | `/api/drawings/{drawing_id}/items` | The last read's items | none | `[Item]` (`[]` before a read) | free; 404 |
-| `GET` | `/api/scenes/{scene_id}/drawings/compare` | Every read drawing's items against the model's own data, drawing by drawing with the level its title block names (`drawings.compare_scene`, `drawing_compare.compare`, the model's index built once, under `ws.lock`); an element one drawing leaves out but another shows is not missing, one left out by several is listed once | none | `{matches: [{item, element, by, …, drawing}], mismatches: [Mismatch + drawing], unmatched: [… + drawing], drawings: [{drawing, name, storey, read, scope}]}` | free; 404 the scene; 501 "comparison not available" |
+| `GET` | `/api/scenes/{scene_id}/drawings/compare` | Every read drawing's items against the model's own data, drawing by drawing with the level its title block names (`drawings.compare_scene`, `drawing_compare.compare`, the model's index built once, under `ws.lock`); an element one drawing leaves out but another sheet shows is not missing, one left out by several is listed once; two drawings with the same sheet number (`drawings.sheet_key`: two issues of one sheet) are each a whole sheet, so one showing an element does not excuse the other leaving it out | none | `{matches: [{item, element, by, …, drawing}], mismatches: [Mismatch + drawing], unmatched: [… + drawing], drawings: [{drawing, name, storey, read, scope}]}` | free; 404 the scene; 501 "comparison not available" |
 
 ### Fixes
 
@@ -613,9 +606,9 @@ Each event is the reader's own, its dataclasses as plain JSON (`drawings.plain`)
 
 | Type | Fields |
 |---|---|
-| `page` | `index` (the `Page.index` about to be read), `total` (pages in this read), `cached` (read before: free) |
-| `item` | `item`: `{id, page, tag, kind, size, size_mm, box, source, status, evidence}` |
-| `done` | `items` (every item of this read), `cost_usd`, `titles` (the model's reading of each title block), `errors` |
+| `page` | `index` (the `Page.index` about to be read), `total` (pages in this read), `cached` (read before, or a saved reading: free), `saved` (the page replays a saved reading) |
+| `item` | `item`: `{id, page, tag, kind, size, size_mm, box, source, status, evidence}`; an AI item's `evidence` includes `model`, `page_cost_usd` (what the page's reply cost when it was made), `cached`, and on a replayed page `saved_reading` `{model, label, at}` (`label` from `drawing_reader.model_name`, like "Gemini 3.8 Flash") |
+| `done` | `items` (every item of this read), `cost_usd` (this read's spend: 0 for replayed and cached pages), `titles` (the model's reading of each title block), `errors`, `saved` (`{model, label, at, pages}` when any page was replayed, `pages` their indexes; else `null`) |
 | `tick` | every 5 s with nothing else |
 | `error` | `status` (429 the budget ran out mid-read, else 500), `detail` |
 
