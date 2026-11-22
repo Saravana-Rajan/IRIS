@@ -220,6 +220,9 @@ geometry engine that verify fixes become a **factory of visual tasks** for bench
 - **Scoring:** Gemini's answers are graded against that ground truth, by task type and difficulty — asking, in
   numbers, whether AI truly sees.
 
+This part is **Iris VisionBench**: the design is in [docs/visionbench.md](docs/visionbench.md), and the quick start
+(install, run, read the report) in [bench/README.md](bench/README.md).
+
 Beyond that: connectors so a kept fix lands in the designers' own tools, checks against site photos and scans, and
 saved projects ([20 · Decisions, limits and roadmap](docs/architecture/20-decisions-limits-and-roadmap.md)).
 

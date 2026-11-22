@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from iris_bench import checker, geom
 from iris_bench.ifc_writer import write_ifc
 from iris_bench.scenes import _aabb, box_distance, clear_of_beam, fits_through, fix_is_clear, generate, to_folder
 from iris_bench.spec import Scene
@@ -14,7 +15,7 @@ SEEDS = range(40)
 
 
 def _knobs(seed: int) -> dict:
-    return dict(density=seed % 12, decoys=seed % 3, occlusion=bool(seed % 2))
+    return dict(density=seed % 12, decoys=seed % 3, occlusion=bool(seed % 2), locked_services=seed % 3)
 
 
 @pytest.fixture(scope="module")
@@ -29,11 +30,23 @@ def test_same_seed_same_scene():
 
 
 def test_round_trip(tmp_path):
-    s = generate(5, density=6, decoys=2, view="iso")
+    s = generate(5, density=6, decoys=2, view="iso", locked_services=2)
     to_folder(s, tmp_path / "s5")
     again = Scene.load(tmp_path / "s5" / "scene.json")
     assert again.to_json() == s.to_json()
     assert again.challenge["view"] == "iso"
+    assert again.relations and again.resolutions and again.cameras
+    assert sum(e.locked for e in again.elements) == 2
+
+
+def test_default_scene_unchanged_by_new_knobs():
+    """locked_services and routed draw from the seed only when used, after everything else: the rest is identical."""
+    base = generate(9, density=5, routed=0, annotate=False)
+    for kw in (dict(locked_services=0), dict(routed=1)):
+        s = generate(9, density=5, annotate=False, **kw)
+        n = len(base.elements)
+        assert [e.id for e in s.elements[:n]] == [e.id for e in base.elements]
+        assert all(a == b for a, b in zip(s.elements, base.elements))
 
 
 def test_contents(scenes):
@@ -47,6 +60,8 @@ def test_contents(scenes):
             if e.kind == "beam":
                 assert 1 <= len(e.openings) <= 3
         assert {p.kind for p in s.planted} == {"real", "not_touching", "by_design"}
+        assert [p.kind for p in s.planted[:3]] == ["real", "not_touching", "by_design"]
+        assert sum(p.kind == "real" for p in s.planted) == 1 + s.challenge["locked_services"]
         for k in ("density", "decoys", "gap_mm", "overlap_mm", "occlusion"):
             assert k in s.challenge
         assert len(s.challenge["decoy_ids"]) == s.challenge["decoys"]
@@ -74,6 +89,8 @@ def test_planted_distances_closed_form(scenes):
         for p in s.planted:
             d = box_distance(_aabb(s.element(p.a)), _aabb(s.element(p.b)))
             assert d == pytest.approx(p.distance_m, abs=1e-6), (s.seed, p)
+            if p.kind != "by_design":
+                assert geom.distance(s.element(p.a), s.element(p.b)) == pytest.approx(p.distance_m, abs=1e-6)
             if p.kind == "real":
                 assert -0.400 - 1e-9 <= p.distance_m <= -0.050 + 1e-9
             if p.kind == "not_touching":
@@ -110,6 +127,40 @@ def test_good_fix_is_clear_and_through_its_opening(scenes):
         assert real.fitting_openings == [o.id for o in all_open if fits_through(mover, o, s.clearance_m)]
 
 
+def test_locked_pairs(scenes):
+    """Service on service: the smaller run is locked, the duct under it moves down clear of it; up is barred."""
+    seen = 0
+    for s in scenes.values():
+        for p in s.planted[3:]:
+            seen += 1
+            assert p.kind == "real"
+            mover, locked = s.element(p.a), s.element(p.b)
+            assert locked.locked and locked.kind in ("pipe", "tray") and locked.id in s.challenge["locked_ids"]
+            assert p.mover == mover.id and mover.kind == "duct" and not mover.locked
+            assert mover.allowed_moves == ["down", "north", "south", "east", "west"]
+            fix = p.good_fix
+            assert fix.dx == fix.dy == 0 and fix.dz < 0 and fix.via_opening is None
+            assert fix_is_clear(s, fix) and checker.check_fix(s, fix)["passed"], s.seed
+            assert p.fitting_openings == [o.id for e in s.elements for o in e.openings
+                                          if fits_through(mover, o, s.clearance_m)]
+    assert seen == sum(_knobs(x)["locked_services"] for x in SEEDS)
+
+
+def test_routed_services_pass_through_with_room(scenes):
+    n = 0
+    for s in scenes.values():
+        for rid in s.challenge["routed_ids"]:
+            el = s.element(rid)
+            assert el.role == "service" and not el.locked
+            hits = [(b, o) for b in s.elements if b.kind == "beam" for o in b.openings if geom.passes_through(el, b, o)]
+            assert len(hits) == 1, (s.seed, rid)
+            beam, o = hits[0]
+            assert o.id != s.planted[0].good_fix.via_opening
+            assert geom.distance(el, beam) >= 0.050 - 1e-9
+            n += 1
+    assert n >= len(SEEDS) // 2
+
+
 def test_brackets_carry_their_service(scenes):
     for s in scenes.values():
         by = next(p for p in s.planted if p.kind == "by_design")
@@ -138,12 +189,16 @@ def test_iris_engine_agrees(tmp_path, seed):
         elif p.kind == "not_touching":
             assert got is None, (p, got)
 
-    real = next(p for p in s.planted if p.kind == "real")
-    mover, fix = ids[real.mover], real.good_fix
-    scene.translate([mover], (fix.dx, fix.dy, fix.dz))
-    assert detect.measure_pair(scene, mover, ids[real.b]) is None
-    verdict = verify.check(scene, [mover], clearance_m=s.clearance_m)
-    assert verdict.passed, verdict
+    for real in (p for p in s.planted if p.kind == "real"):
+        mover, fix = ids[real.mover], real.good_fix
+        other = real.b if real.a == real.mover else real.a
+        scene.translate([mover], (fix.dx, fix.dy, fix.dz))
+        try:
+            assert detect.measure_pair(scene, mover, ids[other]) is None
+            verdict = verify.check(scene, [mover], clearance_m=s.clearance_m)
+            assert verdict.passed, verdict
+        finally:
+            scene.translate([mover], (-fix.dx, -fix.dy, -fix.dz))
 
 
 def test_ifc_names_and_classes(tmp_path):

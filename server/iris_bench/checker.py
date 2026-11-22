@@ -56,12 +56,24 @@ def _opening_owner(scene: Scene, opening_id: str):
     return None, None
 
 
+def directions(fix: Fix) -> list[str]:
+    """The compass/vertical directions a fix moves in (+X east, +Y north, +Z up), for Element.allowed_moves."""
+    out = []
+    for v, pos, neg in ((fix.dx, "east", "west"), (fix.dy, "north", "south"), (fix.dz, "up", "down")):
+        if v > 1e-9:
+            out.append(pos)
+        elif v < -1e-9:
+            out.append(neg)
+    return out
+
+
 def check_fix(scene: Scene, fix: Fix) -> dict:
     """Apply `fix` and judge it.
 
-    Passed = the mover is not structure, every planted real clash of the mover is gone, the least distance to every
-    other element is at least `scene.clearance_m` (brackets carrying the mover are ignored), nothing new is hit, and,
-    when the fix names an opening, the moved element really passes through it.
+    Passed = the mover is not structure, not locked, moves only in its `allowed_moves` (when it lists any), every
+    planted real clash of the mover is gone, the least distance to every other element is at least
+    `scene.clearance_m` (brackets carrying the mover are ignored), nothing new is hit, and, when the fix names an
+    opening, the moved element really passes through it.
 
     Returns {"passed", "clash_gone", "min_clear_m", "new_hits": [ids closer than clearance after that were not
     before, the clash partners excluded], "via_opening": the opening it passes through after the move or None,
@@ -103,6 +115,12 @@ def check_fix(scene: Scene, fix: Fix) -> dict:
     reasons = []
     if mover.role == "structure":
         reasons.append("structure stays: the mover is structure")
+    if mover.locked:
+        reasons.append(f"locked: {mover.id} must not move")
+    if mover.allowed_moves:
+        barred = [d for d in directions(fix) if d not in mover.allowed_moves]
+        if barred:
+            reasons.append(f"not allowed: {mover.id} may not move {', '.join(barred)}")
     if not partners:
         reasons.append(f"{mover.id} has no planted real clash")
     elif not clash_gone:

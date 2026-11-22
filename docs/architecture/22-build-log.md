@@ -1,4 +1,4 @@
-# 22 · Build log (Oct 27 – Nov 11)
+# 22 · Build log (Oct 27 – Nov 22)
 
 > History, condensed: each entry records what was built and decided at the time, where in the code, and how it was
 > checked. Test counts and geometry/check timings were true then. Numbers that depended on the language model
@@ -939,3 +939,38 @@ given `IMAGE`, names the service `iris-api`, and defaults to minimum instances 0
 `test_origins.py` (new) and a voice relay origin test, `npm test`, web builds with and without `VITE_API_BASE` (the
 bundle grepped for the URL), `bash -n`, actionlint and shellcheck on the scripts and workflows. Not yet run against
 Google Cloud: the dev machine is not signed in to gcloud.
+
+**Nov 22, Iris VisionBench documented** ([docs/visionbench.md](../visionbench.md),
+[bench/README.md](../../bench/README.md)). The Track 2 pipeline (`server/iris_bench/`, `bench/render/`, the
+`iris-bench` CLI) has its design written against schema v2 (`spec.py`): jobs J1–J9 in eight scored categories, what a
+scene stores, the views and visual-only prompt rules, ground truth from closed-form geometry cross-checked by Iris's
+engine, the controls, scoring, challenge axes, limitations and the judging criteria. J6–J9, locked elements,
+relations, resolutions, cameras, top and section views, counterfactual controls, per-category and calibration
+scoring, `iris-bench verify` and `export` are marked in progress. No model numbers are quoted. Checked: read against
+the code in `server/iris_bench/` and `bench/render/`; `test_docs_map.py`.
+
+**Nov 22, Iris VisionBench wired end to end; fair Gemini settings; no paid run yet** ([docs/visionbench.md](../visionbench.md),
+[bench/README.md](../../bench/README.md)). `iris-bench build` takes its J5/J6 fix, J7 candidate and J8/J9 group
+renderers from `jobs.renderers_for` (each guarded: a failed render skips that item, never the seed), so all nine jobs
+build; `--modes ...,agentic` adds agentic copies that `run` sends to `iris_bench.agentic.run_agentic`. Rendering draws
+a seed's pairs in one browser, retries jobs lost to a browser crash once in a fresh browser (`render.render_many`,
+`CRASH_MARKERS`), falls back to A/B/C per pair only when that fails, runs at most `--render-workers` (min(4, CPUs))
+browsers at once, and counts it all in `render_stats.json`. Scoring grades J5 on "resolves the original clash", J6 on
+"new clash" and J7 on the valid set from the stored truth, exactly as the runner does (the checker re-run is kept as a
+cross-check); J8 orders are compared in order; `verify` re-derives J4 over the openings offered in the pictures. J8/J9
+items show one render's pictures (`jobs.one_render`: one letter map per item). J3/J4 offer only openings labelled
+in the pair's own pictures (a pair whose pictures show none gets no J4, and its J3 says there are none): before, the
+fallback offered every opening in the scene, and gemini-3.8-flash rightly answered that it could not see them;
+`verify` now fails any item whose answer letters its pictures do not show (`letters_shown`). The runner calls Gemini with one rule
+for every model (thinking at Google's default, Flash-Lite LOW, or `--thinking` under a `<model>@<level>` label;
+media resolution HIGH; `response_json_schema`; no temperature; `Image k:` before each picture; transport-only
+retries), records model version, finish reason and tokens per reply and the settings under `model_runs` in
+`manifest.json`, caps new spend with `--max-usd`, and samples controls to `--control-sample` (100) per mode. Paid runs
+are capped by `--max-usd` (required for a real model); commands are in bench/README.md. First paid run
+(`server/runs/gemini-3.8-flash-7`, not in git): gemini-3.8-flash, 7 seeds, 95 pictures items (11 per job, J4 7) and
+21-22 per control mode, $2.33 recorded over 170 calls; `verify` passed (298/298 pictures answers re-derived, every
+answer letter shown). Pictures 58% [47, 67], no image 36% [18, 59], swapped pictures 14% [0, 32], pictures plus
+measured facts 90% [76, 100]; mean confidence 0.96 in every mode. Small samples: read these as a pipeline check,
+not a model result. Checked: `pytest tests/bench`; `iris-bench all --seeds 0:6
+--model fake:0.7 --locked-services 1` (verify passes, all nine jobs and four modes present, 24/24 pairs rendered
+from the scene cameras with no fallback); a 3-seed fake run with `agentic`.

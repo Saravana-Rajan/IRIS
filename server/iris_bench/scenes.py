@@ -7,6 +7,15 @@ openings cut through its width. Services (ducts, pipes, cable trays) run along Y
   opening it fits through with clearance; `good_fix` raises it so it is centred in that opening.
 - "not_touching": a service under a beam with its top `gap_mm` below the beam's bottom.
 - "by_design": a bracket touching a tray or pipe from below.
+- with `locked_services` (0-2), one more "real" pair each, appended after those three: a small pipe or tray along X
+  close under the slab (the natural mover, but `locked`) with a duct along Y crossing under it, its top 50-100 mm
+  into it. The duct must move: `good_fix` drops it clear; its `allowed_moves` exclude "up" (over the locked run is
+  into the slab).
+
+With `routed` (default 1), a service also runs through a free web opening by design (`challenge["routed_ids"]`), so
+"passes through" has positive cases. Both draw from the seed's generator only when used (locked pairs right after
+the bracket, routed services last), so a scene without them is exactly what it was before.
+`truth.annotate` then adds relations, candidate resolutions and cameras.
 
 Everything else keeps at least `_CLEAR` mm from everything (checked on axis-aligned boxes). Geometry is built in whole
 millimetres so planted distances are exact, then written in metres.
@@ -16,6 +25,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
+from . import checker, truth
 from .spec import Element, Fix, Opening, Planted, Scene
 
 CLEARANCE_MM = 25          # scene.clearance_m in mm
@@ -181,19 +191,96 @@ def _crossing(b: _Builder, beam: dict, kind: str, w: int, h: int, top_from: int,
     return None
 
 
+def _locked_pair(b: _Builder, beam_items: list[dict], soffit: int, length: int) -> tuple[dict, dict, int, int] | None:
+    """A planted service-on-service clash where the natural mover is locked (before the optional X/Y swap).
+
+    S1, the smaller run (a pipe or tray along X, beside a beam, close under the slab), is the one a coordinator would
+    normally move, but it carries a lock. S2, a duct along Y, crosses under it with its top `d2` mm into S1's bottom,
+    so S2 must move: down by d2 + clearance + a margin (its good fix). S2 cannot go up over S1, because the slab is
+    less than its height plus two clearances above S1 (so its allowed moves exclude "up"); S1 could rise clear of S2
+    under the slab, which only its lock forbids. Returns (S1, S2, d2, drop) as builder dicts (not yet added)."""
+    rng, c = b.rng, CLEARANCE_MM
+    for _ in range(5 * _TRIES):
+        beam = rng.choice(beam_items)
+        side = rng.choice((1, -1))
+        k1 = rng.choice(("pipe", "tray"))
+        w1, h1 = b.size(k1)
+        w2, h2 = b.size("duct")                       # 300-800 wide, 200-350 tall: always the bigger section
+        d2 = rng.randint(50, 100)
+        gap_top = d2 + 2 * c + rng.randint(20, 60)    # S1 can rise d2 + c (+5) and keep c under the slab
+        top1 = soffit - gap_top
+        half2 = rng.randint(500, 700)
+        edge = beam["max"][1] if side > 0 else beam["min"][1]
+        yc = edge + side * rng.randint(half2 + 150, max(half2 + 150, 1900 - half2))
+        run = rng.randint(w2 + 800, min(3500, length - 600))
+        xa = rng.randint(300, length - 300 - run)
+        s1 = b.service(k1, yc - w1 // 2, w1, h1, top1, xa, xa + run, along="x")
+        x2 = rng.randint(xa + 300, xa + run - 300 - w2)
+        top2 = top1 - h1 + d2
+        s2 = b.service("duct", x2, w2, h2, top2, yc - half2, yc + half2)
+        drop = d2 + c + rng.randint(10, 60)
+        b1, b2 = b.box_of(s1), b.box_of(s2)
+        sweep = ((b2[0][0], b2[0][1], b2[0][2] - drop), b2[1])
+        assert h2 + 2 * c > gap_top                   # S2 over S1 always meets the slab
+        if b.free(b1) and b.free(b2) and b.free(sweep):
+            b.keepout.append(sweep)
+            return s1, s2, d2, drop
+    return None
+
+
+def _routed(b: _Builder, beam_items: list[dict], skip: str) -> dict | None:
+    """A service along Y running through one of the beams' web openings (not `skip`), its section 50 mm inside the
+    opening all round (before the optional X/Y swap), clear of everything else. None when no opening takes one."""
+    rng = b.rng
+    ops = [(beam, o) for beam in beam_items for o in beam["openings"] if o["id"] != skip]
+    rng.shuffle(ops)
+    for beam, o in ops:
+        (ox0, _, oz0), (ox1, _, oz1) = o["min"], o["max"]
+        room_w, room_h = ox1 - ox0 - 2 * _CLEAR, oz1 - oz0 - 2 * _CLEAR
+        for _ in range(20):
+            kind = rng.choice(("duct", "pipe", "tray"))
+            w, h = b.size(kind)
+            if kind == "pipe":
+                w = h = min(w, 2 * (min(room_w, room_h) // 2))
+                if w < 40:
+                    continue
+            else:
+                w, h = min(w, 2 * (room_w // 2)), min(h, 2 * (room_h // 2))
+                if w < 100 or h < 50:
+                    continue
+            x0 = rng.randint(ox0 + _CLEAR, ox1 - _CLEAR - w)
+            top = rng.randint(oz0 + _CLEAR + h, oz1 - _CLEAR)
+            yc = (beam["min"][1] + beam["max"][1]) // 2
+            half = rng.randint(1000, 1500)
+            it = b.service(kind, x0, w, h, top, yc - half, yc + half)
+            if b.free(b.box_of(it), ignore=(beam["id"],)):
+                return it
+    return None
+
+
 def generate(seed: int, *, density: int = 0, decoys: int = 0, gap_mm: int | None = None,
              overlap_mm: int | None = None, occlusion: bool | int = False, beams: int | None = None,
-             column: bool | None = None, orient: str | None = None, **extra) -> Scene:
+             column: bool | None = None, orient: str | None = None, locked_services: int = 0, routed: int = 1,
+             annotate: bool = True, **extra) -> Scene:
     """A ceiling-void scene for `seed`. Same seed and knobs, same scene.
 
     density: 0-20 extra distractor services. decoys: services of the mover's kind and size, parallel to it, not
     clashing. gap_mm: the near miss's gap (5-40, random by default). overlap_mm: the real clash's depth (50-400,
     random by default). occlusion: add a large duct beside the real clash (on the +X side of it before any swap) and
     record the hint for the renderer. beams: 1 or 2. column: add a column under beam 1. orient: "x" (beams along X)
-    or "y". Anything else in `extra` is recorded in `scene.challenge` untouched (view, style ...)."""
+    or "y". locked_services: 0-2 extra real clashes between two services where the natural mover (the smaller run)
+    is locked (`Element.locked`), so the other one must move (see `_locked_pair`); planted after the bracket.
+    routed: 0-2 services already run through a free web opening (not the target) with 50 mm all round, by design and
+    not planted (`challenge["routed_ids"]`; at most as many as there are openings they fit), placed last.
+    annotate: fill relations, resolutions and cameras (truth.annotate). Anything else in `extra` is recorded in
+    `scene.challenge` untouched (view, style, cam_azimuths, cam_elevations ...)."""
     rng = random.Random(seed)
     if not 0 <= density <= 20:
         raise ValueError("density must be 0-20")
+    if not 0 <= locked_services <= 2:
+        raise ValueError("locked_services must be 0-2")
+    if not 0 <= routed <= 2:
+        raise ValueError("routed must be 0-2")
     gap = int(gap_mm) if gap_mm is not None else rng.randint(5, 40)
     depth = int(overlap_mm) if overlap_mm is not None else rng.randint(50, 400)
     if not 1 <= gap <= 100:
@@ -335,6 +422,17 @@ def generate(seed: int, *, density: int = 0, decoys: int = 0, gap_mm: int | None
     if bracket is None:
         raise RuntimeError(f"seed {seed}: no room for the bracket")
 
+    # --- planted locked pairs: service on service, the natural mover locked (draws from rng only when asked)
+    locked_pairs = []                                   # (S1 locked, S2 mover, d2, drop) as builder dicts / mm
+    for _ in range(locked_services):
+        got = _locked_pair(b, beam_items, soffit, length)
+        if got is None:
+            raise RuntimeError(f"seed {seed}: no room for a locked pair")
+        s1, s2, d2, drop = got
+        s1 = b.add(**s1, locked=True)
+        s2 = b.add(**s2, allowed_moves=["down", "north", "south", "east", "west"])
+        locked_pairs.append((s1, s2, d2, drop))
+
     # --- decoys: same kind and size as the mover, parallel, clear of everything
     decoy_ids = []
     for _ in range(decoys):
@@ -364,6 +462,14 @@ def generate(seed: int, *, density: int = 0, decoys: int = 0, gap_mm: int | None
         if it is not None:
             distractor_ids.append(b.add(**it)["id"])
 
+    # --- routed: services already passing through a web opening by design (last, so nothing above changes)
+    routed_ids = []
+    for _ in range(routed):
+        it = _routed(b, beam_items, skip=target["id"])
+        if it is None:
+            break
+        routed_ids.append(b.add(**it)["id"])
+
     # --- to metres (and swap X/Y when the beams run along Y)
     swap = orient == "y"
 
@@ -374,7 +480,8 @@ def generate(seed: int, *, density: int = 0, decoys: int = 0, gap_mm: int | None
     elements = []
     for it in b.items:
         el = Element(id=it["id"], kind=it["kind"], role=it["role"], shape=it["shape"], supports=it.get("supports"),
-                     openings=[Opening(id=o["id"], min=m(o["min"]), max=m(o["max"])) for o in it["openings"]])
+                     openings=[Opening(id=o["id"], min=m(o["min"]), max=m(o["max"])) for o in it["openings"]],
+                     locked=bool(it.get("locked", False)), allowed_moves=list(it.get("allowed_moves", [])))
         if it["shape"] == "box":
             el.min, el.max = m(it["min"]), m(it["max"])
         else:
@@ -391,15 +498,29 @@ def generate(seed: int, *, density: int = 0, decoys: int = 0, gap_mm: int | None
         Planted(a=near["id"], b=near_beam["id"], kind="not_touching", distance_m=gap / 1000),
         Planted(a=bracket["id"], b=carried["id"], kind="by_design", distance_m=0.0),
     ]
+    for s1, s2, d2, drop in locked_pairs:
+        s2_el = scene.element(s2["id"])
+        scene.planted.append(Planted(
+            a=s2["id"], b=s1["id"], kind="real", distance_m=-d2 / 1000, mover=s2["id"],
+            good_fix=Fix(element=s2["id"], dz=round(-drop / 1000, 6)),
+            fitting_openings=[o.id for el in elements for o in el.openings
+                              if fits_through(s2_el, o, scene.clearance_m)]))
     scene.challenge = {
         "density": density, "decoys": decoys, "gap_mm": gap, "overlap_mm": depth, "occlusion": bool(occlusion),
         "beams": n_beams, "column": has_column, "orient": orient,
         "target": [mover["id"], beam1["id"]], "occluder": occluder["id"] if occluder else None,
         "decoy_ids": decoy_ids, "distractor_ids": distractor_ids,
+        "locked_services": locked_services, "locked_ids": [s1["id"] for s1, *_ in locked_pairs],
+        "routed_ids": routed_ids,
         **extra,
     }
-    if not fix_is_clear(scene, fix):    # by construction; a failure here is a generator bug
-        raise RuntimeError(f"seed {seed}: the planted fix is not clear")
+    # by construction; a failure here is a generator bug
+    for p in scene.planted:
+        if p.good_fix is not None and not (fix_is_clear(scene, p.good_fix)
+                                           and checker.check_fix(scene, p.good_fix)["passed"]):
+            raise RuntimeError(f"seed {seed}: the planted fix for {p.a}/{p.b} is not clear")
+    if annotate:
+        truth.annotate(scene)
     return scene
 
 

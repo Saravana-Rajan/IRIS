@@ -3,11 +3,16 @@
 //
 //   node bench/render/render.mjs scene.json --focus e1,e2 --out DIR [--views A,B,C] [--style shaded|hidden-line|xray]
 //        [--seed N] [--fix '{"element":"e2","dz":0.4}'] [--width 1024] [--tag NAME]
+//        [--cameras '[{"name":"top","elevation_deg":90,"projection":"orthographic"}]'] [--no-compass]
 //   node bench/render/render.mjs --jobs jobs.json [--result out.json]      (many jobs, one browser)
 //
-// A job is {scene_path, focus, out_dir, views, style, seed, fix, width, tag}. Per view it writes
-// <tag>_<view>.png and <tag>_<view>.id.png into out_dir and merges the views into out_dir/views.json; image paths are
-// relative to the scene's folder (spec.View). The result (stdout or --result) is one list of View dicts per job.
+// A job is {scene_path, focus, out_dir, views, cameras, style, seed, fix, width, tag, grid, compass, letters,
+// views_json} (bench.js benchRender says what views, cameras, grid and letters may be; no views = one per camera, else
+// one per scene camera, else A, B, C). Per view it writes <tag>_<view>.png and <tag>_<view>.id.png into out_dir; image
+// paths are relative to the scene's folder (spec.View). The result (stdout or --result) is one list of View dicts per
+// job. views.json: server/iris_bench/render.py sends views_json: false and merges it itself under an exclusive lock
+// (fcntl.flock on views.json.lock), which node cannot take; run on its own, this script merges it with an atomic
+// replace only, so concurrent writers to one folder must go through render.py.
 // Chromium runs with SwiftShader (--use-gl=swiftshader), so the same job gives the same bytes on the same machine.
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -22,7 +27,8 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/ja
 function parseArgs(argv) {
   const a = { _: [] };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith("--")) { a[argv[i].slice(2)] = argv[i + 1]; i++; } else a._.push(argv[i]);
+    if (argv[i] === "--no-compass") a.compass = false;
+    else if (argv[i].startsWith("--")) { a[argv[i].slice(2)] = argv[i + 1]; i++; } else a._.push(argv[i]);
   }
   return a;
 }
@@ -49,8 +55,9 @@ async function runJob(page, job) {
   fs.mkdirSync(outDir, { recursive: true });
   const tag = job.tag || job.focus.join("-");
   const res = await page.evaluate((j) => window.benchRender(j), {
-    scene, focus: job.focus, views: job.views || ["A", "B", "C"], style: job.style || "shaded",
-    seed: job.seed ?? scene.seed ?? 0, fix: job.fix || null, width: job.width || 1024,
+    scene, focus: job.focus, views: job.views || null, cameras: job.cameras || null, style: job.style || "shaded",
+    seed: job.seed ?? scene.seed ?? 0, fix: job.fix || null, width: job.width || 1024, grid: job.grid || null,
+    compass: job.compass !== false, letters: job.letters || null,
   });
   const views = [];
   for (const v of res) {
@@ -60,12 +67,15 @@ async function runJob(page, job) {
     views.push({ name: v.name, image: path.relative(sceneDir, img), id_image: path.relative(sceneDir, idImg),
       labels: v.labels, colors: v.colors, visible_px: v.visible_px, focus: v.focus });
   }
+  if (job.views_json === false) return views;   // render.py merges views.json under its lock
   // views.json next to the PNGs: replace this job's entries, keep the others (other focus pairs of the scene).
   const vj = path.join(outDir, "views.json");
   let prior = [];
-  try { prior = JSON.parse(fs.readFileSync(vj, "utf8")); } catch { prior = []; }
+  if (fs.existsSync(vj)) prior = JSON.parse(fs.readFileSync(vj, "utf8"));
   const mine = new Set(views.map((v) => v.image));
-  fs.writeFileSync(vj, JSON.stringify([...prior.filter((v) => !mine.has(v.image)), ...views], null, 2));
+  const tmp = path.join(outDir, `.views.${process.pid}.json.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify([...prior.filter((v) => !mine.has(v.image)), ...views], null, 2));
+  fs.renameSync(tmp, vj);
   return views;
 }
 
@@ -77,7 +87,8 @@ async function main() {
     if (!args._[0] || !args.focus) { console.error("usage: render.mjs scene.json --focus e1,e2 --out DIR | --jobs jobs.json"); process.exit(2); }
     jobs = [{ scene_path: args._[0], focus: args.focus.split(","), out_dir: args.out, views: args.views ? args.views.split(",") : undefined,
       style: args.style, seed: args.seed !== undefined ? Number(args.seed) : undefined, fix: args.fix ? JSON.parse(args.fix) : null,
-      width: args.width ? Number(args.width) : undefined, tag: args.tag }];
+      width: args.width ? Number(args.width) : undefined, tag: args.tag, cameras: args.cameras ? JSON.parse(args.cameras) : null,
+      compass: args.compass !== false }];
   }
   const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
   const results = [];
@@ -87,7 +98,8 @@ async function main() {
       const t0 = Date.now();
       try { results.push(await runJob(page, job)); }
       catch (e) { results.push({ error: String(e && e.message || e) }); }
-      process.stderr.write(`rendered ${job.scene_path} [${job.focus}] in ${Date.now() - t0} ms\n`);
+      const n = Array.isArray(results.at(-1)) ? results.at(-1).length : 0;
+      process.stderr.write(`rendered ${job.scene_path} [${job.focus}] ${n} views in ${Date.now() - t0} ms\n`);
     }
   } finally { await browser.close(); }
   const text = JSON.stringify(results);

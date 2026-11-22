@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from functools import lru_cache
 
 from .spec import Element, Fix, Opening, Vec
 
@@ -152,8 +153,15 @@ def pieces(el: Element) -> list:
         return [_cyl(el)]
     lo, hi = tuple(map(float, el.min)), tuple(map(float, el.max))
     if el.openings:
-        return _subtract(lo, hi, [(o.min, o.max) for o in el.openings])
+        voids = tuple((tuple(map(float, o.min)), tuple(map(float, o.max))) for o in el.openings)
+        return list(_subtract_cached(lo, hi, voids))
     return [_Box(lo, hi)]
+
+
+@lru_cache(maxsize=4096)
+def _subtract_cached(lo, hi, voids) -> tuple[_Box, ...]:
+    """`_subtract` memoised on the exact geometry (the pieces are immutable): a cut beam is split once, not per query."""
+    return tuple(_subtract(lo, hi, list(voids)))
 
 
 def _interval(a0, a1, b0, b1) -> float:

@@ -18,3 +18,7 @@ __pycache__/
 .pytest_cache/
 .env
 server/.iris-settings.json
+
+# Iris VisionBench run folders and reply caches (bench/README.md: keep runs out of git)
+server/runs/
+server/.bench_cache/
