@@ -1,7 +1,8 @@
 /* A page's header in the app shell (PageHeader.tsx): the breadcrumb (grey, the current page darker), a large title
    with a one-line grey subtitle, the page's actions at the right of the title row, and a hairline under it all.
    Light only, on index.css's tokens. `.slim` is the workspace's single row over the 3D view. */
-.page-head { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.page-head { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px;
+  min-width: 0; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .page-head-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; min-width: 0; }
 .page-head-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; }
 .page-crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0;
@@ -17,7 +18,8 @@ a.page-crumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1
 .page-title { margin: 0; font-size: 30px; line-height: 1.2; font-weight: 500; letter-spacing: -.02em; color: var(--ink); overflow-wrap: anywhere; display: block; }
 .page-sub { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); max-width: 80ch; }
 .page-status { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--muted); }
-.page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: none; }
+.page-head:not(.slim) > .page-status { flex: 1 1 100%; order: 3; }
 .page-actions .btn { height: 38px; padding: 0 14px; border-radius: 8px; }
 .page-actions .btn.small { height: 34px; padding: 0 12px; }
 

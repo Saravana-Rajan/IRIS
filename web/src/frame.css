@@ -4,7 +4,7 @@
    and, over it, the page shown: Home (`.home-shell`) or a project's page (`.proj-shell`). Light only. */
 
 .shell { --shell-top-h: 56px; height: 100%; display: flex; min-width: 0; background: var(--bg); }
-.shell.compact { --shell-top-h: calc(52px + env(safe-area-inset-top)); }
+.shell.shell-compact { --shell-top-h: calc(52px + env(safe-area-inset-top)); }
 .shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 .shell-body { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; }
 

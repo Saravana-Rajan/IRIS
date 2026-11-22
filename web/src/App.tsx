@@ -367,6 +367,8 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
+  const [creating, setCreating] = useState(false);   // New project's create call is out: the dialog waits
+  const [createError, setCreateError] = useState<string | null>(null);
   const goStep = (s: ProjectStep, id: string | null = pid) => { if (id) goRoute({ view: "project", pid: id, step: s }); };
   const goProjects = () => goRoute({ view: "projects" });
   useEffect(() => {   // Back, Forward or an edited address moves between the project pages
@@ -1754,7 +1756,8 @@ export function App() {
   }
   /** Create a project, keep its id in this browser and open its overview. */
   async function newProject(name: string) {
-    setProjectsError(null);
+    if (creating) return;
+    setCreateError(null); setCreating(true);
     try {
       const p = await createProject(name);
       rememberProject(p.id);
@@ -1762,7 +1765,7 @@ export function App() {
       setProject(p);
       setNewOpen(false);
       goStep("overview", p.id);
-    } catch (e) { setProjectsError(`Could not create the project: ${(e as Error).message}`); }
+    } catch (e) { setCreateError(`Could not create the project: ${(e as Error).message}`); } finally { setCreating(false); }
   }
   /** Rename a project (PATCH name): the list, and the open project, take the server's answer. */
   async function renameProjectNow(id: string, name: string) {
@@ -4395,7 +4398,7 @@ export function App() {
       actions={{ ...cardActions(selected.globalId), ...(closable ? { onClose: () => setSelected(null) } : {}) }} />);
 
   return (
-    <div className={`shell${rail ? " rail" : ""}${compact ? ` compact ${layout}` : ""}`}>
+    <div className={`shell${rail ? " shell-rail" : ""}${compact ? ` shell-compact shell-${layout}` : ""}`}>
       <Sidebar active={navActive} project={navProject} workspace={navWorkspace} rail={rail}
         drawer={compact ? (drawerOpen ? "open" : "closed") : undefined} onCloseDrawer={() => setDrawerOpen(false)}
         onNav={nav} hrefOf={navHref} reviewer={reviewer} onReviewer={setReviewer}
@@ -4936,7 +4939,8 @@ export function App() {
           </div>
         </div>
       </div>
-      {newOpen && <NewProjectDialog onCreate={(n) => void newProject(n)} onClose={() => setNewOpen(false)} error={projectsError ?? undefined} />}
+      {newOpen && <NewProjectDialog onCreate={(n) => void newProject(n)} onClose={() => { setNewOpen(false); setCreateError(null); }}
+        busy={creating} error={createError ?? undefined} />}
     </div>
   );
 }
