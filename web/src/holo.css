@@ -1,0 +1,48 @@
+/* Iris's motion (Holo.tsx): the holographic ribbon, the text reveal, the count-up, the AI shimmer and the holo edge that
+   AI-made things wear. Light only, on index.css's tokens (`--holo`, `--accent`). Everything is still under
+   prefers-reduced-motion. */
+
+/* The ribbon: a blurred glow behind an SVG torus that turns slowly */
+.holo-ribbon { position: relative; display: inline-block; flex: none; pointer-events: none; }
+.holo-glow { position: absolute; inset: 12%; border-radius: 50%; filter: blur(28px); opacity: .55;
+  background: conic-gradient(from 0deg, #8f9bff, #b07af2, #ff5cd6, #7dd3fc, #8f9bff); animation: holo-spin 24s linear infinite; }
+.holo-svg { position: relative; display: block; overflow: visible; }
+.holo-turn { transform-origin: 100px 100px; animation: holo-spin 28s linear infinite; }
+.holo-morph { transform-box: fill-box; transform-origin: center; animation: holo-morph 20s ease-in-out infinite alternate; }
+@keyframes holo-spin { to { transform: rotate(360deg); } }
+@keyframes holo-morph { 0% { transform: rotate(38deg) scale(1, 1); } 100% { transform: rotate(-12deg) scale(.86, 1.12); } }
+
+/* Text reveal: each word from a lavender blur to ink */
+.text-reveal-word { display: inline-block; animation: text-reveal .7s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes text-reveal { from { opacity: 0; filter: blur(8px); color: var(--accent, #b07af2); transform: translateY(4px); }
+  60% { color: var(--accent, #b07af2); } to { opacity: 1; filter: blur(0); transform: none; } }
+
+/* Count-up: a slight lavender blur while it counts */
+.count-up { font-variant-numeric: tabular-nums; transition: filter .3s ease, color .3s ease; }
+.count-up.counting { filter: blur(.6px); color: var(--accent, #b07af2); }
+
+/* The AI working shimmer: a soft holo band moving across a status line or card while Gemini works */
+.ai-shimmer { position: relative; overflow: hidden; }
+.ai-shimmer::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(100deg, transparent 20%, rgba(176, 122, 242, .16) 40%, rgba(255, 92, 214, .14) 50%, rgba(125, 211, 252, .14) 60%, transparent 80%);
+  background-size: 250% 100%; animation: ai-shimmer 2.4s linear infinite; }
+@keyframes ai-shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+
+/* AI-made things wear the holographic edge (a 1 px gradient border); things the geometry proved wear the green check */
+.holo-edge { position: relative; border: 1px solid transparent !important;
+  background: linear-gradient(var(--surface, #fff), var(--surface, #fff)) padding-box, var(--holo) border-box !important; }
+
+/* Empty states: a centred small ribbon, one line, one primary action */
+.empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 40px 20px; margin: auto;
+  max-width: 440px; }
+.empty-state.compact { padding: 20px 12px; gap: 8px; }
+.empty-state-art { margin-bottom: 4px; }
+.empty-state-title { margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); display: block; }
+.empty-state.compact .empty-state-title { font-size: 15px; }
+.empty-state-line { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.empty-state-action { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-glow, .holo-turn, .holo-morph, .text-reveal-word, .ai-shimmer::after { animation: none !important; }
+  .count-up { transition: none; }
+}
