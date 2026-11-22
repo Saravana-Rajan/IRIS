@@ -1,4 +1,4 @@
-import type { CheckSummary, ReportClash, TriageVerdict } from "./api";
+import type { CheckSummary, Journal, JournalEntry, ReportClash, TriageVerdict } from "./api";
 import type { Review } from "./ReportList";
 
 /** Coordination overview (docs/engineer-workflow.md, "Classification", "Severity", "Status"): a clash's class,
@@ -97,6 +97,17 @@ export function statusOf(c: Pick<ReportClash, "id">, { fixes, reviewed, resolved
   if (rv?.kind === "by_design") return "reviewed_by_design";
   if (rv?.kind === "author") return "sent_to_author";
   return "open";
+}
+
+/** The edit Undo takes back (the edit log's newest kept entry, `Journal.undo`) when it is this clash's kept fix, tied
+ * by the clash's id or its pair as the server ties them (`Journal.for_clash`); else null: an older fix is undone from
+ * the Edits panel, which takes the newer edits back with it. */
+export function undoableFix(journal: Pick<Journal, "entries" | "can_undo" | "undo"> | null | undefined, clashId: string,
+  pair?: readonly (string | null | undefined)[] | null): JournalEntry | null {
+  if (!journal?.can_undo || !journal.undo) return null;
+  const e = journal.entries.find((x) => x.id === journal.undo && x.state === "kept");
+  const p = pair?.[0] && pair[1] ? [pair[0], pair[1]].sort().join("|") : null;
+  return e && e.clashes.some((c) => c.id === clashId || (!!p && c.pair.length === 2 && [...c.pair].sort().join("|") === p)) ? e : null;
 }
 
 type CheckLike = Pick<CheckSummary, "coverage" | "diff">;

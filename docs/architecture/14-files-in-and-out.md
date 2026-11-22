@@ -7,8 +7,8 @@
 > `_tidy_exports`), `server/iris/built.py` (its cache), `server/iris/projects.py` (the project folders),
 > `server/iris/drawings.py` (PDF drawings in), the saved-reading files of `server/iris/drawing_reader.py`,
 > `web/src/uploads.ts`, `web/src/reqFile.ts` (the file side) · **Checked against code:** 2026-11-22 (project folders,
-> PDF drawings, sample drawings and their saved readings, what `samples/` keeps in git and the image; re-branded on
-> 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
+> PDF drawings, sample drawings and their saved readings, what `samples/` keeps in git and the image, the report
+> without triage; re-branded on 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
 Iris reads models (IFC, or STEP converted to IFC), clash reports (Navisworks XML with its pictures), pictures the
@@ -414,8 +414,9 @@ flowchart TB
 - **What goes in.** The clash report and the verdicts the page shows (`triage` in the request, so the report
   survives a restart or a rerun of the shared triage; else the server's finished run). For the list of Iris's kept
   checks, `check` narrows it to one check's clashes, titled as that check's run (`app._narrowed`; the dialog's "Only
-  <check>" and MCP `generate_report(check=…)`), else every kept check's clashes, each once. Fewer verdicts than half the
-  clashes is 409 "Triage the report first". The session's `evidence` per clash (the fix accepted or proposed, its
+  <check>" and MCP `generate_report(check=…)`), else every kept check's clashes, each once. Triage is optional (since
+  Nov 22; it was 409 "Triage the report first" with fewer verdicts than half the clashes): without verdicts the report
+  still builds, and the clashes nobody sorted are listed as not triaged (below). The session's `evidence` per clash (the fix accepted or proposed, its
   edit, clearance, `meets`, and `before_img` / `after_img` pictures the browser captured with `Viewer.capture`,
   plus `built_img` / `built_note`), `reviews` (team, name, decision, note, date: kept per report in the browser),
   `marks` (by design or for the author) and the user-confirmed `teams` per model file. Costs one proposal.
@@ -439,8 +440,10 @@ flowchart TB
   guessed discipline is later in `STAYS_FIRST` (Structure, Architecture, Site, MEP: structure stays, services move);
   typed names map to their model's guess for this.
 - **Sections** (`build_rows`): a clash with evidence, kept edits or decisions, or a real clash, gets a **page**; a
-  model error or "for the author" mark goes in the authors' table; everything else (by design, not physical,
-  touching) is **noise**, grouped by test.
+  model error or "for the author" mark goes in the authors' table; a clash with no verdict, no fix, no kept edit, no
+  decision and no mark is **not triaged** (`untriaged`), grouped by test in a table of its own and counted on the cover
+  ("n not triaged"), never as noise or as needing action; everything else (by design, not physical, touching) is
+  **noise**, grouped by test. "How this report was made" says how many were not triaged.
 - **A page** (`document._page`): number, title, the test and Navisworks ref; both elements with model, team and
   GlobalId (matched in the open scene, else the report's; `Row.gids`); distance (by whoever found it), level and grid;
   the triage reading; pictures (the first clash picture cropped by colour to where red A and green B meet,
@@ -475,15 +478,15 @@ flowchart TB
   designed" or a check that did not pass is Unverified; a validated one carries its minimum clearance and count),
   decision, reviewer, when (UTC) and reason.
 - **The DRAFT rule** (`render_html`): a page counts as reviewed when every reviewing team has at least one review on
-  it. Only when every page is reviewed (and there is at least one page) does the cover say "REVIEWED · n of n";
-  otherwise the cover's stamp says "DRAFT · AI-assisted · k of n reviewed" and every page's header "DRAFT · requires
-  review".
+  it. Only when every page is reviewed (and there is at least one page) and no clash is left not triaged does the
+  cover say "REVIEWED · n of n"; otherwise the cover's stamp says "DRAFT · AI-assisted · k of n reviewed" (with
+  "· m not triaged" when some are) and every page's header "DRAFT · requires review".
 - **Also in the PDF:** cover with the Iris lockup (`LOCKUP`), "Project: <name>" when `project_name` is given, a
   **Models** table (`model_info` / `models_html`: file and team for each model, plus its IFC schema and element count
   only for a model open in the scene; a combined report lists every open model, a team's or a model's report the
   models its clashes name), counts and the clearance sentence (the requirements' fix clearance, else 25 mm, and what
   each evidence label means);
-  summary and actions by team (AI-drafted); the authors' table; noise by test; "How this report was made" (fixed
+  summary and actions by team (AI-drafted); the authors' table; noise by test; the not-triaged clashes by test; "How this report was made" (fixed
   text naming the triage model that ran, `document.triage_by`: the fast model's label and "(Google)", such as "Gemini Flash (Google)", from the triage run's `info`, else `model_client.triage_model_info()` when no run is held, as after a
   restart); and, under
   requirements, an appendix of the whole file (`requirements_html`) with "Requirements: name vN, label (id)" in the

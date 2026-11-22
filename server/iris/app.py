@@ -2619,8 +2619,10 @@ def report_teams(report_id: str, scene_id: str | None = None):
 
 @app.post("/api/reports/{report_id}/document/stream")
 def document_stream(report_id: str, body: DocumentRequest, request: Request):
-    """A coordination report: PDF(s) combined, per team or per model, plus BCF. Needs the report's triage. Streams
-    progress as newline-delimited JSON, then {"type": "ready", url, name}. Costs one proposal."""
+    """A coordination report: PDF(s) combined, per team or per model, plus BCF. Triage is optional: it sorts the
+    clashes; without a verdict, a clash with a fix, a kept edit or a decision still gets its page and the rest are
+    listed by clash test as not triaged (`document.build_rows`). Streams progress as newline-delimited JSON, then
+    {"type": "ready", url, name}. Costs one proposal."""
     report = ws.report(_report(report_id))
     if body.scope not in ("combined", "team", "model"):
         raise HTTPException(422, "scope is combined, team or model.")
@@ -2634,8 +2636,6 @@ def document_stream(report_id: str, body: DocumentRequest, request: Request):
     ids = {c.id for c in report.clashes}
     verdicts = ({k: v for k, v in body.triage.items() if isinstance(v, dict) and v.get("verdict")} if body.triage
                 else {k: v for k, v in job.results.items() if k in ids} if job is not None and job.done else {})
-    if len(verdicts) < len(report.clashes) // 2:
-        raise HTTPException(409, "Triage the report first: the report sorts clashes by its verdicts.")
     scene = ws.scene(body.scene_id) if body.scene_id and body.scene_id in ws.scenes else None
     # For a project: its name on the cover; with no live edit log for the scene (none open, or the server restarted),
     # the reviewers' decisions of its newest saved state.
@@ -2916,8 +2916,7 @@ def mcp_hooks() -> mcp_server.Hooks:
         job = _triage_jobs.get(_triage_key(whole, requirements.current())) or _triage_latest(whole)
         ids = {c.id for c in report.clashes}
         verdicts = {k: v for k, v in job.results.items() if k in ids} if job is not None and job.done else {}
-        if len(verdicts) < len(report.clashes) // 2:
-            raise RuntimeError("Triage the report first (the triage tool): the report sorts clashes by its verdicts.")
+        # Triage is optional: untriaged clashes are listed by clash test as not triaged.
         return _build_document(report, verdicts, scene_id, scope, triage_info=job.info if job is not None else None)
 
     return mcp_server.Hooks(

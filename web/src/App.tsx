@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Save, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
@@ -58,11 +58,11 @@ import { applyDraw, applyEvent, drawnUpTo, failAll, initRows, removeRow, sendabl
 import { ModelSummary } from "./ModelSummaryPanel";
 import { CoordinationOverview } from "./CoordinationOverview";
 import { ClashHeader } from "./ClashHeader";
-import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, type CoordinationFilter } from "./coordination";
+import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, undoableFix, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
-import { ProjectOverview } from "./ProjectOverview";
+import { ProjectOverview, SaveButton } from "./ProjectOverview";
 import { PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
@@ -1695,13 +1695,14 @@ export function App() {
     } catch (e) { setError(`Could not open the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
     return id;
   }
-  /** Save: the edited models, the edit log and the decisions as the project's next saved state. */
-  async function saveProjectNow() {
+  /** Save: the edited models, the edit log and the decisions as the project's next saved state. Whether it saved, for
+   * the Save button ("Saved ✓" or "Not saved"). */
+  async function saveProjectNow(): Promise<boolean> {
     const p = projectHere;
-    if (!p || !sceneId || !projectOpen || projectBusy) return;
+    if (!p || !sceneId || !projectOpen || projectBusy) return false;
     setProjectBusy("Saving…");
-    try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); }
-    catch (e) { setError(`Could not save the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
+    try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); return true; }
+    catch (e) { setError(`Could not save the project: ${(e as Error).message}`); return false; } finally { setProjectBusy(null); }
   }
   /** The sample building's project of this browser's: found again by name (one holding models), else made now
    * (`made`) and its id kept in this browser. */
@@ -3916,9 +3917,9 @@ export function App() {
       {layout === "tablet" && !landing && (report || sceneId) && <button className={`btn small ${listOpen ? "on" : ""}`} data-tour="drawer"
         aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
         <List size={15} aria-hidden /> Clashes{report ? <span className="badge-n">{(listReport ?? report).clashes.length}</span> : null}</button>}
-      {pid && projectHere && layout !== "phone" && <button type="button" className="btn small" disabled={!projectOpen || !!projectBusy || !!busy} onClick={() => void saveProjectNow()}
-        data-tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"}
-        data-tip-side="bottom"><Save size={14} aria-hidden /> Save</button>}
+      {projectBusy && projectBusy !== "Saving…" && layout !== "phone" && <span className="hint work-busy"><i className="spinner" aria-hidden /> {projectBusy}</span>}
+      {pid && projectHere && layout !== "phone" && <SaveButton onSave={saveProjectNow} saving={projectBusy === "Saving…"} disabled={!projectOpen || !!projectBusy || !!busy}
+        tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"} />}
       {report && layout !== "phone" && <button type="button" className="btn small" data-tour="report" onClick={() => { setDocOpen(true); setDocReady(false); }}>
         <FileText size={14} aria-hidden /> Report</button>}
       {exportable && <a className="btn primary export" data-tour="export" href={api.exportUrl(sceneId!)} data-tip-side="bottom" aria-label={`${exportLabel}${keptNote}`}
@@ -4179,7 +4180,7 @@ export function App() {
           counts={liveCounts} reports={projectHere.reports} activity={projectActivity}
           onImport={() => goStep("models")} saving={projectBusy === "Saving…"}
           onOpenWorkspace={() => { if (!projectOpen && projectHere.files.length) void openProjectScene(projectHere); goStep(projectHere.files.length ? "coordination" : "models"); }}
-          onSave={() => { if (projectOpen) void saveProjectNow(); else setError("Open the project's models first: nothing of it is open to save."); }}>
+          onSave={() => { if (projectOpen) return saveProjectNow(); setError("Open the project's models first: nothing of it is open to save."); return false; }}>
           {projStep === "drawings" && (projectOpen && sceneId ? (
             <section className="proj-drawings" aria-label="Drawings">
               <DrawingsPanel sceneId={sceneId} drawings={drawings} items={drawingItemsBy} compare={drawingCompare} busy={!!busy}
@@ -4251,6 +4252,7 @@ export function App() {
 
   // The clash tab's actions, right under its header so Propose fixes shows without scrolling: Propose fixes (unless the
   // clash reads as not one), a wider fix, and the way back to the clash in 3D.
+  const fixedHere = !!clash && (!!fixes[clash.id] || resolvedIds.has(clash.id));
   const clashActions = (
     <div className="actions">
       {!hideFix && <button className="btn primary big" data-tour="propose" disabled={!a || !b || !sceneId || !!busy || proposing || (!!running && running.id !== clash?.id)} onClick={propose}>
@@ -4633,18 +4635,16 @@ export function App() {
                   ? (<><ClashHeader clash={shownClash ?? clash} triage={shownTriage[clash.id]} status={statusOf(clash, { fixes, reviewed, resolvedIds })}
                     onFocus={() => goToClash(clash, matches?.[clash.id], true)}
                     onPrev={listPrev ? () => selectClash(listPrev) : undefined} onNext={listNext ? () => selectClash(listNext) : undefined} />
-                    {fixes[clash.id] ? (
-                      <div className="fixed-calm" role="status">
-                        <span className="fixed-calm-head"><CircleCheck size={16} aria-hidden /> <b>Fixed</b><span className="why">{fixes[clash.id]}</span></span>
-                        <span className="fixed-calm-actions">
-                          {nextClash && <button type="button" className="btn small" onClick={() => { setTab("clash"); selectClash(nextClash); }}>
-                            Next clash <ArrowRight size={13} aria-hidden /></button>}
-                          <button type="button" className="btn small ghost" disabled={!a && !b} onClick={focusNow}><LocateFixed size={14} aria-hidden /> Go to the clash</button>
-                        </span>
-                      </div>
-                    ) : clashActions}
+                    {/* A fixed clash shows "Fixed ✓" in its panel (ClashPanel: what was kept, Undo, Propose a different fix) in
+                        place of these actions, and the way on to the next open clash. */}
+                    {!fixedHere && clashActions}
                     <ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
-                    origin={report.origin} capturing={capturing === clash.id} />
+                    origin={report.origin} capturing={capturing === clash.id} resolved={resolvedIds.has(clash.id)} busy={!!busy || proposing}
+                    onUndo={undoableFix(journal, clash.id, [matches?.[clash.id]?.a, matches?.[clash.id]?.b]) ? () => void stepEdit("undo") : undefined}
+                    onProposeAgain={a && b && sceneId && !(running && running.id !== clash.id) ? () => void propose() : undefined} />
+                    {fixedHere && nextClash && <div className="actions fixed-next">
+                      <button type="button" className="btn small" onClick={() => { setTab("clash"); selectClash(nextClash); }}>
+                        Next clash <ArrowRight size={13} aria-hidden /></button></div>}
                     {evidence[clash.id]?.status === "recommended" && evidence[clash.id].kind === "penetration" &&
                       <div className="recommended">
                         <h3>Opening requested</h3>

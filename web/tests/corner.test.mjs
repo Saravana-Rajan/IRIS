@@ -31,3 +31,16 @@ test("the owner's settings sit on their button's tip, not in a long chip in the 
   assert.equal(host.component("OwnerSettingsMenu").props.note, undefined);
   host.unmount();
 });
+
+test("Settings shows only the sections that apply: nothing open has no session or layout section", async () => {
+  const open = await appHost();
+  const sheet = open.menu();
+  assert.ok(hasText(sheet, "This session") && hasText(sheet, "Panels and layout") && hasText(sheet, "Coordinate"));
+  open.unmount();
+  const empty = await appHost({ initial: { sceneId: null, a: null, b: null, stats: null, clash: null, report: null, matches: null } });
+  const bare = empty.menu();
+  assert.ok(hasText(bare, "Models") && hasText(bare, "Coordinate"));
+  assert.equal(hasText(bare, "This session"), false, "no session to act on");
+  assert.equal(hasText(bare, "Panels and layout"), false, "no panels to lay out");
+  empty.unmount();
+});

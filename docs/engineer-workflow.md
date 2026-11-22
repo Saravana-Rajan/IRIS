@@ -21,7 +21,7 @@ This file is the shared contract for the slices that implement it. Anything not 
 | 7 Validate | Geometry gate at propose and at keep (`plans.apply` → `recheck`) | Card states: **AI-proposed / Geometry-validated / Failed validation / Unverified**; `checked_against` kept in the journal; "as designed" never shown as geometry-validated |
 | 8 Before/after | Before / After / Both in 3D | Unchanged; linked from the card |
 | 9 Review | Accept (keep) and undo; reject is browser-only; no actor | **Decisions** recorded on the server: accepted / rejected / modified / requested another, with reason and reviewer |
-| 10 Report | PDF / BCF per clash | Project name on the cover, GlobalIds, rationale, moved element + delta, checked-against count, required clearance, proposal history with decisions |
+| 10 Report | PDF / BCF per clash | Project name on the cover, GlobalIds, rationale, moved element + delta, checked-against count, required clearance, proposal history with decisions; triage optional (clashes not triaged listed by clash test as such) |
 
 ## Server contract
 
@@ -126,6 +126,18 @@ New files (each self-contained, props only, no direct App state):
 
 **Status**: *Open*; *Fix kept, awaiting re-check* (in `fixes`, check stale); *Resolved by geometry* (the re-run
 check's `diff.resolved`); *Reviewed: by design*; *Sent to author*.
+
+### Save, the share closed, a fixed clash and the report (Nov 22)
+
+- **Save** (`SaveButton`, the Overview's header and the workspace's step bar) says how it went: "Saving…", then
+  "Saved ✓" for about 2 s, or "Not saved" with the reason in its tip.
+- **The share closed** on the Overview is never rounded to a false claim (`closedText`): 1 of 464 is "<1% closed",
+  463 of 464 ">99% closed".
+- **A fixed clash** shows "Fixed ✓" in its panel: what was kept, Undo when the newest kept edit is its fix, and
+  "Propose a different fix" as a secondary; no primary Propose fixes.
+- **The report does not need triage.** A clash with a fix, a kept edit or a decision gets its page; one with no
+  verdict, fix, edit, decision or mark is listed by clash test as "not triaged" (never as noise or as needing action),
+  and the report stays DRAFT while any is. Triage only sorts them.
 
 ## Not built (stated plainly)
 

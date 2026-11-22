@@ -80,6 +80,39 @@ def test_combined_without_bcf_is_one_pdf_and_stays_draft(tmp_path):
     assert media == "application/pdf" and data.startswith(b"%PDF") and name == "iris-report.pdf"
 
 
+def test_a_report_without_triage_keeps_an_accepted_fix_and_lists_the_rest_as_not_triaged(tmp_path):
+    # Triage is optional: the fixed clash gets its page; every other clash is "not triaged", never noise or action.
+    report = _report(tmp_path)
+    first = report.clashes[0]
+    evidence = {first.id: {"status": "accepted", "title": "Raise the duct", "edit": "+400 mm", "clearance": "50 mm",
+                           "clearance_m": 0.05, "before_img": _jpeg(), "after_img": _jpeg()}}
+    rows = document.build_rows(report, {}, {}, None, None, evidence, {}, {})
+    assert {r.clash.id: r.section for r in rows} == {c.id: "page" if c.id == first.id else "untriaged"
+                                                      for c in report.clashes}
+    rest = len(report.clashes) - 1
+    html_text = document.render_html("Report", "Coordination", rows, {}, {})
+    assert "Raise the duct" in html_text and "With the fix (applied)" in html_text
+    assert "<h2 style='margin-top:14pt'>Not triaged</h2>" in html_text
+    assert f"<div class='count'><b>{rest}</b>not triaged</div>" in html_text
+    assert "<div class='count'><b>1</b>need action</div>" in html_text
+    assert "<div class='count'><b>0</b>noise</div>" in html_text
+    assert f"{rest} of {len(rows)} results were not triaged" in html_text
+    # Reviewed by every team, the page alone can't make it final: the untriaged rest might still need action.
+    (page,) = [r for r in rows if r.section == "page"]
+    page.reviews = [{"team": t, "name": "A. Engineer", "decision": "approve"} for t in page.reviewers]
+    reviewed = document.render_html("Report", "Coordination", rows, {}, {})
+    assert f"DRAFT · AI-assisted · 1 of 1 reviewed · {rest} not triaged" in reviewed and "REVIEWED ·" not in reviewed
+    # Only the page is explained (one model call) and only it becomes a BCF issue.
+    model = Writer()
+    document.explain(model, rows, lambda e: None)
+    assert model.asked == [document.EXPLAIN_SCHEMA]
+    bcf = zipfile.ZipFile(io.BytesIO(document.bcf_zip(rows, None, None)))
+    assert len([n for n in bcf.namelist() if n.endswith("markup.bcf")]) == 1
+    # Triaged later: the same clashes sort into their sections and nothing is left "not triaged".
+    verdicts = {c.id: {"verdict": "by_design"} for c in report.clashes}
+    assert "untriaged" not in {r.section for r in document.build_rows(report, verdicts, {}, None, None, evidence, {}, {})}
+
+
 def test_the_report_names_the_triage_model_that_ran(tmp_path, monkeypatch):
     report = _report(tmp_path)
     rows = document.build_rows(report, {}, {}, None, None, {}, {}, {})

@@ -1023,3 +1023,22 @@ their items into `drawings/` on attach and save and ingest them again on open. C
 (reportlab sheets: word boxes against the rendered ink, title fields, a scan, the caps, refusals, every route with the
 reader and comparison stubbed and once with the real reader's `FakeReader` and the real comparison, eviction, a
 project round trip), `test_docs_map.py` and the full server suite.
+
+**Nov 22 (2026-11-22), fixes from testing the live site** ([12](12-web-app.md), [14](14-files-in-and-out.md),
+[03](03-end-to-end-flows.md), [10](10-http-api-and-streams.md), [11](11-mcp-and-agent-links.md),
+[docs/engineer-workflow.md](../engineer-workflow.md)). **The report no longer needs triage:** the route and MCP's
+`generate_report` drop the 409 "Triage the report first"; `document.build_rows` puts a clash with no verdict, fix,
+kept edit, decision or mark in a new `untriaged` section, listed by clash test under "Not triaged" and counted on the
+cover, never as noise or needing action, and the report stays DRAFT while any is ("· n not triaged" on the stamp).
+The dialog (`ReportDoc.tsx`, `reportCounts`) builds with only the teams table read, says "n not triaged (listed by
+clash test)" and offers Triage all as a secondary. **Save says how it went** (`SaveButton` in `ProjectOverview.tsx`,
+both Save buttons): "Saved ✓" for 2 s, or "Not saved" with the reason. **A fixed clash** shows "Fixed ✓" in
+`ClashPanel` (what was kept, Undo when `coordination.undoableFix` finds its fix is the newest kept edit, "Propose a
+different fix" as a secondary) and App leaves out Propose fixes, Explore wider fix and Go to the clash. **The
+Overview's share closed** (`projectsApi.closedText`): 1 of 464 is "<1% closed", not "0%". **The clash list's line**
+("3 tests · 464 in the model", "Naming n…") wraps on a 300 px panel instead of being clipped (`.report-meta`). **The
+menu's "More"** names only the sections it shows. Checked: `test_document.py` (a report with no triage and an accepted
+fix), `test_projects.py` (the route builds with no triage), `test_document_engineer.py`, web
+`report-dialog.test.mjs`, `clash-fixed.test.mjs`, `projects-api.test.mjs` (Save, `closedText`), `corner.test.mjs`
+(the More label), `npm test`, `tsc`, `npm run build`, `test_docs_map.py` and the full server suite (the two pango PDF
+tests fail locally, as before).

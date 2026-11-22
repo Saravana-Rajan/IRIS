@@ -62,6 +62,16 @@ export function ReviewBlock({ clash, teams, signoffs, onAdd, onRemove }: {
   );
 }
 
+/** What the report will hold: a page for each clash with a fix, or that triage calls real and nobody marked otherwise;
+ *  a clash with no verdict, no fix and no mark is "not triaged", listed by clash test in a table of its own. Triage is
+ *  optional: it only sorts. The server also gives a page to a clash with a kept edit or a decision (document.build_rows). */
+export function reportCounts(clashes: ReportClash[], triage: Record<string, TriageVerdict>, evidence: Record<string, Evidence>,
+  reviewed: Record<string, Review>): { pages: ReportClash[]; untriaged: number } {
+  const pages = clashes.filter((c) => evidence[c.id] || (triage[c.id]?.verdict === "real_clash" && !reviewed[c.id]));
+  const untriaged = clashes.filter((c) => !evidence[c.id] && !reviewed[c.id] && !triage[c.id]?.verdict).length;
+  return { pages, untriaged };
+}
+
 const STEP: Record<string, () => string> = {
   drawing: () => `Drawing the accepted fixes as they could look built (${aiName("image")}, checked against the model)`,
   explaining: () => `${aiName("proposal")} is writing each clash's explanation`, summarising: () => "Writing the summary",
@@ -103,9 +113,9 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
     }).catch((e) => setError((e as Error).message));
   }, [report.id, sceneId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pages = narrowed.filter((c) => evidence[c.id] || (triage[c.id]?.verdict === "real_clash" && !reviewed[c.id])).length;
-  const reviewedPages = narrowed.filter((c) => (evidence[c.id] || (triage[c.id]?.verdict === "real_clash" && !reviewed[c.id]))
-    && reviewersOf(c, teams).every((t) => signoffs[c.id]?.some((s) => s.team === t))).length;
+  const { pages: pageClashes, untriaged } = reportCounts(narrowed, triage, evidence, reviewed);
+  const pages = pageClashes.length;
+  const reviewedPages = pageClashes.filter((c) => reviewersOf(c, teams).every((t) => signoffs[c.id]?.some((s) => s.team === t))).length;
 
   async function build() {
     setError(null); setReady(null); setStep({ type: "progress", step: "explaining", done: 0, total: pages });
@@ -136,7 +146,7 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
           report is kept with the project once built.</p>}
         <p className="hint">A PDF for the design teams: every real clash and every fix on its own page, with {aiName("proposal")}'s explanation,
           the original and the fix side by side, and a review block for each team involved. Model errors go in a table for the
-          models' authors; noise in a summary by clash test. BCF issues open in Revit, Navisworks, Solibri or BIMcollab.</p>
+          models' authors; noise in a summary by clash test, and clashes not triaged yet in a table of their own. BCF issues open in Revit, Navisworks, Solibri or BIMcollab.</p>
 
         <h3>What to produce</h3>
         <div className="seg" role="group" aria-label="Scope">
@@ -174,25 +184,25 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
           (one per clash that needs action, assigned to the team that acts)</label>
 
         <dl className="kv">
-          <dt>Pages</dt><dd>{triageDone ? `${pages} clashes need action` : "after triage"}</dd>
+          <dt>Pages</dt><dd>{pages} {pages === 1 ? "clash needs" : "clashes need"} action{untriaged ? ` · ${untriaged} not triaged (listed by clash test)` : ""}</dd>
           <dt>Fixes</dt><dd>{Object.values(evidence).filter((e) => e.status === "accepted").length} applied, {Object.values(evidence).filter((e) => e.status === "proposed").length} proposed</dd>
-          <dt>Reviews</dt><dd>{reviewedPages} of {pages} reviewed by every team: {reviewedPages >= pages && pages ? "final" : "the report will say DRAFT"}</dd>
+          <dt>Reviews</dt><dd>{reviewedPages} of {pages} reviewed by every team: {reviewedPages >= pages && pages && !untriaged ? "final" : "the report will say DRAFT"}</dd>
         </dl>
 
-        {!triageDone && <p className="nofix">{triageRunning
-          ? <><LoaderCircle size={13} className="spin" aria-hidden /> Triage is running ({Object.keys(triage).length} of {report.clashes.length}). The report can be built when it ends.</>
-          : <>The report sorts clashes by triage. Run it first (a few minutes for a few hundred clashes).
-            <button className="btn small" onClick={onRunTriage}>Triage all</button></>}</p>}
+        {!triageDone && untriaged > 0 && <p className="hint">{triageRunning
+          ? <><LoaderCircle size={13} className="spin" aria-hidden /> Triage is running ({Object.keys(triage).length} of {report.clashes.length}).
+            Build now and the clashes it hasn't sorted are listed as not triaged, or wait for it to end.</>
+          : <>Triage is optional. Without it, the clashes with a fix or a decision get their pages and the other {untriaged} are
+            listed by clash test as not triaged. Triage sorts them into real problems, model errors and noise (a few minutes for
+            a few hundred clashes). <button className="btn small ghost" onClick={onRunTriage}>Triage all</button></>}</p>}
         {busy && step?.type === "progress" && (
           <p className="hint"><LoaderCircle size={13} className="spin" aria-hidden /> {STEP[step.step]?.() ?? step.step}
             {step.total ? ` · ${step.done ?? 0} of ${step.total}` : ""}…</p>)}
         {error && <p className="bad">{error}</p>}
-        {error?.startsWith("Triage the report first") && !triageRunning &&
-          <button className="btn small" onClick={() => { setError(null); onRunTriage(); }}>Triage all</button>}
         <div className="actions">
           {ready
             ? <a className="btn primary big" data-tour="download" href={apiUrl(ready.url)} download={ready.name}><Download size={16} aria-hidden /> Download {ready.name} ({Math.max(1, Math.round(ready.bytes / 1024))} KB)</a>
-            : <button className="btn primary big" data-tour="build" disabled={!triageDone || busy || !models} onClick={build}>
+            : <button className="btn primary big" data-tour="build" disabled={busy || !models} onClick={build}>
               {busy ? <><i className="spinner" aria-hidden /> Building…</> : <><FileText size={16} aria-hidden /> Build the report</>}</button>}
           {ready && <button className="btn" onClick={() => setReady(null)}>Change and build again</button>}
         </div>

@@ -719,9 +719,10 @@ def build(ws: Workspace | Callable[[], Workspace], hooks: Hooks | None = None,
     @tool()
     def generate_report(ctx: Context, scope: Literal["combined", "team", "model"] = "combined",
                         wait_s: float = 40, check: str | None = None) -> dict:
-        """The design coordination report: a PDF (one, or one per team or per model) with BCF issues, built from the
-        triage (run triage first). `check`: only one kept check's clashes (its name, as get_session lists them).
-        Returns a download link. Costs one proposal."""
+        """The design coordination report: a PDF (one, or one per team or per model) with BCF issues. Triage first to
+        sort the clashes; without it, clashes with a fix or decision get pages and the rest are listed as not triaged.
+        `check`: only one kept check's clashes (its name, as get_session lists them). Returns a download link. Costs
+        one proposal."""
         link = call(ctx, "generate_report", {"scope": scope, **({"check": check} if check else {})})
         if hooks.build_document is None:
             raise RuntimeError("reports are not available here")
