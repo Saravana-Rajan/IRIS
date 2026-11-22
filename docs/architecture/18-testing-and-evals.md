@@ -398,6 +398,12 @@ to port 8000), or build the web app and let the server serve `web/dist` on one p
   16:10 and writes `web/public/demos/northbank.webp` and `cell.webp` with Pillow from the server's env. Run against a
   server with the demo models (`--url`, default `http://localhost:8765`). Recapture after the viewer's look or the demo
   models change; the README's "Two demos" table shares these pictures and the landing cards' numbers.
+- **`web/scripts/capture-drawings.cjs`** records the first screen's "2D drawing reader" clip (and with `--clash` the
+  3D clash check) in the app as a visitor tries it, against one origin (the server serving `web/dist`): Try the sample
+  drawings, both sample sheets read from their saved readings (no Gemini call; it needs no credentials), the
+  Mismatches tab, one mismatch shown on the sheet. It writes `web/public/demos/drawings.webp` with its still, and a
+  full-size MP4 to `~/Downloads/Iris-demo/` for the hackathon video, and prints each read's line, chips and
+  mismatches, so a run doubles as a product check of the demo path.
 - **`web/scripts/capture-proposals.cjs`** records the README's proposal clips: for each run (Northbank #1, #2, #3 and
   the cell's #66) it opens the demo, picks the clash, chooses Propose fixes (a live Gemini Pro call), waits for the
   verified options, flips Before / After, and for #1 and #66 opens Activity in its own window and replays the

@@ -394,6 +394,17 @@ canvas with the viewer's screenshot button, and crops it to 16:10 WebP with Pill
 Recapture after the viewer's look or the demo models change; the cards, the README table and the landing numbers move
 together and only from measured runs.
 
+### First-screen clips ("See it work")
+
+The first screen's **See it work** (`DemoClips.tsx`) plays two clips side by side: `check.webp` (the 3D clash check,
+from `capture-proposals.cjs --landing`, below) and `drawings.webp` (the 2D drawing reader), each 1000 × 625 with a
+`-still.webp`. `web/scripts/capture-drawings.cjs` records `drawings.webp` in the app from a fresh browser: Try the
+sample drawings, the sample building opening (sped up), the clean sheet read (its boxes, items and status chips),
+the mismatch sheet read, its Mismatches tab and one size that differs shown on the sheet. Both reads replay the
+saved readings ("Saved readings" above): no Gemini call, $0, and the page says so on screen. The same run writes a
+1920 px MP4 to `~/Downloads/Iris-demo/iris-drawings.mp4` for the hackathon video (`--clash`: `iris-3d-clash.mp4`).
+Recapture after the Drawings step's look, the sample sheets or their saved readings change.
+
 ### Landing clips
 
 `fix-northbank.webp` (#1, the duct through the girder) and `fix-cell.webp` (#66, the air pipe into the conveyor's

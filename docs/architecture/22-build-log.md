@@ -1023,3 +1023,24 @@ their items into `drawings/` on attach and save and ingest them again on open. C
 (reportlab sheets: word boxes against the rendered ink, title fields, a scan, the caps, refusals, every route with the
 reader and comparison stubbed and once with the real reader's `FakeReader` and the real comparison, eviction, a
 project round trip), `test_docs_map.py` and the full server suite.
+
+**Nov 22 (2026-11-22), the sample drawings demo: saved readings, the samples route, See it work**
+([docs/drawings.md](../drawings.md), [10](10-http-api-and-streams.md), [12](12-web-app.md), [19](19-demo-data.md)).
+Each sample sheet ships with the drawing reader's Gemini 3.8 Flash reply to it (`samples/drawings/*.reading.json`,
+made once by `evals/save_drawing_readings.py`), keyed by the PDF's sha256, `prompt_hash()` and the page size; a read
+of that very file replays it as the same NDJSON stream (`page.saved`, `evidence.saved_reading`, `done.saved`, $0, no
+budget check), and any other PDF is read live as before. `POST /api/scenes/{scene_id}/drawings/samples` attaches the
+open demo's sheets; the first screen's **Try the sample drawings** and the Drawings step's **Add the sample
+drawings** use it, and the page labels a replay "Saved AI reading of this sample (Gemini 3.8 Flash)". `--check`
+(no model call): the clean sheet 123 items (119 confirmed, 3 AI-read, 1 text only), 0 mismatches; the mismatch sheet
+124 items (121 / 2 / 1), exactly its 4 planted mismatches (size differs, missing in model, type differs, missing in
+drawing). The first screen's **See it work** (`DemoClips.tsx`) plays `check.webp` beside the new `drawings.webp`,
+recorded by `web/scripts/capture-drawings.cjs` against one origin with no Gemini credentials (Metal GPU, `--gpu`);
+the full-size MP4s for the hackathon video go to `~/Downloads/Iris-demo/`. Found on the way: the recorder's frames
+(CDP `Page.captureScreenshot` with `clip.scale` 2) laid the page out at twice the window while capturing, so every
+frame showed it shifted and the sheet viewer fitted the page to the wrong size; frames now come from Playwright's
+screenshot, and the sheet viewer fits the page again when its stage resizes until the reader moves the view.
+Checked: `test_drawing_reader.py` (a replay and three misses: another file, a changed prompt, another page size),
+`test_drawings.py` (the samples route, a sample read with no model call, and an upload read live), the web tests
+(`drawings-samples.test.mjs`), `tsc`, the build, `test_docs_map.py`, the full server suite (only the two pango PDF
+tests fail locally).

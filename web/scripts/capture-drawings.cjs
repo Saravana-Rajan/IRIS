@@ -45,7 +45,7 @@ const MP4 = path.join(MP4_DIR, CLASH ? "iris-3d-clash.mp4" : "iris-drawings.mp4"
 const WEBP = arg("--webp", CLASH ? "" : path.join(ROOT, "web", "public", "demos", "drawings.webp"));
 const GL = process.argv.includes("--gpu")
   ? ["--enable-gpu", "--ignore-gpu-blocklist", `--use-angle=${{ win32: "d3d11", darwin: "metal" }[process.platform] ?? "vulkan"}`]
-  : ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"];
+  : ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"];
 // The window (a desktop layout), its pixel ratio, the clip's width (the start screen's player, 16:10), the WebP's and
 // the MP4's frames a second and widths, and where the speed sits (fractions; y is the badge's bottom edge).
 const [VW, VH] = arg("--size", "1280x800").split("x").map(Number);
@@ -78,19 +78,21 @@ function paceOf(at) {
   return segs.filter(([a, b]) => b - a > 0.05);
 }
 
-/** The frames: the whole window at full scale (a screencast sends it at its CSS size), about 12 a second, each named
- * with the time it shows. */
-async function grab(ctx, page, dir, t0) {
+/** The frames: the whole window at the context's pixel ratio (a screencast sends it at its CSS size), about 12 a
+ * second, each named with the time it shows. Playwright's own screenshot, not CDP's `Page.captureScreenshot` with a
+ * `clip.scale`: in the Chromium of Playwright 1.65 that lays the page out in a window `scale` times as large while
+ * it captures, so every frame showed the page shifted into its bottom-right quarter, and the page's resize observers
+ * saw the larger window (the sheet viewer fitted the page to it and drew it off screen). */
+async function grab(page, dir, t0) {
   fs.mkdirSync(dir, { recursive: true });
-  const cdp = await ctx.newCDPSession(page); let n = 0, on = true;
-  const clip = { x: 0, y: 0, width: VIEW.width, height: VIEW.height, scale: SCALE };
+  let n = 0, on = true;
   const loop = (async () => {
     while (on) {
       const a = Date.now();
       try {
-        const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, clip });
+        const data = await page.screenshot({ type: "jpeg", quality: 90 });
         const t = ((a + Date.now()) / 2 - t0) / 1000;
-        fs.writeFileSync(path.join(dir, `f${String(n++).padStart(5, "0")}_${t.toFixed(3)}.jpg`), Buffer.from(data, "base64"));
+        fs.writeFileSync(path.join(dir, `f${String(n++).padStart(5, "0")}_${t.toFixed(3)}.jpg`), data);
       } catch { break; }   // the page closed
       await new Promise((r) => setTimeout(r, Math.max(0, GRAB_MS - (Date.now() - a))));
     }
@@ -173,7 +175,7 @@ async function record(browser, tmp) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.mouse.move(VIEW.width * 0.62, VIEW.height * 0.82);
   await pause(0.8);
-  const stop = await grab(ctx, page, path.join(tmp, "app"), t0);
+  const stop = await grab(page, path.join(tmp, "app"), t0);
   mark("start");
   await shot("01-start");
   await pause(1.0);
