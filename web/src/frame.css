@@ -98,3 +98,39 @@ kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 5px; border-radi
 @media (max-width: 760px) {
   .proj-shell-alert { margin: 10px 16px 0; }
 }
+
+/* ---- The owner's white + pink theme, on every screen (loaded last, so it wins over the component sheets) ----------
+   White surfaces with hairlines; grey only for tracks (segmented controls, table header bands). Pink and lavender are
+   the accent: primary buttons wear the pink-to-lavender gradient (--holo-cta) with white text, secondary buttons turn
+   pink on hover, selected rows a pink tint with a pink left edge, form controls pink. Engineering meanings stay:
+   geometry-verified green, clash red, A red and B green in 3D. */
+.btn.primary, .rq-btn.rq-primary, .pcard-accept.btn, button.btn.primary.big {
+  background: var(--holo-cta); border-color: transparent; color: #fff; }
+.btn.primary:hover:not(:disabled), .rq-btn.rq-primary:not(:disabled):hover {
+  background: var(--holo-cta); border-color: transparent; color: #fff; filter: saturate(1.08) brightness(1.04);
+  box-shadow: 0 6px 18px -6px rgba(211, 36, 156, .55), 0 2px 6px -2px rgba(154, 70, 221, .35); }
+.btn.primary:focus-visible, .rq-btn.rq-primary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.btn.primary:disabled, .rq-btn.rq-primary:disabled { background: var(--holo-cta); opacity: .45; }
+.btn:not(.primary):not(.ghost):not(.danger):hover:not(:disabled) { border-color: var(--accent-line); color: var(--accent-ink);
+  background: var(--accent-soft); }
+.btn.ghost:hover:not(:disabled) { background: var(--accent-soft); }
+input[type="checkbox"], input[type="radio"], input[type="range"], progress { accent-color: #c8309f; }
+:focus-visible { outline-color: var(--accent); }
+/* Every spinner is the Aperture's blades in the holo colours */
+.spinner { background: var(--holo); }
+/* Chips and count badges on white with a hairline (not grey fills); selected ones pink */
+.chip { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.chip.accent, .badge-n { background: var(--accent-soft); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent-line); }
+/* Selected list rows: a light pink tint with a pink left edge */
+.report .clash-row.pick { background: var(--accent-soft); box-shadow: inset 2px 0 var(--pink); }
+.report .clash-row:hover { background: #fffafe; }
+/* Tabs: white strips, the active tab underlined in pink */
+.dockview-theme-iris { --dv-tabs-and-actions-container-background-color: #fff; --dv-group-view-background-color: #fff;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #fff; --dv-activegroup-visiblepanel-tab-background-color: #fff;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #fff; --dv-activegroup-hiddenpanel-tab-background-color: #fff;
+  --dv-separator-border: var(--line); --dv-paneview-header-border-color: var(--line); }
+.dockview-theme-iris .dv-tab.dv-active-tab, .dockview-theme-iris .dv-tab.dv-active-tab:focus { box-shadow: inset 0 -2px 0 var(--pink); }
+.pane .tabs button.on, .tabs [role="tab"].on, .tabs [role="tab"][aria-selected="true"] { box-shadow: inset 0 -2px 0 var(--pink); }
+/* Section kickers and eyebrows in the accent */
+.proj-eyebrow, .menu-section > h3 { color: var(--accent-ink); }
+/* Text buttons and links take --accent-ink (pink-magenta) through the tokens. */
