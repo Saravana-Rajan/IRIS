@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import tempfile
 import time
 import uuid
@@ -36,7 +35,7 @@ import numpy as np
 from . import facets, requirements, verify
 from .limits import env_int
 from .reports import Report, ReportClash, ReportElement, plain_name
-from .scene import MESH_KERNEL, IfcScene, faceted, kernel
+from .scene import MESH_KERNEL, THREADS, IfcScene, faceted, kernel
 
 TOLERANCE_M = 0.001        # an overlap must be deeper than this to be a hard clash; less is a touch
 DUPLICATE_M = 0.001        # two copies of one thing: boxes and vertices agree within this
@@ -45,6 +44,11 @@ CAP = env_int("IRIS_DETECT_CAP", 5000)   # clashes kept per test; a test that re
 RULES = ("same_element", "connected", "assembly", "host")
 RULE_LABEL = {"same_element": "same element", "connected": "joined by ports", "assembly": "one assembly",
               "host": "door or window in its wall"}
+# The measurement's version, part of a saved check's key (saved_checks.py): bump it with any change to what a test
+# measures (`_candidates`, `_offset`, `_tree`, `_measure`, `_Solids`, `_same_shape`), so a check saved by older code is
+# never replayed; then make the saved checks again (`python -m iris.saved_checks`). Boxes have their own
+# (`saved_checks.BOXES_VERSION`).
+VERSION = 1
 
 Event = Callable[[dict], None]
 
@@ -218,6 +222,7 @@ class Run:
     seconds: float
     offset: list[float]       # what the triangle tree was shifted by (zero unless the models are far from the origin)
     state: dict               # what the next run compares against
+    saved: bool = False       # measured by a saved check of the unchanged sample models (saved_checks.py), not anew
 
 
 # ------------------------------------------------------------------------------------------------- the open models
@@ -408,18 +413,18 @@ def presets(scene: IfcScene, index: _Index | None = None) -> list[Test]:
 
 # ------------------------------------------------------------------------------------------------- broad phase
 
+CANDIDATES_CHUNK = 1 << 20   # window entries the broad phase holds at once (about 50 MB of index arrays)
+
+
 def _candidates(ix: _Index, a: list[str], b: list[str] | None, margin: float) -> list[tuple[str, str]]:
     """Every pair whose boxes come within `margin` of each other: a sort and sweep on x, then y and z. A pair it does
-    not return cannot overlap or come that close, so it needs no further check. `b` None pairs A with itself, once."""
+    not return cannot overlap or come that close, so it needs no further check. `b` None pairs A with itself, once.
+    Pairs come element by element of `a`, each one's in sweep order (by the start of B's boxes on x)."""
     if not a or (b is not None and not b):
         return []
     A = np.array([ix.boxes[g] for g in a])            # (n, 2, 3)
     B = A if b is None else np.array([ix.boxes[g] for g in b])
     ids_b = a if b is None else b
-    # A check on filters can take an element on both sides (a filter against Everything): never pair an element with
-    # itself, and each pair once.
-    both = b is not None and not set(a).isdisjoint(b)
-    once: set[tuple[str, str]] = set()
     order = np.argsort(B[:, 0, 0])
     rank = np.empty(len(order), dtype=np.int64)
     rank[order] = np.arange(len(order))
@@ -433,25 +438,44 @@ def _candidates(ix: _Index, a: list[str], b: list[str] | None, margin: float) ->
     short = order[widths[order] <= cut]
     short_min = B[short, 0, 0]
     widest = float(widths[short].max()) if len(short) else 0.0
-    out = []
-    for i, g in enumerate(a):
-        lo, hi = A[i, 0] - margin, A[i, 1] + margin
-        start = np.searchsorted(short_min, lo[0] - widest, side="left")
-        end = np.searchsorted(short_min, hi[0], side="right")
-        js = np.concatenate([short[start:end], long_])
-        js = js[np.argsort(rank[js], kind="stable")]   # in sweep order, as always
-        js = js[(B[js, 0, 0] <= hi[0]) & (B[js, 1, 0] >= lo[0]) & (B[js, 0, 1] <= hi[1]) & (B[js, 1, 1] >= lo[1])
-                & (B[js, 0, 2] <= hi[2]) & (B[js, 1, 2] >= lo[2])]
-        for j in js:
-            h = ids_b[j]
-            if b is None and h <= g:      # self test: each unordered pair once, never an element with itself
-                continue
-            if both:
-                if h == g or (min(g, h), max(g, h)) in once:
-                    continue
-                once.add((min(g, h), max(g, h)))
-            out.append((g, h))
-    return out
+    lo, hi = A[:, 0] - margin, A[:, 1] + margin       # (n, 3)
+    starts = np.searchsorted(short_min, lo[:, 0] - widest, side="left")
+    ends = np.searchsorted(short_min, hi[:, 0], side="right")
+    # Every element's window at once, in chunks (a big model's windows would not fit together): the element, each box
+    # in its window, then every long box; kept when the boxes come within the margin on all three axes.
+    sizes = ends - starts + len(long_)
+    found_i, found_j = [], []
+    first = 0
+    while first < len(a):
+        took = int(np.searchsorted(np.cumsum(sizes[first:]), CANDIDATES_CHUNK, side="right"))
+        idx = np.arange(first, first + max(1, took))
+        first = int(idx[-1]) + 1
+        n_short = np.maximum(ends[idx] - starts[idx], 0)   # an empty window, as a slice past its end gives
+        i = np.concatenate([np.repeat(idx, n_short), np.repeat(idx, len(long_))])
+        j = np.concatenate([short[np.arange(int(n_short.sum())) + np.repeat(starts[idx] - (np.cumsum(n_short) - n_short),
+                                                                           n_short)],
+                            np.tile(long_, len(idx))])
+        near = ((B[j, 0, 0] <= hi[i, 0]) & (B[j, 1, 0] >= lo[i, 0]) & (B[j, 0, 1] <= hi[i, 1]) & (B[j, 1, 1] >= lo[i, 1])
+                & (B[j, 0, 2] <= hi[i, 2]) & (B[j, 1, 2] >= lo[i, 2]))
+        found_i.append(i[near])
+        found_j.append(j[near])
+    i, j = np.concatenate(found_i), np.concatenate(found_j)
+    if b is None:   # a self test: each unordered pair once (the later GlobalId second), never an element with itself
+        _, code = np.unique(np.array(a, dtype=str), return_inverse=True)
+        keep = code[j] > code[i]
+        i, j = i[keep], j[keep]
+    by = np.lexsort((rank[j], i))                     # element by element, each one's in sweep order
+    i, j = i[by], j[by]
+    if b is not None and not set(a).isdisjoint(b):
+        # A check on filters can take an element on both sides (a filter against Everything): never pair an element
+        # with itself, and each pair once, the first time it comes.
+        _, code = np.unique(np.array([*a, *b], dtype=str), return_inverse=True)
+        ca, cb = code[:len(a)][i], code[len(a):][j]
+        pair = np.minimum(ca, cb) * (int(code.max()) + 1) + np.maximum(ca, cb)
+        _, at = np.unique(pair, return_index=True)
+        at = np.sort(at[ca[at] != cb[at]])
+        i, j = i[at], j[at]
+    return list(zip(np.array(a, dtype=object)[i].tolist(), np.array(ids_b, dtype=object)[j].tolist()))
 
 
 # ------------------------------------------------------------------------------------------------- narrow phase
@@ -479,7 +503,7 @@ def _tree(ix: _Index, gids: set[str], offset: np.ndarray):
         if offset.any():
             s.set("model-offset", tuple(float(x) for x in offset))
         kw = {"geometry_library": MESH_KERNEL} if mesh else {}
-        tree.add_iterator(ifcopenshell.geom.iterator(s, ix.scene.models[i], os.cpu_count() or 1, include=include, **kw))
+        tree.add_iterator(ifcopenshell.geom.iterator(s, ix.scene.models[i], THREADS, include=include, **kw))
     return tree
 
 
@@ -688,14 +712,30 @@ def clash_id(test_id: str, a: str, b: str) -> str:
     return "s" + hashlib.sha1(f"{test_id}|{x}|{y}".encode()).hexdigest()[:9]
 
 
+def _plan(ix: _Index, tests: list[Test]) -> list[tuple[Test, list[str], list[str] | None, list[tuple[str, str]]]]:
+    """The broad phase of every test: (test, side A, side B or None, candidate pairs)."""
+    plans = []
+    for t in tests:
+        a = _sized(ix, ix.select(t.a), t.min_size_m)
+        b = None if t.b is None else _sized(ix, ix.select(t.b), t.min_size_m)
+        margin = t.clearance_m if t.kind == "clearance" else t.tolerance_m
+        plans.append((t, a, b, _candidates(ix, a, b, margin)))
+    return plans
+
+
 def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None = None, previous: dict | None = None,
-        cap: int = CAP, title: str | None = None, known: dict | None = None, root: Path | None = None) -> Run:
+        cap: int = CAP, title: str | None = None, known: dict | None = None, root: Path | None = None,
+        replay: bool = False, measured: dict | None = None) -> Run:
     """Run the tests (default: `default_tests`) over the open models and return them as a clash report.
 
     `previous`: the state this run compares with (what it calls new, resolved or no longer checked): the same check's
     last run. `known`: every clash the scene has given an id and a number ({"clashes": id → {kind, a, b}, "numbers",
     "open": ids in the open list}, `checks.Register.known`); without it, `previous` is all the run knows. `root`: the
-    folder the report keeps its files in (a new temporary one, deleted with the report, by default)."""
+    folder the report keeps its files in (a new temporary one, deleted with the report, by default). `replay`: take
+    the measurement from a saved check when the scene is the shipped sample models with no kept edit, under the same
+    tests and candidate pairs (saved_checks.py; the workspace's runs do, a direct call measures); everything after the
+    measurement is made as in a live run. `measured`: filled with each test's measurement, test id → (candidate pairs,
+    hits, touches), for saving a check."""
     emit = on_event or (lambda e: None)
     if known is None:
         was = (previous or {}).get("clashes", {})
@@ -709,16 +749,19 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
     emit({"type": "start", "elements": len(ix.entity), "tests": [{"id": t.id, "name": t.name, "kind": t.kind}
                                                                    for t in tests]})
     # Broad phase for every test first, so the triangle tree is built once over just what can clash.
-    plans = []
-    for t in tests:
-        a = _sized(ix, ix.select(t.a), t.min_size_m)
-        b = None if t.b is None else _sized(ix, ix.select(t.b), t.min_size_m)
-        margin = t.clearance_m if t.kind == "clearance" else t.tolerance_m
-        plans.append((t, a, b, _candidates(ix, a, b, margin)))
+    plans = _plan(ix, tests)
     needed = {g for _, _, _, pairs in plans for p in pairs for g in p}
     offset = _offset(ix)
-    emit({"type": "phase", "text": f"Building geometry for {len(needed)} elements"})
-    tree = _tree(ix, needed, offset) if needed else None
+    saved = None
+    if replay and needed:
+        from . import saved_checks   # it reads this module's measures
+        saved = saved_checks.find(scene, ix, tests, plans, offset)
+    if saved is not None:
+        emit({"type": "phase", "text": f"Unchanged sample models: taking the saved geometry of {len(needed)} elements"})
+        tree = None
+    else:
+        emit({"type": "phase", "text": f"Building geometry for {len(needed)} elements"})
+        tree = _tree(ix, needed, offset) if needed else None
     solids = _Solids(ix)
 
     hits_found: list[tuple[Test, object]] = []
@@ -728,7 +771,12 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
     for n, (t, a, b, pairs) in enumerate(plans):
         t1 = time.perf_counter()
         emit({"type": "test", "index": n, "id": t.id, "name": t.name, "candidates": len(pairs)})
-        hits, touches = _measure(ix, solids, t, pairs, tree, offset) if tree is not None else ({}, [])
+        if saved is not None:
+            hits, touches = saved[t.id]
+        else:
+            hits, touches = _measure(ix, solids, t, pairs, tree, offset) if tree is not None else ({}, [])
+        if measured is not None:
+            measured[t.id] = (pairs, hits, touches)
         contacts.update(frozenset(p) for p in touches)
         touching = len(touches)
         excluded: Counter = Counter()
@@ -798,7 +846,7 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
              "selections": selections, "numbers": numbers, "contacts": [sorted(p) for p in contacts]}
     seconds = round(time.perf_counter() - t0, 2)
     return Run(report, coverage, {k: v for k, v in diff.items() if k != "new_ids"}, len(checked_ids), seconds,
-               [float(x) for x in offset], state)
+               [float(x) for x in offset], state, saved=saved is not None)
 
 
 def _assign_ids(hits: list[tuple[Test, object]], known: dict[str, dict]) -> list[str]:

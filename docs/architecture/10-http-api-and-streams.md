@@ -6,6 +6,7 @@
 > (the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health`, the voice origin check, projects and
 > decisions routes, 2D drawing routes with the sample drawings and saved readings, the route count, the front door
 > and the errors table; re-branded 2026-11-11) ·
+> (projects and decisions routes, 2D drawing routes, the detect stream's `phase` and `done`; re-branded 2026-11-11) ·
 > **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
@@ -352,7 +353,7 @@ the files instead of patching by index. `_with_patch` holds
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
 | `GET` | `/api/scenes/{scene_id}/detect/tests` | The tests a run would use (defaults and presets, or what the requirements compile to) (`Workspace.detect_tests`) | none | `{tests, teams, elements, file_elements, rules, requirements, check: {tolerance_m, clearance_m, rules, min_size_m, everything}}` (`check`: a check on filters' defaults, `Workspace.check_defaults`; `everything`: the selection its Everything takes, a site model left out) | free |
-| `POST` | `/api/scenes/{scene_id}/detect/stream` | Runs one check (`Workspace.detect` → `detect.run`), keeps its result with the scene's other checks and opens every kept check's clashes as one report ([docs/detection.md](../detection.md), "Kept checks"); with `all`, every kept check again, one after another (`Workspace.detect_all`) | `DetectRequest {tests: [...] or null, check: key or null, all: false}`; a test with no id and a side with a `filter` is a check on filters ([docs/filters.md](../filters.md)); `check` runs a kept check again with the tests it ran with; `done` carries `check` (its key; null for all), `ran`, `checks` (summaries) and `tests` (as run, or null) | NDJSON | `detect_limit` (`IRIS_DETECT_PER_HOUR`/`_DAY`), once for Run all again too; the one run after a hand edit kept with clashes (`after_edit`) on `edit_rerun_limit` instead; 422 bad tests; 404 a `check` no longer kept |
+| `POST` | `/api/scenes/{scene_id}/detect/stream` | Runs one check (`Workspace.detect` → `detect.run`), keeps its result with the scene's other checks and opens every kept check's clashes as one report ([docs/detection.md](../detection.md), "Kept checks"); with `all`, every kept check again, one after another (`Workspace.detect_all`) | `DetectRequest {tests: [...] or null, check: key or null, all: false}`; a test with no id and a side with a `filter` is a check on filters ([docs/filters.md](../filters.md)); `check` runs a kept check again with the tests it ran with; `done` carries `check` (its key; null for all), `ran`, `checks` (summaries), `saved` (one check: measured by the samples' saved check) and `tests` (as run, or null) | NDJSON | `detect_limit` (`IRIS_DETECT_PER_HOUR`/`_DAY`), once for Run all again too; the one run after a hand edit kept with clashes (`after_edit`) on `edit_rerun_limit` instead; 422 bad tests; 404 a `check` no longer kept |
 | `GET` | `/api/scenes/{scene_id}/checks` | The scene's kept checks and the report listing their clashes, made again with a new id if the server let it go (`Workspace.checks_info`, `union_report`); no detection run | none | `{report_id (null: none kept), checks: [{key, name, title, tests, requirements, revision, stale, ran_at, seconds, elements, coverage, diff, clashes}]}` | free; 404 scene |
 | `DELETE` | `/api/scenes/{scene_id}/checks/{key}` | Drops a check on filters (`Workspace.remove_check`): its clashes leave the list unless another check found them; their numbers stay theirs | none | `{report (null when none is left), checks}` | free; 404 no such check, 409 `models` (run again, never removed) |
 
@@ -514,12 +515,12 @@ model that ran it (Gemini Pro's label, or the escalation model's).
 
 | Type | Fields |
 |---|---|
-| `phase` | `text` ("Reading the models", "Building geometry for n elements") |
+| `phase` | `text` ("Reading the models", "Building geometry for n elements"; for the unchanged sample models, "Unchanged sample models: taking the saved geometry of n elements": a saved check, [06](06-geometry-and-detection.md)) |
 | `start` | `elements`, `tests [{id, name, kind}]` |
 | `test` | `index`, `id`, `name`, `candidates` |
 | `test_done` | `index`, `coverage` (test, name, kind, elements, candidate pairs, clashes, touching, excluded, partial, seconds) |
 | `check` | Run all again only, before each check's own events: `key`, `name`, `index`, `of` |
-| `done` | `report` (the union of every kept check, with `scene_id`, `serial`, `checks`), `check` (the key run, null for all), `ran [keys]`, `checks [summaries]`, `coverage`, `diff {new, resolved, no_longer_checked, first}` against that check's own last run (null for all), `elements`, `seconds`, `offset`, `requirements`, `tests` |
+| `done` | `report` (the union of every kept check, with `scene_id`, `serial`, `checks`), `check` (the key run, null for all), `ran [keys]`, `checks [summaries]`, `coverage`, `diff {new, resolved, no_longer_checked, first}` against that check's own last run (null for all), `elements`, `seconds`, `offset`, `saved` (one check: true when its measurement came from the samples' saved check; not sent for all), `requirements`, `tests` |
 | `error` | `detail` |
 
 **`POST /api/reports/{report_id}/triage/stream`** (`triage.Job`, `triage.triage_report`):

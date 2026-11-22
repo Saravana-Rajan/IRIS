@@ -30,9 +30,9 @@ def test_an_added_file_is_measured_alone_and_found(files, monkeypatch):
     measured = []
     real = IfcScene._measure
 
-    def spy(self, indexes, progress=None):
+    def spy(self, indexes, progress=None, saved=False):
         measured.append(list(indexes))
-        return real(self, indexes, progress)
+        return real(self, indexes, progress, saved)
 
     monkeypatch.setattr(IfcScene, "_measure", spy)
     seen = []

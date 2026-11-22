@@ -37,6 +37,16 @@ The server replays it instead of calling the model when that exact PDF is read w
 reading, and charges nothing ([docs/drawings.md](../docs/drawings.md), "Saved readings"). Run the script again,
 from the repo root with `uv run --directory server python ../evals/save_drawing_readings.py`, after regenerating the
 PDFs or changing the reader's prompt; until then those sheets are read live.
+## Saved checks
+
+`saved-checks/northbank.json` is generated, not edited by hand: the element boxes of the four Northbank files the demo
+opens and the clashes their default check measures, so the demo's first check builds no geometry
+([docs/detection.md](../docs/detection.md), "Saved checks for the samples"). It keeps one entry per platform
+(linux/x86_64 for Cloud Run and CI, macOS/arm64 for development), because the same files measure a little differently
+on another processor. It is geometry from the files above only: no AI output and no customer data. Regenerate it
+after any change to these files, to what detection measures or how boxes are made, or to the IfcOpenShell version,
+from `server/`, with `uv run python -m iris.saved_checks --docker` (this machine's entry, then linux/x86_64's in
+Docker); `server/tests/test_saved_checks.py` fails when either entry is stale.
 
 ## Open the demos
 

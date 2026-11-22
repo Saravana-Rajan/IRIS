@@ -1,6 +1,7 @@
 """Iris detection (docs/detection.md) on small synthetic models: one case per rule and measure."""
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from iris import detect, plans, triage
@@ -556,3 +557,78 @@ def test_now_measures_a_detected_clash_as_the_run_did(paths, tmp_path):
     assert now["distance_m"] == pytest.approx(duct["distance_m"], abs=1e-6)
     ws.scene(sid).translate([duct["a"]["global_id"]], (0.0, 0.0, -0.6))
     assert detect.measure_pair(ws.scene(sid), duct["a"]["global_id"], duct["b"]["global_id"]) is None
+
+
+def _sweep_one_by_one(ix, a, b, margin):
+    """The broad phase as it was written first, one element at a time (Nov 22): `_candidates` must give exactly its
+    pairs, in its order (a saved check's key holds them)."""
+    if not a or (b is not None and not b):
+        return []
+    A = np.array([ix.boxes[g] for g in a])
+    B = A if b is None else np.array([ix.boxes[g] for g in b])
+    ids_b = a if b is None else b
+    both = b is not None and not set(a).isdisjoint(b)
+    once = set()
+    order = np.argsort(B[:, 0, 0])
+    rank = np.empty(len(order), dtype=np.int64)
+    rank[order] = np.arange(len(order))
+    widths = B[:, 1, 0] - B[:, 0, 0]
+    cut = float(np.percentile(widths, 99)) if len(widths) > 100 else float(widths.max())
+    long_ = np.nonzero(widths > cut)[0]
+    short = order[widths[order] <= cut]
+    short_min = B[short, 0, 0]
+    widest = float(widths[short].max()) if len(short) else 0.0
+    out = []
+    for i, g in enumerate(a):
+        lo, hi = A[i, 0] - margin, A[i, 1] + margin
+        start = np.searchsorted(short_min, lo[0] - widest, side="left")
+        end = np.searchsorted(short_min, hi[0], side="right")
+        js = np.concatenate([short[start:end], long_])
+        js = js[np.argsort(rank[js], kind="stable")]
+        js = js[(B[js, 0, 0] <= hi[0]) & (B[js, 1, 0] >= lo[0]) & (B[js, 0, 1] <= hi[1]) & (B[js, 1, 1] >= lo[1])
+                & (B[js, 0, 2] <= hi[2]) & (B[js, 1, 2] >= lo[2])]
+        for j in js:
+            h = ids_b[j]
+            if b is None and h <= g:
+                continue
+            if both:
+                if h == g or (min(g, h), max(g, h)) in once:
+                    continue
+                once.add((min(g, h), max(g, h)))
+            out.append((g, h))
+    return out
+
+
+class _Boxes:
+    def __init__(self, boxes):
+        self.boxes = boxes
+
+
+def test_the_broad_phase_gives_every_near_pair_in_sweep_order(monkeypatch):
+    """All windows at once, in chunks, give the pairs the one-at-a-time sweep gave: self tests, two sides, an element
+    on both sides, long boxes, boxes that start together, margins; however small the chunks."""
+    rng = np.random.default_rng(7)
+    lo = np.round(rng.uniform(0, 40, (400, 3)), 1)            # rounded: many boxes start at the same x
+    size = np.round(rng.uniform(0.1, 3, (400, 3)), 1)
+    size[::50, 0] = 30.0                                       # a few long ones (slabs, long walls)
+    ids = [f"g{n:03d}{'abc'[n % 3]}" for n in rng.permutation(400)]
+    ix = _Boxes({g: np.array([lo[n], lo[n] + size[n]]) for n, g in enumerate(ids)})
+    a, b, mixed = sorted(ids[:250]), sorted(ids[250:]), ids[150:330]
+    cases = [(a, None), (ids, None), (a, b), (b, a), (a, mixed), (mixed, a), (ids[:3], None), (a[:1], b), ([], None),
+             (a, [])]
+    for sa, sb in cases:
+        for margin in (0.0, 0.001, 0.5):
+            before = _sweep_one_by_one(ix, sa, sb, margin)
+            for chunk in (detect.CANDIDATES_CHUNK, 500, 1):
+                monkeypatch.setattr(detect, "CANDIDATES_CHUNK", chunk)
+                assert detect._candidates(ix, sa, sb, margin) == before, (chunk, margin)
+
+
+def test_the_broad_phase_on_the_fixtures_as_before(paths):
+    ix = detect._Index(IfcScene(paths))
+    scene = ix.scene
+    for t in detect.default_tests(scene, ix) + detect.presets(scene, ix):
+        a = ix.select(t.a)
+        b = None if t.b is None else ix.select(t.b)
+        for margin in (0.0, t.tolerance_m, 0.025):
+            assert detect._candidates(ix, a, b, margin) == _sweep_one_by_one(ix, a, b, margin)

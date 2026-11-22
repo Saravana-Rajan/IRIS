@@ -10,6 +10,7 @@
 > PDF drawings, the report without triage; re-branded on 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
 > PDF drawings, sample drawings and their saved readings, what `samples/` keeps in git and the image; re-branded on
 > 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
+> PDF drawings, what git keeps of `samples/`; re-branded on 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
 Iris reads models (IFC, or STEP converted to IFC), clash reports (Navisworks XML with its pictures), pictures the
@@ -91,7 +92,8 @@ flowchart LR
 - **What counts.** `IfcScene.products()` and `bounds()` take every `IfcElement` with a body that is physical
   (`scene.not_physical`: not an `IfcFeatureElement`, not virtual, not a provision for void). Boxes are measured once
   at open (`IfcScene.bounds`, in batches of `BOUNDS_BATCH`, meshes through CGAL; from `IRIS_BIG_MODEL_MB`
-  every element goes through CGAL). See [06](06-geometry-and-detection.md) and [docs/uploads.md](../uploads.md).
+  every element goes through CGAL; a shipped sample file takes its saved boxes from `samples/saved-checks/`). See
+  [06](06-geometry-and-detection.md) and [docs/uploads.md](../uploads.md).
 
 ### Sample models
 
@@ -100,6 +102,9 @@ flowchart LR
   (`drawings.sample_names`, below). Git keeps only `samples/README.md`, the eight demo models and `samples/drawings/`
   (`.gitignore`); the image copies the folder in, filtered by `.dockerignore` to the demo file types (models, JSON,
   XML, pictures) and `samples/drawings/*.pdf` (`Dockerfile`).
+  `MODEL_SUFFIXES`). Git keeps only the named sample files, `README.md`, `drawings/` and `saved-checks/` (the
+  samples' saved checks, [06](06-geometry-and-detection.md)); the rest is gitignored. The Cloud Run image copies the
+  folder in at deploy.
 - `POST /api/scenes` opens the named samples (`Workspace.open`). A name that resolves outside `samples/` is refused
   as not found. A STEP sample is converted first, with the fast model (`GEMINI_FAST_MODEL`) as classifier (`app._classifier`).
 - The page picks its defaults from the list: every `…structure|mep|architecture|site.ifc` (App.tsx), and the
@@ -556,7 +561,7 @@ outside `$TMP`.
 
 | What | Where | Lives until |
 |---|---|---|
-| Sample models, sample reports, shipped STEP cache | `samples/`, `samples/reports/<name>/`, `samples/step-cache/` | Redeploy (part of the image) |
+| Sample models, sample reports, shipped STEP cache, the samples' saved checks | `samples/`, `samples/reports/<name>/`, `samples/step-cache/`, `samples/saved-checks/` | Redeploy (part of the image) |
 | Open scenes and every edit | Memory (`Workspace.scenes`, `IfcScene.models`) | Evicted by `IRIS_MAX_SCENES` or `IRIS_SCENE_BUDGET_MB` (oldest first, live agent links' last), or restart |
 | Uploaded models (unpacked) | `$TMP/iris-models/<tmp>/`, one folder per opening or adding | The scene is dropped, or the open or add fails; a removed model's file at once, its folder once it holds none of the scene's files |
 | STEP conversions (sample or upload) | `<scene folder>/converted-<i>/<stem>.ifc` and `<stem>.step.json` | The scene is dropped |

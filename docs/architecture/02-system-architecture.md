@@ -4,8 +4,8 @@
 > `server/iris/model_client.py`, `server/iris/limits.py`, `server/iris/agents.py`, `server/iris/origins.py`,
 > `deploy/deploy.sh`, `firebase.json`, `.github/workflows/deploy.yml`, `web/src/api.ts`, `web/src/App.tsx` (as the
 > caller), `server/pyproject.toml`, `web/package.json` ·
-> **Checked against code:** re-branded on 2026-11-11; hosting, the middleware stack and the request lifecycle
-> re-checked on 2026-11-22 ·
+> **Checked against code:** re-branded on 2026-11-11; hosting, the middleware stack, the request lifecycle and
+> IfcOpenShell's threads re-checked on 2026-11-22 ·
 > **Deeper design:** none of its own; the docs in the last table link to the feature designs in `docs/*.md`.
 
 Iris is one web app: a React page with a three.js viewer, and one Python process that holds the open models, checks
@@ -170,7 +170,7 @@ begins with no open models.
 | anyio worker threads (one `CapacityLimiter(40)` at anyio 4.15.1) | Starlette and FastAPI | every plain `def` route; every `next()` of a stream whose body is a sync generator (`propose/stream`, `detect/stream`, `plan/stream`, `document/stream`, `triage/stream`, `titles/stream`, `upload/stream`), so such a stream holds a worker thread while it waits for its next event; `run_in_threadpool` work (`_unpack`, `transcribe`, preview counts); MCP tool calls (the MCP SDK runs sync tools with `anyio.to_thread.run_sync`) |
 | Daemon workers | `owner.spawn` | the work behind each streamed request (propose, detect, plan, document, chat, built, context, upload stream), each `triage.Job` and `titles.Job` run, MCP jobs (`agents.Link.start` with `hooks.spawn`) |
 | Pools inside a workflow | `ThreadPoolExecutor`, each task through `owner.submit` | see the next table |
-| IfcOpenShell's own threads | `ifcopenshell.geom.iterator` | element boxes at open (`scene.THREADS`, the CPUs from `sched_getaffinity`), detection's triangle tree (`os.cpu_count()`) |
+| IfcOpenShell's own threads | `ifcopenshell.geom.iterator` | element boxes at open and detection's triangle tree (`scene.THREADS`, the CPUs from `sched_getaffinity`) |
 
 | Pool | Size | What runs in parallel |
 |---|---|---|

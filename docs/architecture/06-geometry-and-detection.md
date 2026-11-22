@@ -1,9 +1,11 @@
 # 06 · Geometry engine and detection
 
 > **Covers:** `server/iris/scene.py`, `server/iris/verify.py`, `server/iris/detect.py`,
-> `server/iris/checks.py`, the geometry parts of `server/iris/service.py` (`Workspace.open_paths`,
-> `verify_move`, `measure`, `detect`, `detect_all`, `detect_tests`),
-> `requirements.compile_tests`, `server/iris/fixtures.py` · **Checked against code:** re-branded on 2026-11-11 ·
+> `server/iris/checks.py`, `server/iris/saved_checks.py`, the geometry parts of `server/iris/service.py`
+> (`Workspace.open_paths`, `add_models`, `verify_move`, `measure`, `detect`, `detect_all`, `detect_tests`),
+> `requirements.compile_tests`, `server/iris/fixtures.py` · **Checked against code:** re-branded on 2026-11-11; the
+> element boxes, saved checks, the broad phase, the tree's threads, `Run` and detection's events re-checked on
+> 2026-11-22 ·
 > **Deeper design:** [docs/detection.md](../detection.md), [docs/uploads.md](../uploads.md)
 
 Everything Iris says about geometry comes from three modules. `scene.py` holds the open models as one federated
@@ -42,8 +44,9 @@ sequenceDiagram
     ws->>ws: _evict(incoming bytes) makes room first
     ws->>scene: IfcScene(paths)
     Note over scene: ifcopenshell.open per file, unit scale per file
-    ws->>scene: bounds(progress)
-    loop batches of 2,000 elements per file and kernel
+    ws->>scene: bounds(progress, saved=True)
+    Note over scene: a file with saved boxes (saved_checks.py) takes them
+    loop the other files: batches of 2,000 elements per file and kernel
         scene->>scene: geometry iterator in world coordinates
         scene-->>api: boxes event every 500 elements (upload stream only)
     end
@@ -88,10 +91,16 @@ How it triangulates:
   `IfcPolygonalFaceSet`, no openings), then split into batches of `BOUNDS_BATCH` (2,000). An IfcOpenShell iterator
   holds what it made until it is dropped; one iterator over a 150 MB model went past 4.5 GB.
 - **Kernel:** a mesh-only batch uses `MESH_KERNEL` (`hybrid-cgal-simple-opencascade`, about 1 ms an element against
-  20-30 ms in OpenCASCADE, same vertices). When all files together reach `IRIS_BIG_MODEL_MB` (default 50),
-  every batch uses it, extrusions too. Smaller models keep the default kernel for everything but meshes, so their
-  boxes are as before.
+  20-30 ms in OpenCASCADE, same vertices). When all files together reach `IRIS_BIG_MODEL_MB` (default 50,
+  `IfcScene.big()`), every batch uses it, extrusions too. Smaller models keep the default kernel for everything but
+  meshes, so their boxes are as before.
 - **Threads:** `THREADS`, the CPUs the process may use (`os.sched_getaffinity`), not the host's count.
+- **Saved boxes** (`bounds(saved=True)`, `add_files(saved=True)`, Nov 22): `Workspace.open_paths` and
+  `Workspace.add_models` pass it, since their files were just read from disk. A file with boxes in
+  `samples/saved-checks/` (`saved_checks.boxes`: keyed by the file's SHA-256, `big()`, `saved_checks.BOXES_VERSION`,
+  the IfcOpenShell version and the platform) takes them instead of being triangulated; the other files are measured
+  as above. The files go in order, so a GlobalId two files repeat keeps the box it would have had. On Northbank the
+  boxes take 0.04 s this way, against 1.5-1.7 s live (Apple Silicon, 10 cores; 4.1 s on 2 threads).
 - **Progress:** the callback gets `(done, total)` every 500 elements and once at the end. The upload stream turns it
   into `boxes` events.
 - A batch whose iterator fails to initialise is skipped: its elements get no box, so nothing treats them as
@@ -245,7 +254,8 @@ stands on".
 
 - A check triangulates only the neighbourhood: 0.4-0.6 s per check on Northbank (CLAUDE.md, Oct 27).
 - The boxes are paid once at open: about 3 s on Northbank (CLAUDE.md, Oct 27); 5.7 s for the four files with Site
-  in the Oct 28 measurement ([docs/detection.md](../detection.md)).
+  in the Oct 28 measurement ([docs/detection.md](../detection.md)). The shipped samples take saved boxes instead
+  (above), and their first check a saved measurement ("Saved checks for the samples", below).
 
 ## Iris detection (`detect.py`)
 
@@ -322,7 +332,11 @@ flowchart TD
     select --> sweep["_candidates: sort and sweep on x, then y and z"]
     sweep --> union["every element in any candidate pair"]
     union --> shift["_offset: shift if the federation lies over 200 m out"]
-    shift --> tree["_tree: one triangle tree for the whole run"]
+    shift --> replay{"replay, a saved check of the unchanged samples on this platform, and its probe measures the same?"}
+    replay -->|"yes"| saved["saved_checks.find: each test's hits and touches"]
+    saved -->|"touches"| touching
+    saved -->|"hits"| hit
+    replay -->|"no"| tree["_tree: one triangle tree for the whole run"]
     tree --> kind{"test kind"}
     kind -->|duplicate| dup["same class, boxes and vertices within 1 mm"]
     kind -->|"hard or clearance"| meas["intersection, collision without touching, separating axes"]
@@ -349,17 +363,23 @@ close, so it needs no further check, and its count is the test's `candidate_pair
 
 - Boxes on side B are sorted by their minimum x. For each box on side A, a binary search finds the window
   `[lo - widest, hi]` on x, then the y and z overlaps filter it.
+- **All windows at once** (Nov 22): every A element's window is expanded and filtered together with NumPy, in chunks
+  of `CANDIDATES_CHUNK` (2^20) window entries (about 50 MB of index arrays), not one element at a time. The pairs come
+  as before: element by element of A, each one's in sweep order. `test_detect.py` checks it against the old
+  one-at-a-time sweep (random boxes with ties and long boxes, two sides, an element on both sides, margins, chunks of
+  2^20, 500 and 1; and the fixtures' tests).
 - **The lower bound.** Without it the sweep was quadratic (a 500 MB synthetic model: 482 s down to 18 s with it,
   `evals/README.md`). The few very long boxes (wider than 99 in 100: a slab, a long wall) would widen the window for
   everyone, so they are checked against every box instead.
 - A self test (`b` None) returns each unordered pair once and never an element with itself.
 
-All tests' broad phases run first, so the triangle tree is built once over only the elements that appear in some
-candidate pair.
+All tests' broad phases run first (`_plan`: each test's sides and candidate pairs), so the triangle tree is built once
+over only the elements that appear in some candidate pair.
 
 ### Narrow phase and depth
 
-`_tree` builds one `opencascade.trianglebvh` tree, one iterator per file and kernel (threads: `os.cpu_count()`).
+`_tree` builds one `opencascade.trianglebvh` tree, one iterator per file and kernel (threads: `scene.THREADS`, as the
+boxes).
 **Revit's faceted meshes go through the mesh kernel** (Nov 2, owner decision): an element whose every body item,
 through mapped items, is an `IfcFacetedBrep` or `IfcFaceBasedSurfaceModel`, with no openings (`scene.faceted`), is
 triangulated with `MESH_KERNEL` (`scene.kernel`), here, in a fix's check (`verify.check`, step 4 above) and in the live
@@ -408,6 +428,51 @@ box lies within `FAR_M` (200 m) of the origin; otherwise minus the federation's 
 file's iterator gets the same `model-offset`, so the files stay aligned with each other, and witness points are moved
 back before they are stored. `Run.offset` reports the shift.
 
+### Saved checks for the samples (`saved_checks.py`)
+
+Design and measured numbers: [docs/detection.md](../detection.md), "Saved checks for the samples". The shipped sample
+models' default check is measured once per platform and kept in `samples/saved-checks/northbank.json` (generated,
+committed), so their first check builds no triangle tree.
+
+- **`detect.run(..., replay=False, measured=None)`.** With `replay=True`, after the broad phase and `_offset`,
+  `saved_checks.find(scene, ix, tests, plans, offset)` looks the run up; on a hit `_measure` and `_tree` are skipped and
+  each test takes its saved hits and touches. All tests or none. `measured` (a dict) is filled with each test's
+  candidate pairs, hits and touches, for making the file.
+- **Per platform.** Every key ends with the platform (`saved_checks.PLATFORM`, "linux-x86_64" or "darwin-arm64";
+  `PLATFORMS` are the two shipped). On Northbank, linux/x86_64's boxes differ from macOS/arm64's in the last bit for
+  12 elements, and the triangle queries' depths for 46 clashes and points for 309, so one platform's check is never
+  another's. On one machine the results are the same whatever the threads (1, 2, 4 and 10 checked on both).
+- **The probe** (`saved_checks.probe`). Before a process first replays a check it measures again the check's `probe`:
+  `PROBES` (8) of its hits that the triangle queries measured (a point that is not the boxes' middle), spread over the
+  tests, in a tree of just their elements. A difference to the bit and it runs live, with a logged warning; the answer
+  is kept per run key for the process (`_probed`). About 0.5 s once per process locally.
+- **Who replays.** `Workspace._run_check` (so the detect stream, Run all again, chat and MCP) and the requirements
+  preview (`app.requirements_preview`) pass `replay=True`; a direct `detect.run` call (evals, tests) measures live.
+- **The key** (`saved_checks.run_key`): None unless the scene's `revision` is 0 (no kept edit, no model added or
+  removed); else a SHA-256 of the files' SHA-256s in order, every element box to the bit (`_boxes_digest`), every
+  test's settings (all fields but `name` and `enabled`) with its candidate pairs (sorted, as a set: NumPy's sort orders
+  boxes that start at the same x differently on x86 and ARM), the offset, `detect.VERSION`,
+  `saved_checks.BOXES_VERSION`, the IfcOpenShell version and the platform. Any difference misses and the run measures
+  live: a box a trial moved and moved back can be a rounding apart.
+- **What stays live.** Everything after the measurement: the never-a-clash rules, the cap, ids, #N, the diff, the
+  report, coverage, kept checks, triage input and Insights. The events are the same; only the `phase` text becomes
+  "Unchanged sample models: taking the saved geometry of n elements". `Run.saved` is true, and `Workspace.detect`'s
+  result says `saved`.
+- **Versions.** `detect.VERSION` (1) covers what a test measures (`_candidates`, `_offset`, `_tree`, `_measure`,
+  `_Solids`, `_same_shape`); `saved_checks.BOXES_VERSION` (1) covers how boxes are made (`IfcScene._measure`). Bump
+  the one a change touches, then `uv run python -m iris.saved_checks --docker` from `server/` (`SETS` names the demo
+  sets; pure geometry, no AI): this machine's entry, then linux/x86_64's in Docker (`docker_command`:
+  `python:3.13-slim-bookworm`, `--platform linux/amd64`, the same IfcOpenShell, NumPy and defusedxml versions), each
+  merged into the file in place of that platform's old part (`merge`). `server/tests/test_saved_checks.py` fails while
+  either platform's entry is stale.
+- **The file:** `about`; `platforms` (per platform: `detect`, `boxes`, `ifcopenshell`, `files` with each file's
+  SHA-256, `live` with the live run it was made from); `boxes` (box key → GlobalId → box, each key ending
+  `|platform=…`); `checks` (run key → `platform`, `probe`, `tests`). About 550 KB with both platforms.
+- **Reading.** `saved_checks._data` merges every `*.json` in the folder, read once and again when a file there
+  changes; a damaged file saves nothing, and a damaged entry under a matching key is measured live (a logged
+  warning either way; `test_a_damaged_saved_file_saves_nothing`). `digest` keeps each file's SHA-256 while its size and
+  time stay the same, at most 256 of them (cleared past that).
+
 ### Cap, ids and numbers
 
 - **Cap.** Hits are sorted by depth; a test with more than `CAP` (5,000) keeps the first 5,000 and is marked
@@ -431,7 +496,8 @@ back before they are stored. `Run.offset` reports the shift.
 
 Each test yields a `Coverage`: elements on each side, candidate pairs, clashes, touching pairs, hits removed per rule,
 `partial` and seconds. `detect.run` returns a `Run`: the report, the coverage, the diff, the number of elements
-checked, seconds, the offset and the `state` the next run compares against.
+checked, seconds, the offset, the `state` the next run compares against, and `saved` (measured by a saved check, not
+anew).
 
 ### Kept checks and reruns: `Workspace.detect`, `checks.Register`
 
@@ -472,16 +538,18 @@ panel's "Now" agrees with the run; for an imported report it uses `verify.check`
 
 ### Events
 
-`detect.run(on_event=)` emits `phase`, `start`, `test` and `test_done`; the route adds `done` (the report, coverage,
-diff, elements, seconds, offset, requirements) or `error`. The full protocol is in [10](10-http-api-and-streams.md).
+`detect.run(on_event=)` emits `phase`, `start`, `test` and `test_done` (a replayed run the same, with its own `phase`
+text); the route adds `done` (the report, coverage, diff, elements, seconds, offset, `saved`, requirements) or
+`error`. The full protocol is in [10](10-http-api-and-streams.md).
 Detection is capped per visitor (`IRIS_DETECT_PER_HOUR` / `IRIS_DETECT_PER_DAY`, [16](16-security-caps-and-cost.md)).
 
 ### Other callers
 
 - Chat and MCP `detect_clashes` ([09](09-agent-workflows.md), [11](11-mcp-and-agent-links.md)): the same tests as the
   page, optionally with one tolerance for every hard test.
-- `POST /api/scenes/{scene_id}/requirements/preview`: runs `detect.run` for a requirements file and for the defaults
-  without opening a report, cached per scene and test set, to show how many clashes a file would find.
+- `POST /api/scenes/{scene_id}/requirements/preview`: runs `detect.run` (with `replay=True`) for a requirements file
+  and for the defaults without opening a report, cached per scene and test set, to show how many clashes a file would
+  find.
 
 ## Geometry facts learned the hard way
 
@@ -498,7 +566,7 @@ Each is a rule the code relies on, checked at `104fda9`.
 | Intersection misses flush-faced overlaps; clearance then reads 0 mm | Collision without touching plus box overlap (`verify`), plus separating axes (`detect._Solids`, `verify._rectangular_penetration`) |
 | The clearance query gives true gaps | `min_clearance_m` and clearance hits come from `clash_clearance_many` |
 | Never call the clash queries with an empty set: IfcOpenShell segfaults | `verify.check` returns before building a tree; `detect.run` builds none when no pair is a candidate and `_measure` returns on no pairs |
-| Boxes once at open, checks on the neighbourhood | `IfcScene.bounds()` cached and paid in `open_paths`; `verify.check` triangulates only `scene.near(...)` |
+| Boxes once at open, checks on the neighbourhood | `IfcScene.bounds()` cached and paid in `open_paths` (the shipped samples take saved boxes, `saved_checks.boxes`); `verify.check` triangulates only `scene.near(...)` |
 | Port-connected neighbours touch by design | `verify.check(exclude_connected=True)` ignores them; detection's `connected` rule counts them |
 | Openings (`IfcFeatureElement`) and virtual elements are not physical | `scene.NOT_PHYSICAL` and `not_physical`, which also covers provisions for void |
 | The triangle tree drops overlaps far from the origin | `detect._offset` and `model-offset` past 200 m |
@@ -516,11 +584,18 @@ All from recorded runs; the build log keeps the dates ([22](22-build-log.md)).
 | Sampled Navisworks results Iris also reports | 117 of 117 real overlaps (of the other 200: 129 not physical, 46 touches, 24 one element, 1 joined by ports) | `evals/README.md` |
 | Palletising cell, Rev A / Rev B | 17/17 planted pairs, 95 by design, 0 unexpected / 0 planted, 93 by design (Oct 30, 161 / 185 parts, 0.8 s each) | `evals/runs/2026-10-30-cell-detection/` |
 | Big synthetic models (4 CPUs) | 150 MB: boxes 37 s, detection 5 s; 500 MB: detection 18 s | `evals/README.md`, "Big models" |
+| Northbank's first check on Cloud Run (2 vCPU), live | 186 s once, cold, with two scenes opened at nearly the same time; about 11 s warm | [22](22-build-log.md), Nov 22 |
+| Northbank, live and replayed (Apple Silicon, 10 cores) | Live: boxes 1.5-1.7 s, check 2.4-2.8 s (tree 1.5 s, measures 0.8 s, broad phase 0.3 s, now 0.13 s); on 2 threads boxes 4.1 s, check 5.8 s (tree 4.6 s). Replayed: boxes 0.04 s, check 0.3 s (0.5-0.6 s with a process's first probe). Busy machine, open to first result: one scene 6.2-7.0 s before, 0.7 s replayed; two scenes at once 9.0-13.2 s before, 1.2 s replayed | [detection.md](../detection.md), 3a; [22](22-build-log.md), Nov 22 |
 
 ## When to update this doc
 
-- A change to how a scene opens or measures boxes: `IfcScene.__init__`, `bounds`, the kernel rule, `BOUNDS_BATCH`,
-  `THREADS`, `IRIS_BIG_MODEL_MB`, or `Workspace.open_paths`.
+- A change to how a scene opens or measures boxes: `IfcScene.__init__`, `bounds`, `big`, the kernel rule,
+  `BOUNDS_BATCH`, `THREADS`, `IRIS_BIG_MODEL_MB`, saved boxes, or `Workspace.open_paths`.
+- A change to what detection measures or how boxes are made: bump `detect.VERSION` or `saved_checks.BOXES_VERSION`
+  and make the saved checks again (`uv run python -m iris.saved_checks --docker` from `server/`). Also a change to
+  which runs replay (`replay=`), to what the saved check's key holds (`saved_checks.run_key`), to the platforms
+  (`PLATFORMS`) or to the probe (`PROBES`, `probe`).
+- A change to the broad phase (`_candidates`, `CANDIDATES_CHUNK`).
 - A change to what counts as physical (`not_physical`, `NOT_PHYSICAL`, `is_provision`, `products`) or to
   what stays in place (`IfcScene.stays`, `domains.STAYS`), `FITTINGS`, `connected_run`, `step_run`.
 - A change to `verify.check` (queries, tolerances, `SEARCH_M`, the empty-set guard, what is ignored), to the supports
