@@ -35,8 +35,9 @@ const VOICE_LINE = "Isolate the services and colour them by system.";
 const CHAT_LINE = "Find a fix for clash #22.";   // the cell-22 take asks for its fix in Chat (owner, Nov 2)
 const TYPING = 65;       // ms a key: readable typing
 // The viewer's layouts (ViewerToolbar.tsx): kept in the browser (`iris.views.layout`), so every setup puts back
-// "3D only"; `duct` and `cell-22` switch to "Four views" on camera.
-const VIEWS_MENU = 'button[aria-label="Views: plans, sections and elevations beside the 3D view"]:visible';
+// "3D only"; `duct` and `cell-22` switch to "Four views" on camera. The layouts ("Views") and the saved views sit in the
+// rail's More tools menu; with several panes the saved views are in the 3D pane's rail, under More 3D tools.
+const MORE_TOOLS = "More tools", MORE_3D_TOOLS = "More 3D tools";
 const NORTHBANK_FILTERS = "iris.filters.Northbank";   // filters are kept per set of models, by their common name
 // The owner's sign-in checklist (--login), and what the built shot says when its setting is off.
 const SIGN_IN = "Sign in as owner, switch on Gemini Flash and Show it built (Gemini Image), then close the window";
@@ -395,13 +396,29 @@ async function dockWorkings(page) {
   await fitBar(page);
 }
 
-/** The viewer's layout, from its Views menu ("Views: plans, sections and elevations beside the 3D view"): "3D only" or
- * "Four views". `click` is a glided click in a take (the menu, then the layout: one zoom), a plain one in a setup. */
+/** One of the viewer rail's menus (`label`: "More tools", or "More 3D tools" on the 3D pane's rail), opened unless it
+ * is open already (its button toggles it, so a second click would close it). Resolves the open menu. */
+async function openMore(page, label, click, why) {
+  const menu = page.getByRole("menu", { name: label, exact: true }).first();
+  if (await shown(menu)) return menu;
+  const button = page.locator(`button[aria-label="${label}"]:visible`);
+  if (!(await shown(button))) throw new Error(`No ${label} menu on screen for ${why} (models not open, or the window too narrow for the desktop layout?)`);
+  await click(button);
+  await menu.waitFor({ state: "visible", timeout: 5000 });
+  return menu;
+}
+
+/** The saved views' menu: More 3D tools when the stage shows several panes, else More tools. */
+async function savedViewsMenu(page, click) {
+  const threeD = await shown(page.locator(`button[aria-label="${MORE_3D_TOOLS}"]:visible`));
+  return openMore(page, threeD ? MORE_3D_TOOLS : MORE_TOOLS, click, "the saved views");
+}
+
+/** The viewer's layout, from the Views items in the rail's More tools menu: "3D only" or "Four views". `click` is a
+ * glided click in a take (the menu, then the layout: one zoom), a plain one in a setup. */
 async function setLayout(page, name, click) {
-  const menu = page.locator(VIEWS_MENU);
-  if (!(await shown(menu))) throw new Error(`No Views menu on screen for "${name}" (models not open, or the window too narrow for the desktop layout?)`);
-  await click(menu);
-  const item = page.locator(".pop.open").getByRole("menuitemradio", { name: new RegExp(`^${name}`) }).first();
+  const menu = await openMore(page, MORE_TOOLS, click, `"${name}"`);
+  const item = menu.getByRole("menuitemradio", { name: new RegExp(`^${name}`) }).first();
   await item.waitFor({ state: "visible", timeout: 5000 });
   if ((await item.getAttribute("aria-checked")) === "true") {
     await page.keyboard.press("Escape");
@@ -426,7 +443,7 @@ async function prepareShot(page, { clear = true } = {}) {
  * Why the opening can't start as the browser keeps it: the opening draws Northbank with what was kept (localStorage),
  * so a kept filter, Four views, Workings off, or Activity away from its bar or its bar not at Workings' height would
  * show. `kept` holds the raw values: Northbank's filters, `iris.views.layout`, `iris.workings` and the dock's
- * saved layout (`iris.dock.v1`). Empty when nothing needs putting right.
+ * saved layout (`iris.dock.v2`). Empty when nothing needs putting right.
  */
 function untidy(kept) {
   const read = (s) => { try { return JSON.parse(s ?? "null"); } catch { return null; } };
@@ -447,7 +464,7 @@ function untidy(kept) {
 /** What the opening reads from the browser (`untidy`). */
 function keptLayout(page) {
   return page.evaluate((filters) => ({ filters: localStorage.getItem(filters), layout: localStorage.getItem("iris.views.layout"),
-    workings: localStorage.getItem("iris.workings"), dock: localStorage.getItem("iris.dock.v1") }), NORTHBANK_FILTERS);
+    workings: localStorage.getItem("iris.workings"), dock: localStorage.getItem("iris.dock.v2") }), NORTHBANK_FILTERS);
 }
 
 /** The row of clash #n. The list draws only the rows on screen, and a closed group none: open the group, else filter
@@ -556,8 +573,7 @@ async function saveView(page, name) {
   const section = page.locator('button[aria-label^="Section box"]:visible').first();
   const boxed = (await section.count()) && (await section.getAttribute("aria-pressed")) !== "true";
   if (boxed) { await section.click(); await sleep(1500); }
-  await page.locator('button[aria-label="Saved views"]:visible').first().click();
-  const menu = page.getByRole("menu", { name: "Saved views" }).first();
+  const menu = await savedViewsMenu(page, plainClick);
   const old = menu.getByRole("button", { name: `Delete ${name}`, exact: true });
   while (await old.count()) { await old.first().click(); await sleep(200); }
   await menu.getByRole("textbox", { name: "Name for this view" }).fill(name);
@@ -880,8 +896,8 @@ const SHOTS = [
       await sleep(1000);
       // The duct take's camera and its section box round #1, then X-ray: with no clash picked nothing is greyed out,
       // so the revision's duct through the beam's opening shows through what the box keeps in front of it.
-      await ctx.click(page.locator('button[aria-label="Saved views"]:visible'));
-      await ctx.click(page.getByRole("menu", { name: "Saved views" }).getByRole("button", { name: VIEW, exact: true }));
+      const saved = await savedViewsMenu(page, ctx.click);
+      await ctx.click(saved.getByRole("button", { name: VIEW, exact: true }));
       await sleep(GAP);
       await xray(page, ctx.click);
       await sleep(5000);

@@ -1042,3 +1042,27 @@ fix), `test_projects.py` (the route builds with no triage), `test_document_engin
 `report-dialog.test.mjs`, `clash-fixed.test.mjs`, `projects-api.test.mjs` (Save, `closedText`), `corner.test.mjs`
 (the More label), `npm test`, `tsc`, `npm run build`, `test_docs_map.py` and the full server suite (the two pango PDF
 tests fail locally, as before).
+
+**Nov 22 (2026-11-22), the sidebar app shell and the lifemed theme** ([12](12-web-app.md), [01](01-product-and-journeys.md)).
+Iris is now an app with a left sidebar, not a website (the owner's brief). **The shell** (`AppShell.tsx`, `shellNav.ts`,
+`appShell.css`, `frame.css`, `PageHeader.tsx`, `page.css`): `App` renders `div.shell`, the `Sidebar` (Home, Projects,
+Workspace for a session outside a project, the open project's seven steps with counts, Help, Settings, the reviewer's
+name edited inline; a 64 px rail kept in `iris.sidebar`, collapsed by default on the 3D workspace; a drawer from a slim
+light top bar on phones and tablets) beside the `TopBar` (the toggle, the search over projects, clashes, elements and
+pages, the page's primary action) over the body, where the workspace stays mounted and Home or a project's page sits
+over it. **Home** (`StartScreen.tsx`, `home.css`): the greeting revealed word by word beside the holographic ribbon,
+the resume card, the start tiles, recent projects, See it work and How Iris works. **Projects** (`ProjectsHome.tsx`,
+`ProjectOverview.tsx`, `projects.css`): a table with status tabs, status pills and a row menu (Open, Rename, Remove
+from this browser), a New project dialog, the overview's stat cards counting up; `ProjectSteps` is gone. **Theme**
+(`index.css`, `index.html`'s theme colour #ffffff): lifemed's tokens, white and ink with a lavender accent and the
+`--holo` gradient for AI-made things; light only, no dark fills. **Motion** (`Holo.tsx`, `holo.css`): the ribbon, the
+text reveal, the count-up, the AI shimmer on the status line and the holo edge on AI-proposed cards, all still under
+reduced motion. **The workspace decluttered** (`workspace.css`): Activity collapsed to a slim strip with one line
+(`ActivityLine`; the layout kept as `iris.dock.v2`, v1 not read), the clash details once (`ClashHeader`, then Propose
+fixes visible without scrolling, then `ClashPanel`), the list's row icons on hover or a ⋮ menu under status tabs with
+counts, six core 3D tools and the rest under More tools, no Iris pill and no notch, one status line in the header,
+Export in the header's actions, and no ☰ Menu (its contents are Settings, beside Help, in the sidebar). The release fix
+f76fb7c (report without triage, Save feedback, the fixed clash state) was merged (c0d6265) and kept in the new shell.
+`web/scripts/record-demo.cjs` reads `iris.dock.v2` and opens More tools for the views and saved views. Checked: the
+full web suite (`npm test`: 503 tests, all passing), `tsc`, `vite build`, server `test_docs_map.py` and `test_web_pages.py`, and
+headless Chromium screenshots at 1512×805 and 390×844 against a local one-origin server, with no Gemini call.

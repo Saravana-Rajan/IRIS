@@ -5,7 +5,9 @@
 > re-branded on 2026-11-11; the server's address (`api.ts`, `voice.ts`, `clashImage.ts`, the server's URLs at render
 > time), the engineer-workflow files (projects, import rows, model summary, coordination overview, clash header,
 > proposal card) and the sample drawings (`StartScreen.tsx`, `DemoClips.tsx`, `sampleDrawings.ts`, `DrawingsPanel.tsx`,
-> `drawingsApi.ts`, `trySampleDrawings`) on 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
+> `drawingsApi.ts`, `trySampleDrawings`) on 2026-11-22; the app shell and theme files (`App.tsx`'s shell, `AppShell.tsx`,
+> `shellNav.ts`, `PageHeader.tsx`, `Holo.tsx`, `StartScreen.tsx`, the projects pages, the decluttered workspace, `dock.tsx`,
+> `dockLayout.ts` and the stylesheets) on 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
 > [docs/views.md](../views.md), [docs/panels.md](../panels.md), [docs/brand-assets.md](../brand-assets.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
@@ -15,27 +17,37 @@ report back through callbacks. A handful of plain modules hold logic that the te
 fix wording, requirements files, uploads, review sign-offs, the chat's turn ownership). The page talks to the server
 only through `api.ts`, mostly as NDJSON streams, and draws the models through the `Viewer` class
 ([13](13-3d-viewer.md)). There is no router, no state library and no CSS framework: `useState`/`useRef`/`useMemo`/
-`useEffect` and one global stylesheet (the landing has its own, `landing/landing.css`, and the engineer-workflow
-components each import a small one of their own built on its tokens). Pages with an address read it from the hash with
-small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and `#project/<pid>/<step>`
-(`projectRoute.ts`, below, "Engineer workflow").
+`useEffect` and one global stylesheet with the tokens (the shell, Home, the pages and the workspace each import a small
+one of their own built on them; the landing has its own, `landing/landing.css`). Everything sits in an app shell: a
+left sidebar, a top bar, and the page in the body (below, "The app shell"). Pages with an address read it from the
+path with small pure modules: `/home`, `/workspace` and the projects, `/projects` and `/projects/<pid>/<step>`
+(`projectRoute.ts`, below, "Engineer workflow"), and `/about` (`aboutRoute.ts`).
 
 ## Every file in `web/src/`
 
 | File | What it is | Main exports | Used by |
 |---|---|---|---|
-| `main.tsx` | Entry: mounts `<App />` in `StrictMode` on `#root`, imports the stylesheet | (none) | `web/index.html` |
-| `App.tsx` | The whole page: state, handlers, effects, the notch and corner (desktop) or the compact header, panes, sheet, dialogs. Also small local components `ProofStrip`, `Recommended`, `NoFix`, `Thinking` and helpers `keepPlaces`, `movedPairs`, `clampPane`, `shortName` | `App` | `main.tsx` |
-| `index.css` | The app's stylesheet: tokens, layout grid, every feature's styles, then the "Responsive" block (the landing's are in `landing/landing.css`) | (CSS) | `main.tsx` |
+| `main.tsx` | Entry: mounts `<App />` in `StrictMode` on `#root`, imports `index.css`, then `frame.css` | (none) | `web/index.html` |
+| `App.tsx` | The whole page: state, handlers, effects, and the app shell it renders (below, "The app shell"): `Sidebar` and `TopBar` (`AppShell.tsx`), then the shell's body: the workspace (`div.app`: panes, sheet, dialogs; always mounted) with Home or a project's page over it. On the desktop workspace the top bar's middle is a slim `PageHeader` carrying the one status line (`headerStatus`); Settings and Help are two `MenuSheet`s the sidebar opens; the New project dialog sits at the shell's root. No notch, corner or compact header any more. Also small local components `ProofStrip`, `Recommended`, `NoFix`, `Thinking` and helpers `keepPlaces`, `movedPairs`, `clampPane` | `App` | `main.tsx` |
+| `index.css` | The app's stylesheet: the lifemed tokens on `:root` (below, "Theme and motion"), layout grid, every feature's styles (buttons, segmented controls, dockview's light theme), then the "Responsive" block. The landing's are in `landing/landing.css`; the shell's, Home's, the pages' and the workspace's in their own files (below) | (CSS) | `main.tsx` |
+| `frame.css` | How the workspace and the pages sit in the shell: `.shell`, `.shell-main`, `.shell-body` (`--shell-top-h`), the workspace (`.app`) filling the body, a page over it (`.proj-shell`, absolute in the body) with its `.proj-shell-alert`, the top bar's `.work-actions` (Export's kept-fix count `.export-n`), the one status line (`.status-line`: `status-error`, `-gone`, `-pilot`, `-work`, `-idle`), Help's steps (`.help-flow`), `kbd` | (CSS) | `main.tsx` (after `index.css`) |
+| `AppShell.tsx` | The app shell's parts (below, "The app shell"): `Sidebar` (the logo, Home, Projects, Workspace for a session outside a project, the open project's group with its seven steps and counts, Help, Settings, the reviewer; expanded, the 64 px rail, or a drawer on phones and tablets that Escape, the scrim, ✕ or an item closes, focus kept inside and given back), `TopBar` (the collapse toggle, or the hamburger and logo; the middle; the search; the actions), `SearchBox` (a combobox whose popover groups the hits by kind; arrows and Enter, Escape, "/" or Ctrl/⌘+K to focus it; an icon that opens the field on narrow screens), `SideLink` (a link whose plain click goes to `onNav`, a button without an address; `aria-current="page"` when active), `UserBlock` (the initial, the name, Edit inline; no log out: there is no login), `LogoTile`. Props only | `Sidebar`, `TopBar`, `SearchBox`, `SideLink`, `UserBlock`, `LogoTile`, `SidebarProps`, `TopBarProps`, `SearchBoxProps`, `SideLinkProps`, `NavId`, `SearchHit` | `App` |
+| `shellNav.ts` | The shell's pure parts, no React: the sidebar's item ids (`NavId`: home, projects, workspace, a project step), the rail state in `iris.sidebar` (`readRail`, `writeRail`: `{"pages": bool, "workspace": bool}`, true meaning the rail; `RAIL_DEFAULT` expanded on pages and the rail on the 3D workspace; a missing or throwing storage gives the defaults and never throws), the avatar's initial, the name the inline edit saves (`cleanName`, at most `NAME_MAX`, 120), the search key (`isSearchKey`: "/" outside a field, `inField`, or Ctrl/⌘+K) and the hits grouped by kind (`groupHits`, the first `MAX_HITS`, 8) | `NavId`, `RailWhere`, `SIDEBAR_KEY`, `RAIL_DEFAULT`, `readRail`, `writeRail`, `browserStorage`, `StorageLike`, `initials`, `NAME_MAX`, `cleanName`, `SearchHit`, `HIT_KIND_LABEL`, `MAX_HITS`, `HitGroup`, `groupHits`, `inField`, `isSearchKey` | `App`, `AppShell.tsx` |
+| `appShell.css` | The sidebar (`nav.sidebar`, 264 px; `.sidebar-rail`, 64 px, the width animated; `.side-drawer.open` / `.closed` over a light `.side-scrim` on phones and tablets), its rows (20 px outline icons; the active one a white pill with a hairline, a soft shadow and a 2 px holo left edge; counts as small pills, open clashes red-tinted), the logo tile, the top bar (`header.topbar`, `.compact`, `.has-middle`) and the search (`.search*`); prefixes `side-`, `topbar-`, `search-`; light only | (CSS) | `AppShell.tsx` |
+| `PageHeader.tsx` | A page's header in the shell: the breadcrumb (`Crumb`: a link whose plain click the page handles, or the page itself), the title, a grey line under it, then the status and the actions at the right; `slim` is the workspace's one row in the top bar (crumbs and title side by side, the status line in the middle, no line under the title). Props only | `PageHeader`, `Crumb` | `App` (the workspace's slim header), `ProjectsHome.tsx`, `ProjectOverview.tsx` |
+| `page.css` | PageHeader's styles (`.page-head`, `.page-crumbs`, `.page-title` 30 px at weight 500, `.page-sub`, `.page-status`, `.page-actions`, a hairline under it; `.slim`, one row with a 15 px title) | (CSS) | `PageHeader.tsx` |
+| `Holo.tsx` | Iris's motion (below, "Theme and motion"): `HoloRibbon` (the holographic ribbon, CSS only: fine threads in the holo colours that turn in 28 s and sway in 26 s over a blurred glow, with a glassy spark; fewer, thicker threads under 160 px; decorative), `TextReveal` (words from a lavender blur to ink, one after another; with `once`, once per page load), `CountUp` (counts up from 0 the first time it shows, a slight lavender blur while it counts), `EmptyState` (a small ribbon, a title, one line, one action; `compact`), `useReducedMotion` and `prefersReducedMotion` (all of it still under `prefers-reduced-motion`, or with no window) | `HoloRibbon`, `TextReveal`, `CountUp`, `EmptyState`, `useReducedMotion`, `prefersReducedMotion` | `StartScreen.tsx` (`HoloRibbon`, `TextReveal`), `ProjectOverview.tsx` (`CountUp`, `EmptyState`), `ProjectsHome.tsx` and `App` (`EmptyState`) |
+| `holo.css` | The ribbon (`.holo-ribbon`, its size `--hr`), `.text-reveal*`, `.count-up`, `.ai-shimmer` (a soft holo band moving across a status line or card while an AI model works), `.holo-edge` (a 1 px `--holo` border on AI-made things), `.empty-state*`; every animation off under `prefers-reduced-motion` | (CSS) | `Holo.tsx` |
 | `api.ts` | Every server call, the NDJSON reader, the wire types, the two request headers, the server's address (`VITE_API_BASE`) | `api`, `ApiError`, `apiUrl`, `wsUrl`, `setOwnerSettings`, `setRequirements`, `requirementsInUse`, ~100 types | everything |
 | `aiNames.ts` | The name of the AI model behind each role (proposal, escalation, triage, image, voice) as the server reports it (`GET /api/models` labels), for every panel's words; App sets them, the defaults until then | `aiName`, `setAiNames`, `DEFAULT_AI_NAMES`, `AiRole`, `AiNames` | `App`, `Activity.tsx`, `pilot.ts`, `PlanPanel.tsx`, `BuiltView.tsx`, `Triage.tsx`, `Insights.tsx`, `ReportDoc.tsx`, `ClashPanel.tsx`, `ReportList.tsx`, `Requirements.tsx`, `Owner.tsx`, `Workings.tsx`, `workingsGraph.ts` |
 | `names.ts` | Model files' names as people read them: no extension, and no prefix the set shares, whatever the project is called | `shortNames`, `sharedPrefix` | `App` |
-| `About.tsx` | The landing in the empty viewer, a page of its own (`landing/`): its header (the wordmark, section links that follow the scroll), the hero with the live replay (`landing/Hero.tsx`) and the resume card, the strip of formats Iris reads and writes by their logos (`Formats`), the problem (`Collide`), the loop as tabs beside one frame playing each step's recorded run (`Loop`), the check to try by hand (`landing/Sandbox.tsx`), the kinds of fix (`landing/FixArt.tsx`), the AI's rule and the five models, everything around the fix (`landing/Bento.tsx`), the two demo cards playing a recorded fix (`DemoCard`, `Clip`), who it is for, what is proven and what is not, words and colours, the close with the "Go deeper" card that opens About Iris, the footer. Its numbers are the measured ones; the one industry figure, rework's cost, links its source `GIRI_STRATEGY` | `About`, `Resume`, `projectName`, `GIRI_STRATEGY` | `StartScreen.tsx` (`Resume`, `projectName`), `App` (`projectName`); the page itself is no longer the first screen (`StartScreen.tsx` is) |
-| `AboutIris.tsx` | About Iris: a full page over the app in six tabs (Overview, How it works, The fixes, The AI, Under the hood, Proof and limits), with animated SVG pictures (the Iris loop, the girder clash before and after, each fix kind, the propose-check loop), count-up numbers and sections that fade up as they scroll in; reduced motion shows it all still. Its numbers are the landing's measured ones | `AboutIris` | `App` |
+| `About.tsx` | The landing in the empty viewer, a page of its own (`landing/`): its header (the wordmark, section links that follow the scroll), the hero with the live replay (`landing/Hero.tsx`) and the resume card, the strip of formats Iris reads and writes by their logos (`Formats`), the problem (`Collide`), the loop as tabs beside one frame playing each step's recorded run (`Loop`), the check to try by hand (`landing/Sandbox.tsx`), the kinds of fix (`landing/FixArt.tsx`), the AI's rule and the five models, everything around the fix (`landing/Bento.tsx`), the two demo cards playing a recorded fix (`DemoCard`, `Clip`), who it is for, what is proven and what is not, words and colours, the close with the "Go deeper" card that opens About Iris, the footer. Its numbers are the measured ones; the one industry figure, rework's cost, links its source `GIRI_STRATEGY` | `About`, `Resume`, `projectName`, `GIRI_STRATEGY` | `StartScreen.tsx` (`Resume`, `projectName`), `App` (`projectName`); App mounts the page itself no more (Home is the first screen) |
+| `AboutIris.tsx` | About Iris: a full page over the app in six tabs (Overview, How it works, The fixes, The AI, Under the hood, Proof and limits), with animated SVG pictures (the Iris loop, the girder clash before and after, each fix kind, the propose-check loop), count-up numbers and sections that fade up as they scroll in; reduced motion shows it all still. Its numbers are the landing's measured ones | `AboutIris` | none at HEAD: App keeps `aboutTab` from the address but mounts no page for it ("no longer offered", docs/ui-design.md §10) |
 | `stepClips.ts` | The landing's step clips: an animated WebP's length read from its frames (`webpDuration`), and each clip fetched once (`loadClip`) so the loop (`Loop` in `landing/Story.tsx`) can play it from a fresh object URL, from its first frame, and move on when it ends | `webpDuration`, `loadClip`, `LoadedClip` | `landing/Story.tsx` |
-| `StartScreen.tsx` | The first screen at `/home` (and `/`), light and lean (docs/ui-design.md §10.1): the wordmark, the principle in one line, **Open projects** (a link to `/projects`), **Try the sample building** (the Northbank sample as a project of this browser's, made once and found again by name, opened on its Clash review; opening and checking call no model) and beside it **Try the sample drawings** (`data-start="sample-drawings"`: the same project opened on its Drawings step with the sample PDF sheets attached, `onSampleDrawings`; shown only when the server lists sample drawings), `sampleBusy` or `sampleDrawingsBusy` spinning the one opening while both wait, the last session to resume when there is one, and **See it work** (`DemoClips`) where the Northbank still was. No 3D until a model opens. Props only | `StartScreen` | `App` |
-| `DemoClips.tsx` | **See it work** (`figure[data-start="see-it-work"]`): the two demo clips side by side (`DEMO_CLIPS`, each its own `figure[data-clip]`), "3D clash check" (`/demos/check.webp`: Northbank's check, the clashes found, numbered and listed) and "2D drawing reader" (`/demos/drawings.webp`: the sample sheets read by Gemini, checked against the PDF's own text, then compared with the 3D model), each with its label, a one-line caption and alt text, 1000 × 625 and loaded lazily; their stills (`check-still.webp`, `drawings-still.webp`) under reduced motion (a `<picture>` source); stacked where there is no room for both (a phone, the first screen's 400 px column). Self-contained: no props, its own stylesheet | `DemoClips`, `DEMO_CLIPS`, `DemoClip` | `StartScreen.tsx` |
-| `demoClips.css` | DemoClips' styles (`.demo-clip*`): a grid that puts the two clips side by side when each gets at least 260 px (`auto-fit`), else stacks them; light, on `index.css`'s tokens | (CSS) | `DemoClips.tsx` |
+| `StartScreen.tsx` | Home (`/home`, and `/` on load), the first page inside the shell, light and calm (docs/ui-design.md §10.1): the greeting (`greetingFor`: Good morning, afternoon or evening, then the reviewer's name or "there") revealed word by word (`TextReveal`) beside the holographic ribbon, the tagline "AI proposes. Geometry proves. The engineer decides.", what Iris does, the last session to resume (Resume, Start fresh), three start tiles (**New project**, dashed; **Try the sample building**, `data-start="sample"`, the Northbank sample as a project of this browser's opened on its Clash review; **Try the sample drawings**, `data-start="sample-drawings"`, the same project on its Drawings step with the sample PDF sheets attached, shown only when the server lists sample drawings; `sampleBusy` or `sampleDrawingsBusy` spin the one opening while both wait), **Recent projects** (up to `RECENT_MAX`, 4: name, models, the open clashes when the last check is known, else "Not checked", when updated; light placeholders while listing; "Create one" with none), **See it work** (`DemoClips`) and **How Iris works** (the eight steps, `PROJECT_FLOW`; Propose wears the holo edge, Validate a check). No 3D and no brand header of its own: the shell has them. Props only | `StartScreen`, `greetingFor`, `RECENT_MAX` | `App` |
+| `home.css` | Home's styles (`.home*`): the hero (the greeting at weight 400, the tagline, the ribbon at the right, clipped so nothing scrolls sideways), the resume card on glass, the start tiles (New project dashed), the recent projects, the steps; Home is a size container, so its layout follows the panel's width beside the sidebar, not the window's | (CSS) | `StartScreen.tsx` |
+| `DemoClips.tsx` | **See it work** (`figure[data-start="see-it-work"]`, with its title): the two demo clips (`DEMO_CLIPS`, each its own `figure[data-clip]`), "3D clash check" (`/demos/check.webp`: Northbank's check, the clashes found, numbered and listed) and "2D drawing reader" (`/demos/drawings.webp`: the sample sheets read by Gemini, checked against the PDF's own text, then compared with the 3D model), each a white card with its label and a one-line caption under the clip, alt text, 1000 × 625 and loaded lazily; their stills (`check-still.webp`, `drawings-still.webp`) under reduced motion (a `<picture>` source). Self-contained: no props, its own stylesheet | `DemoClips`, `DEMO_CLIPS`, `DemoClip` | `StartScreen.tsx` (Home, between Recent projects and How Iris works) |
+| `demoClips.css` | DemoClips' styles (`.demo-clip*`): a grid that puts the two clips side by side when each gets at least 300 px (`auto-fit`), else stacks them; white cards with a hairline and a 12 px radius, on `index.css`'s tokens | (CSS) | `DemoClips.tsx` |
 | `landing/Hero.tsx` | The landing's first screen: the hook and the ways in (with `data-tour` `golden` and `blank`), and the live 3D replay of Iris fixing Northbank's three girder clashes: labels hung on the scene each frame, the log (each line tagged with its step: Observe, Resolve, Check, Apply), chapter buttons and pause. It frames the scene in the HUD's empty window wherever the layout puts it, pauses off screen and in a hidden tab, gives a still frame (and still chapters) for less motion, a recorded still of the app without WebGL, and a fresh canvas each mount | `Hero`, `HeroActions` | `About.tsx` |
 | `landing/heroScene.ts` | The hero's three.js scene, apart from the viewer ([13](13-3d-viewer.md)): the girder, the services, their fixes and the context from `landing/northbank.ts`, materials in the viewer's colours with a scan band, a fade beyond the crossings and an idea's lift from its run in their shaders, a camera that eases to the clash being told and fits the window, fog by distance; draws one frame of `landing/timeline.ts` and gives its WebGL context back on dispose | `HeroScene`, `webglAvailable`, `Anchor` | `landing/Hero.tsx` |
 | `landing/timeline.ts` | The replay as a pure function of time (36 s): the check's sweep, the three pins, each run's idea, check, keep and old self, the tray's recorded round (the whole lift failing on the spigots and a core wall, then its offset), the log's lines from Iris's records (the opening as Gemini Pro is told it, the recorded numbers), chapters, the still frame | `heroAt`, `logAt`, `LOG`, `CHAPTERS`, `T`, `LOOP`, `STILL`, `chapterStill`, `ramp`, `HeroFrame` | `landing/Hero.tsx`, `landing/heroScene.ts` |
@@ -49,19 +61,20 @@ small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and
 | `landing/motion.ts` | The landing's motion hooks: less motion asked for, seen once, sections fading up as they scroll in (late ones too), the section in view for the header, scroll progress, counting up | `useReducedMotion`, `useSeen`, `useReveal`, `useSpy`, `useScrollProgress`, `useCountUp` | `About.tsx`, `landing/Story.tsx` |
 | `landing/landing.css` | The landing's styles: its tokens, the hero and its HUD, each section, the narrower pages by container query, less motion; and how the app's own chrome looks over it (the notch steps aside, the corner and the compact bar take the night) | (CSS) | `About.tsx` |
 | `aboutRoute.ts` | The About page's tabs and address: the path `/about` and `/about/<tab>` (`showAboutPath`: pushed when it opens, so Back closes it, replaced on a tab change, and on close the address it was opened from), and the first, hash form `#about` and `#about/<tab>`, still read | `ABOUT_TABS`, `AboutTab`, `aboutTabFromHash`, `aboutHash`, `nextTab`, `currentHash`, `showAboutHash`, `aboutPath`, `aboutTabNow`, `showAboutPath` | `App`, `AboutIris.tsx` |
-| `Activity.tsx` | The Activity panel: the one-line status, then Steps (the table of ideas tried, why each failed) or Workings, with the switch between them, Workings' off button and, when it is off, Turn it on | `Activity`, `ActivityView`, `statusLine`, `Progress` (re-exports `editText`, `KIND_LABEL`) | `App` |
+| `Activity.tsx` | The Activity panel: the one-line status, then Steps (the table of ideas tried, why each failed) or Workings, with the switch between them, Workings' off button and, when it is off, Turn it on; and `ActivityLine`, the one calm line the collapsed Activity strip shows (a spinner while a proposal runs, then where it is; nothing before the first run), which App hands the dock as the Activity tab's content | `Activity`, `ActivityLine`, `ActivityView`, `statusLine`, `Progress` (re-exports `editText`, `KIND_LABEL`) | `App` |
 | `Workings.tsx` | Workings ([docs/workings.md](../workings.md)): the picked run drawn on a canvas that pans, zooms, follows the newest step, marks the step the pilot shows, and replays a finished run (the timeline strip, speeds); a check pointed at or pinned goes to `onPeek`, so its trial shows in the 3D viewer; timers and sizes come from the window the panel is in, so it works floated or in a pop-out window | `Workings`, `curve` | `Activity.tsx` |
 | `workingsGraph.ts` | A run's events as a graph to draw (lanes, columns, steps, edges, timeline bars), one builder per kind of run, as it stood at any moment | `graphOf`, `sec`, `Graph`, `Step`, `Edge`, `Lane`, `Part`, `Peek` | `Workings.tsx`, `App` (`Peek`) |
 | `runlog.ts` | The runs the page watched, for Workings: each run's events (meshes dropped, but a trial's pieces kept for the newest three proposals) with when they arrived, its origin (you, the chat, an agent over MCP, a tour replay); kinds: propose, plan, triage, built, detect, chat (a Chat panel turn); 12 kept, never letting a live one go | `runs`, `RunLog`, `lean`, `Run`, `RunHandle`, `RunKind`, `Origin`, `RUNS_KEPT`, `TRIALS_KEPT` | `App`, `Workings.tsx` |
 | `Agent.tsx` | "Connect an agent" dialog: token and server fields, client set-up snippets, time left, the agent's log | `AgentDialog`, `timeLeft`, `secondsLeft`, `AgentLogEntry` | `App` |
-| `AppMenu.tsx` | Iris's menu, on every layout: a panel from the right with every action by name (Models, Coordinate, this session, Panels and layout on a desktop, Help) | `MenuSheet` | `App` |
-| `Brand.tsx` | Iris's identity in the page: the wordmark, the split-O (`IrisMark`, still, orbiting or settling once), the app icon, the notch at the model's top edge (grows with a `NotchStatus` while Iris works), the loading card while the first models open (`LoadCard`, fed by `LoadProgress`) and the kept-fix toast | `Wordmark`, `IrisMark`, `AppIcon`, `Notch`, `NotchStatus`, `LoadCard`, `LoadProgress`, `KeptToast` | `App`, `AppMenu.tsx` |
+| `AppMenu.tsx` | `MenuSheet`: a titled panel from the right with every action by name; Escape or the scrim closes it. App opens two from the sidebar (below, "The app shell"): **Settings** (what the old ☰ menu held: Models, Coordinate, This session, Panels and layout) and **Help** (the principle and the eight steps, the samples, good to know) | `MenuSheet` | `App` |
+| `Brand.tsx` | Iris's identity in the page: the wordmark, the split-O (`IrisMark`, still, orbiting or settling once), the app icon, the loading card while the first models open (`LoadCard`, fed by `LoadProgress`; `serverLine` says the server may be waking after `WAKE_AFTER_MS`, `loadShare` is the bar's share) and the kept-fix toast. `Notch` (the logo at the model's top edge) is still exported, but App no longer renders it; its `NotchStatus` is now what the workspace's status line says while Iris works | `Wordmark`, `IrisMark`, `AppIcon`, `Notch`, `NotchStatus`, `LoadCard`, `LoadProgress`, `serverLine`, `loadShare`, `WAKE_AFTER_MS`, `KeptToast` | `App`, `AppMenu.tsx` and `About.tsx` (`Wordmark`), `AppShell.tsx` (`IrisMark`) |
 | `BuiltView.tsx` | Show it built's picture over Iris's view, the wipe dragged on the picture (its handle, each side named, the keys), "Lines from the model", the "Checked against the model" chip | `BuiltView`, `builtStep`, `cutText`, `wipeAt`, `BuiltRun` | `App`, `PlanPanel.tsx` |
 | `Chat.tsx` | "Chat with Iris": turns, tool steps, suggestions, the mic (hold to talk, hands-free, upload fallback); tells the page what was asked (`asked`) before each request, so Workings draws the turn | `ChatPanel`, `Turn`, `Step` | `App` |
-| `ClashPanel.tsx` | The selected clash's card (both sides, how each matched, Navisworks or captured views, triage reading), the image dialog, thumbnails. A fixed clash (a fix kept, `fix`, or `resolved` by the re-run check) shows a calm **Fixed ✓** card in place of the propose actions: what was kept, **Undo** when `onUndo` is given (App passes it only when `coordination.undoableFix` finds the newest kept edit is this clash's fix) and **Propose a different fix** as a secondary text button (`onProposeAgain`); App then leaves out Propose fixes, Explore wider fix and Go to the clash | `ClashPanel`, `Lightbox`, `ClashThumb` | `App`, `ReportList.tsx` |
+| `ClashPanel.tsx` | What the clash header does not show (the header holds the number, title, status, the report's distance and A and B, once): the A/B/C pictures in one row of small squares, the distance Iris measures now, whether the open model has each element, the "one element" note and the triage reading folded to one line (open at once when its rule is disputed or the reading failed); the image dialog, thumbnails. A fixed clash (a fix kept, `fix`, or `resolved` by the re-run check) shows a calm **Fixed ✓** card: what was kept, **Undo** when `onUndo` is given (App passes it only when `coordination.undoableFix` finds the newest kept edit is this clash's fix) and **Propose a different fix** as a secondary (`onProposeAgain`); App then leaves out Propose fixes, Explore wider fix and Go to the clash, and shows only Next clash after it | `ClashPanel`, `Lightbox`, `ClashThumb` | `App`, `ReportList.tsx` |
 | `ContextPlan.tsx` | The "wider fix" (context proposal) review in the Plan tab: alternatives, checks, review conditions to acknowledge | `ContextPlan`, `contextStep`, `ContextRun` | `App` |
-| `dock.tsx` | The desktop's panels on dockview: a slot per panel that `App` draws into (`inSlot`), `SlotHost` (where a slot sits, in the dock or the classic grid), `DockHost` (the dock, its tabs, buttons, right-click menu, saving) and `DockHandle` (show, reset, gather, and `fitBar`, which grows the bottom bar for Workings and gives it back only from that height) | `DockHost`, `SlotHost`, `inSlot`, `usePanelSlots`, `DockHandle`, `Slots` | `App` |
-| `dockLayout.ts` | The panels and their homes, which saved layouts load (`validLayout`), pop-outs back home on save (`withoutPopouts`), storage, what showing a panel takes (`showSteps`) | `PANELS`, `PANEL_IDS`, `homeOf`, `isPanel`, `validLayout`, `withoutPopouts`, `readLayout`, `writeLayout`, `showSteps`, `LAYOUT_KEY`, `CLASSIC_KEY` | `App`, `dock.tsx` |
+| `dock.tsx` | The desktop's panels on dockview: a slot per panel that `App` draws into (`inSlot`), `SlotHost` (where a slot sits, in the dock or the classic grid), `DockHost` (the dock, its tabs, buttons, right-click menu, saving; Activity starts collapsed to its strip, whose tab carries `strip` and App's `ActivityLine`) and `DockHandle` (show, reset, gather, and `fitBar`, which grows the bottom bar for Workings and gives it back only from that height). Imports `workspace.css` | `DockHost`, `SlotHost`, `inSlot`, `usePanelSlots`, `DockHandle`, `Slots` | `App` |
+| `dockLayout.ts` | The panels and their homes, which saved layouts load (`validLayout`), pop-outs back home on save (`withoutPopouts`), storage (`LAYOUT_KEY` `iris.dock.v2`, `LAYOUT_VERSION` 2: a layout kept under `iris.dock.v1` is not read), the bars the default layout starts collapsed (`DEFAULT_COLLAPSED`: Activity's), what showing a panel takes (`showSteps`) | `PANELS`, `PANEL_IDS`, `homeOf`, `isPanel`, `validLayout`, `withoutPopouts`, `readLayout`, `writeLayout`, `showSteps`, `LAYOUT_KEY`, `LAYOUT_VERSION`, `DEFAULT_COLLAPSED`, `CLASSIC_KEY` | `App`, `dock.tsx` |
+| `workspace.css` | The workspace decluttered: the 3D toolbar's light glass column and its white menus (More tools in two columns), the clash list (status tabs with counts, number / title / distance-badge rows, row actions on hover or focus and a ⋮ that is always there on touch, the selection bar), the clash header and panel (one measure line, A and B side by side, the calm Fixed state, the A/B/C squares, the folded triage note), and the Activity strip with its `ActivityLine`. `index.css` comes later in the cascade, so each rule here is more specific than the one it overrides; never a bare `.rail` | (CSS) | `dock.tsx` |
 | `Detect.tsx` | Iris's check: the set-up card (tests to run), the run summary (coverage, new/resolved, Detect again; with no check of the open models kept, "Only <check>" and Check the open models), and the check picker over the list (All checks or one kept check, Run again, Remove a check on filters, Run all again, which checks ran before a fix; [docs/detection.md](../detection.md), "Kept checks") | `DetectSetupCard`, `DetectSummary`, `CheckPicker`, `DetectProgress` | `App` |
 | `Insights.tsx` | Root causes and patterns, with their fix, filter, tick, mark and Add to requirements buttons | `Insights` | `App` (into `ReportList`'s `insights` slot) |
 | `Owner.tsx` | The owner's gear: unlock, "For me" and "For everyone" settings; marked while the owner's own settings are on, what is set in its tip (`note`) | `OwnerSettingsMenu` | `App` |
@@ -70,11 +83,11 @@ small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and
 | `ElementCard.tsx` | The selected element's card ([docs/panels.md](../panels.md), "Properties"): header, breadcrumbs that open a parent's own properties (with a back arrow; a storey's isolate, hide, filter), the icon bar (A, B, zoom, hide, isolate, section box, links, More for the class), what it is linked to (`Links`), then `PropertySets` (folded under All properties on the card over the model; its editor, `CardActions.editor`, only for the element itself: `api.editProperty`, then the new properties, the drawn revision moved on and the log read again) | `ElementCard`, `CardActions`, `Links` | `App` (`elementCard`, `cardActions`) |
 | `FiltersPanel.tsx` | The Filters panel ([docs/filters.md](../filters.md)): the list of filters (on, colour or action, name, count, up, down, zoom to them, delete; Show colours, The rest: Show · Grey · Hide, Colour by…), and the editor (models, classes and floors with counts, property conditions, Colour / By value / Hide / Isolate, swatches, Invert, the Value / Items / Colour table, the live count); with `check`, each row's What do these hit? and the Check clashes block under the list ([docs/filters.md](../filters.md), "Checks") | `FiltersPanel`, `blankRule`, `FiltersPanelProps` | `App` (the dock's Filters panel, or a sheet without the dock) |
 | `ProjectStart.tsx` | The blank project's drop zone (IFC/STEP models, or a Navisworks report or folder) | `ProjectStart` | `App` |
-| `projectRoute.ts` | A project's address as a path, pure (as `aboutRoute.ts`; below, "Engineer workflow", "Addresses and steps"): the seven steps in order with their labels, `/projects`, `/projects/<pid>` (Overview), `/projects/<pid>/<step>` (`clashes` for Clash review) and `/projects/<pid>/clashes/<n>` read and written (an unknown step opens on Overview; an id is 1–64 word characters or dashes, never a slash); the first, hash addresses (`#projects`, `#project/<pid>/<step>`) still read, and `legacyPath` turning an old hash (`#about`, `#owner` too) into its path; the step beside one for the step bar's arrow keys (wrapping); `showPath` / `showProjectRoute` (pushed, so Back returns, or replaced; the same address again is not a new entry); `ownClick` (a plain click a link's page handles, not one for a new tab) | `PROJECT_STEPS`, `ProjectStep`, `Step`, `ProjectRoute`, `isProjectStep`, `isProjectId`, `parseProjectPath`, `formatProjectPath`, `projectPath`, `PROJECTS_PATH`, `parseProjectHash`, `formatProjectHash`, `projectHash`, `PROJECTS_HASH`, `legacyPath`, `stepBeside`, `stepLabel`, `currentHash`, `currentPath`, `currentProjectRoute`, `showPath`, `showProjectRoute`, `ownClick` | `App`, `ProjectOverview.tsx`, `ProjectsHome.tsx`, `projectsApi.ts` (type) |
+| `projectRoute.ts` | A project's address as a path, pure (as `aboutRoute.ts`; below, "Engineer workflow", "Addresses and steps"): the seven steps in order with their labels, `/projects`, `/projects/<pid>` (Overview), `/projects/<pid>/<step>` (`clashes` for Clash review) and `/projects/<pid>/clashes/<n>` read and written (an unknown step opens on Overview; an id is 1–64 word characters or dashes, never a slash); the first, hash addresses (`#projects`, `#project/<pid>/<step>`) still read, and `legacyPath` turning an old hash (`#about`, `#owner` too) into its path; the step beside one (`stepBeside`, wrapping; nothing calls it since the step bar went); `showPath` / `showProjectRoute` (pushed, so Back returns, or replaced; the same address again is not a new entry); `ownClick` (a plain click a link's page handles, not one for a new tab) | `PROJECT_STEPS`, `ProjectStep`, `Step`, `ProjectRoute`, `isProjectStep`, `isProjectId`, `parseProjectPath`, `formatProjectPath`, `projectPath`, `PROJECTS_PATH`, `parseProjectHash`, `formatProjectHash`, `projectHash`, `PROJECTS_HASH`, `legacyPath`, `stepBeside`, `stepLabel`, `currentHash`, `currentPath`, `currentProjectRoute`, `showPath`, `showProjectRoute`, `ownClick` | `App`, `ProjectOverview.tsx`, `ProjectsHome.tsx`, `projectsApi.ts` (type) |
 | `projectsApi.ts` | Projects on the server ([docs/engineer-workflow.md](../engineer-workflow.md), "Server contract"): the `Project` wire types and a typed call per `/api/projects*` route through its own small JSON `request` (a failure is `api.ts`'s `ApiError` with FastAPI's `detail`); listing asks only for the ids this browser keeps (`iris.projects`, most recent first), in batches of `LIST_IDS_MAX` (200), and `pruneProjectIds` forgets the ids the server no longer has; the stable clash key reviews are stored under; and the plain facts the project pages show: relative and full times (server seconds or page milliseconds, `toMs`), sizes, the model mix, the latest saved state, review tallies, which counts to show (`knownCounts`: the open page's live ones, else the project's last known) and the next step (`nextAction`: no models → import; models, no counts → run coordination; open clashes → review; else report); `closedText` words the share closed without a false round number (1 of 464 is "<1% closed", 463 of 464 ">99% closed") | `listProjects`, `createProject`, `getProject`, `patchProject`, `renameProject`, `attachScene`, `openProject`, `saveProject`, `setReview`, `addReport`, `projectReportUrl`, `projectsApi`, `clashKey`, `myProjectIds`, `rememberProject`, `forgetProject`, `pruneProjectIds`, `PROJECTS_KEY`, `LIST_IDS_MAX`, `toMs`, `whenText`, `fullTime`, `sizeText`, `plural`, `closedText`, `modelMix`, `lastSaved`, `REVIEW_LABEL`, `reviewTally`, `knownCounts`, `nextAction`, `Project`, `CoordCounts`, `Review`, `ActivityItem`, `NextAction`, … | `ProjectsHome.tsx`, `ProjectOverview.tsx` |
-| `ProjectsHome.tsx` | The Projects home (`/projects`): "Iris Engineering · Projects", the projects this browser knows, newest change first, one row each (name and when updated, models with a chip per kind, the last known open / resolved / reviewed of all clashes, else the reviews recorded, else "Not checked"; the last save and its edits; Open), an inline **Create project** form (a name up to 120 characters), an error line, and with no projects the eight steps a project follows (`PROJECT_FLOW`, Import → Report, in words true of Iris as built) and **Open the sample building**. Props only: `projects`, `loading`, `error`, `onCreate(name)`, `onOpen(pid)`, `onDemo`; App fetches, creates and routes | `ProjectsHome`, `PROJECT_FLOW` | `App` |
-| `ProjectOverview.tsx` | One project (`/projects/<pid>/<step>`): `ProjectSteps`, the step bar (a Projects crumb, the six steps with counts: models and reports from the project, open clashes from the counts; left and right arrows move; Save and Open workspace, or Import models, at its right end), then the step's body: Overview (the next step from `nextAction`, the Models, Coordination, Reports and Recent activity cards), Models (files, kind, size, SHA-256, the "2D drawings (PDF) · Not yet supported" line, Import models), Coordination (unresolved against resolved and reviewed as one bar, labelled live or last known, and the review decisions recorded), Clash review (the same tally and Open workspace: the review itself happens in the workspace), Reports (every report kept with the project, each a download from `projectReportUrl`), Activity (the page's activity lines and the saved states). Props only: `project`, `step`, `onStep`, `counts`, `reports`, `activity`, `onImport`, `onOpenWorkspace`, `onSave`, `saving`, `onProjects`; `SaveButton`, the project's Save (the overview's header and App's step bar): "Saving…" while it runs, "Saved ✓" for `SAVED_MS` (2 s) after, "Not saved" (`btn danger`, the reason in its tip, for 5 s) when `onSave` resolves `false` or throws | `ProjectOverview`, `ProjectSteps`, `SaveButton`, `SAVED_MS` | `App` |
-| `projects.css` | The Projects home's and the project overview's styles (`.proj-*`, `.pchip`): a small type scale, tabular numbers, status chips, no gradients, colours only from `index.css`'s tokens | (CSS) | `ProjectsHome.tsx`, `ProjectOverview.tsx` |
+| `ProjectsHome.tsx` | Projects (`/projects`) in the shell: a `PageHeader` ("Projects", how many in this browser; **Open the sample building** at the right when there are projects), tabs with counts (All · Needs review · Clear · Not checked), a table card (Name · Models · Clashes · Open · Status · Last saved · ⋮) whose status pill comes from the counts and reviews only (`projectStatus`: No models, Not checked, Open issues, All clear, Resolved, In review), each row's ⋮ menu (Open, Rename in place, Remove from this browser with an inline confirm), stacked cards on a narrow panel, and with no projects an `EmptyState` with **New project** and Try the sample building. No inline create form: `NewProjectDialog` (a light modal: one name up to 120 characters, Enter creates, Escape or Cancel closes but not while `busy`, `error` the server's words) is App's, opened from Home's tile, the top bar and this empty state. `PROJECT_FLOW`: the eight steps a project follows (Import → Report, in words true of Iris as built). Props only: `projects`, `loading`, `error`, `onNew`, `onOpen`, `onRename`, `onRemove`, `onDemo`, `hrefOf` | `ProjectsHome`, `ProjectRow`, `NewProjectDialog`, `projectStatus`, `ProjectStatus`, `ProjectStatusKey`, `PROJECT_FLOW` | `App`, `StartScreen.tsx` (`PROJECT_FLOW`) |
+| `ProjectOverview.tsx` | A project's page (`/projects/<pid>/<step>` for Overview, Drawings, Reports and Activity): a `PageHeader` (crumbs Projects › name › step; the title the name, or the step's label; under it created, updated and the last save; **Save** its only action), then the step's body: Overview (four stat cards that count up, `CountUp`: Models, Clashes, Open, Resolved, "—" when unknown; the models table and the coordination tally with `closedText`; the next step from `nextAction` under a thin holo line; recent activity; recent reports), Reports and Activity, with `EmptyState` where there is nothing yet (it still holds bodies for Models, Coordination and Clash review, steps App shows as the workspace instead). App's own cards for the step follow as `children` (Drawings' `DrawingsPanel`, building a report, the decisions, the edit log). The page is a size container, so it follows its panel's width. No step bar: the sidebar carries the steps. Props only: `project`, `step`, `onStep`, `counts`, `reports`, `activity`, `onImport`, `onOpenWorkspace`, `onSave`, `saving`, `onProjects`, `stepHref`, `projectsHref`, `children`. `SaveButton`, the project's Save (this header and the workspace's top bar): "Saving…" while it runs, "Saved ✓" for `SAVED_MS` (2 s) after, "Not saved" (`btn danger`, the reason in its tip, for 5 s) when `onSave` resolves `false` or throws | `ProjectOverview`, `SaveButton`, `SAVED_MS` | `App` |
+| `projects.css` | Projects' and a project's pages (`.proj-*`): white cards with a hairline and a 12 px radius (a soft shadow on hover only where clickable), tables with a soft grey header band, numbers in IBM Plex Mono, status pills (a dot and a label), segmented tabs with counts, the row menu, rename in place, the New project modal on a pale veil, the overview's stat cards and next-step card; container queries follow the page's panel; light only, on `index.css`'s tokens | (CSS) | `ProjectsHome.tsx`, `ProjectOverview.tsx` |
 | `importRows.ts` | Per-file import rows, pure ([docs/engineer-workflow.md](../engineer-workflow.md), step 2): one row per chosen file (`IFC`, `STEP`, else refused at once with why: a PDF, `PDF_REFUSAL` ("A PDF drawing is not a model: add it on the Drawings step, where Iris reads it against the models"; `App` sends the PDFs among chosen files to the Drawings step first, `splitDrawings`), a DWG or DXF drawing "aren't supported yet", Navisworks `.nwd`/`.nwc`/`.nwf`, `.ifczip`), moved through the existing upload stream's events (`applyEvent`: packing, upload bytes split over the files in the order sent, a STEP file's own conversion stages, then opening and measuring, which are the whole batch's and marked `shared`, never a file's own number); `failAll` fails every model row (the server opens the batch all or none) and names the culprit when the reason names one file; `applyDraw` marks files ready as the viewer draws them; `summary` says ready / in progress / failed / not supported and whether **Retry** applies | `importKind`, `extension`, `sendableFiles`, `initRows`, `applyEvent`, `applyDraw`, `drawnUpTo`, `failAll`, `removeRow`, `summary`, `PACK_MIN`, `PDF_REFUSAL`, `ImportRow`, `ImportKind`, `ImportStage`, `ImportSummary` | `ImportPanel.tsx` |
 | `ImportPanel.tsx` | The import as a file table: each row's type, size, stage, progress (indeterminate where nothing is measured; a shared batch figure said so), its error, **Remove**; one batch error said once; **Retry import** (every model file again: the server opens them together, all or none), **Choose files** and an optional drop zone; the formats line (`FORMATS`: IFC, STEP, "2D PDF drawings: not yet supported"). Props only: `rows`, `onRetry`, `onRemove`, `onPick`, `onDrop`, `onClose`, `busy`; the page keeps the rows and the files | `ImportPanel`, `FORMATS`, `fileSize` | `App` |
 | `import.css` | The import table's styles (`.imp-*`), on `index.css`'s tokens | (CSS) | `ImportPanel.tsx` |
@@ -83,23 +96,22 @@ small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and
 | `model-summary.css` | The model summary's styles (`.msum-*`), on `index.css`'s tokens | (CSS) | `ModelSummaryPanel.tsx` |
 | `coordination.ts` | The coordination overview's rules, pure (step 4; the contract's "Classification", "Severity", "Status"): a clash's class from fields the page already holds (`classify`: settled facts, then the triage verdict, then the test and its signed distance; a duplicate test is a modelling error), triage severity (`severityOf`, AI-assessed; high / medium / low / none, no "critical" tier), status (`statusOf`: resolved by the re-run check's `diff.resolved`, else a kept fix awaiting re-check, else reviewed by design or sent to author, else open), the counts with the detector's touching and meant-to-meet pairs as counts only (`overview`), the list filter (`passes`), the clash key (Iris's `kind|gidA|gidB`, an imported one `nw|<report title>|<clash name>`), and distance, limit and location in words; `undoableFix`: the edit log's newest kept entry when it is this clash's fix (by id or pair, as `Journal.for_clash`), for the clash panel's Undo | `classify`, `severityOf`, `statusOf`, `resolvedIdsOf`, `undoableFix`, `overview`, `passes`, `clashKey`, `testKind`, `distanceText`, `limitText`, `locationText`, `CLASSES`, `SEVERITIES`, `STATUSES`, `CLASS_INFO`, `SEVERITY_LABEL`, `STATUS_INFO`, `ClashClass`, `Severity`, `ClashStatus`, `CoordinationFilter`, `CoordinationSummary`, `StatusInputs` | `CoordinationOverview.tsx`, `ClashHeader.tsx`, `App` |
 | `CoordinationOverview.tsx` | The coordination overview card: how many kept checks it counts (or "Imported report: no checks run by Iris"), totals (clashes, open, actual, triaged), the clashes by class, by severity (badged "AI-assessed (triage)", with **Triage all** or "Triage the n not read") and by status, each number a filter on the list (`onFilter`); touching and meant-to-meet pairs as counts with no rows; **Run checks again** (or **Run checks**). Props only: `summary` (`coordination.overview`), `onFilter`, `onRunChecks`, `onTriage`, `triaged` | `CoordinationOverview` | `App` |
-| `ClashHeader.tsx` | The investigation header for one clash (step 5): #N, its id (stable across runs for Iris's own) and Navisworks ref, previous and next, the class, severity ("AI-assessed", or "by rule" when a rule settled it) and status chips, A and B as the report gives them (class, name, file, level, system, a GlobalId to copy), the signed distance (overlap, gap, touching) against the test's limit (required clearance or tolerance), the level and grid, **Focus in 3D**; a field the clash does not hold is left out. Props: `clash`, `triage`, `status` (`statusOf`), `onFocus`, `onPrev`, `onNext` | `ClashHeader` | `App` |
+| `ClashHeader.tsx` | The investigation header for one clash (step 5), compact and the only place its details show, so the panel's Propose fixes stays on screen under it: #N, its id (stable across runs for Iris's own) and Navisworks ref, previous and next, focus in 3D, the title, the class, severity ("AI-assessed", or "by rule" when a rule settled it) and status chips, the signed distance (overlap, gap, touching) against the test's limit with the level and grid on one line, A and B side by side as the report gives them (class, GlobalId to copy, name, file, level, system); a field the clash does not hold is left out. Props: `clash`, `triage`, `status` (`statusOf`), `onFocus`, `onPrev`, `onNext` | `ClashHeader` | `App` |
 | `coordination.css` | The overview's and the clash header's styles (`.coord-*`, `.clash-head-*`), on `index.css`'s tokens, `.chip`, `.btn`, `.ibtn` and `.sw` | (CSS) | `CoordinationOverview.tsx`, `ClashHeader.tsx` |
 | `proposalState.ts` | A proposal's state and words, pure (steps 6, 7 and 9; below, "Proposal states"): `stateOf` decides AI-proposed / Geometry-validated / Failed validation / Unverified from the item's shape alone, never from anything the model wrote; `safeState` lets a caller lower a validated state, never raise one; `describe` gives the card's rows (element and joined parts, direction and distance in mm on east / north / up, the edit, the reason labelled AI-drafted, constraints considered, expected outcome and evidence only from geometry numbers, a failed check's reason and hits); `toDecision` builds the journal's `Decision` and throws on accepting anything not geometry-validated; `decisionWords` says who, when and why | `stateOf`, `safeState`, `describe`, `toDecision`, `decisionWords`, `moveParts`, `directionWords`, `STATE_LABEL`, `STATE_MEANING`, `EXPECTED_NONE`, `ProposalState`, `DecisionKind`, `Decision`, `ProposalItem`, `Described`, `ClashRef`, … | `ProposalCard.tsx`, `api.ts` (the `Decision` type) |
-| `ProposalCard.tsx` | One proposal for the engineer: the state chip and what it means, kind and model, element to move, direction, distance, edit, reason (AI-drafted), constraints considered, expected outcome, evidence or the failed check; **Accept** (enabled only when geometry-validated; the server checks again on keep), **Reject** (a reason is required), **Modify** (the edit tool, this fix as the start), **Request another**, **Before / after**; once decided, "Accepted by … · time · Why". Props only: `item`, `state`, `names`, `requiredClearanceMm`, `onAccept`, `onReject(reason)`, `onModify`, `onAnother`, `onShowBeforeAfter`, `busy`, `decided` | `ProposalCard`, `ProposalCardProps` | `App` |
-| `proposal.css` | The proposal card's styles (`.pcard-*`): a rule down the left in the state's colour (dashed for Unverified), on `index.css`'s tokens, no gradients | (CSS) | `ProposalCard.tsx` |
+| `ProposalCard.tsx` | One proposal for the engineer: the state chip and what it means, kind and model, element to move, direction, distance, edit, reason (AI-drafted), constraints considered, expected outcome, evidence or the failed check. An AI-proposed or Unverified card wears the holo edge and a soft yellow notice "AI-proposed: check before accepting"; a geometry-validated one a green check in its chip. **Accept** (ink; enabled only when geometry-validated; the server checks again on keep), **Reject** (outline; a reason is required), **Modify** (the edit tool, this fix as the start), **Request another** (text), **Before / after**; once decided, "Accepted by … · time · Why". Props only: `item`, `state`, `names`, `requiredClearanceMm`, `onAccept`, `onReject(reason)`, `onModify`, `onAnother`, `onShowBeforeAfter`, `busy`, `decided`, `acceptTour` | `ProposalCard`, `ProposalCardProps` | `App` |
+| `proposal.css` | The proposal card's styles (`.pcard-*`): a rule down the left in the state's colour (dashed for Unverified), the holo edge on AI-only cards (with `holo.css`'s `.holo-edge`), the soft yellow notice, on `index.css`'s tokens | (CSS) | `ProposalCard.tsx` |
 | `drawingsApi.ts` | The 2D drawing reader's calls and facts, pure ([docs/drawings.md](../drawings.md)): upload PDFs to the open scene (with progress), attach the sample drawings that go with the open sample models (`addSampleDrawings`, `POST /api/scenes/{scene_id}/drawings/samples`), list them, a page's picture, read one with AI (NDJSON events, its cost), its items, the comparison with the models; a saved reading (`SavedReading` `{model, label, at}`: a sample sheet's reply, made once with Gemini and replayed at no cost) as `Drawing.saved_reading`, a `page` event's `saved`, `done.saved` and `ReadResult.saved`, read tolerantly by `savedReadingOf` (and from an item's `evidence.saved_reading` by `savedOfItems`); the status and mismatch words and styles, kinds, sizes, cost (`costText`: "$0 (saved reading)" for a replay, "$0 (already read, cached)" for a cached page), text-layer label, page numbers, the viewer's zoom maths | `uploadDrawings`, `addSampleDrawings`, `listDrawings`, `pageUrl`, `readDrawing`, `drawingItems`, `compareDrawings`, `drawingsApi`, `Drawing`, `SavedReading`, `Item`, `Comparison`, `Mismatch`, `ReadEvent`, `ReadResult`, `savedReadingOf`, `savedOfItems`, `savedText`, `savedModel`, `costText`, `STATUS_STYLE`, `MISMATCH_STYLE`, `fitWidth`, `zoomAt`, `centreOn`, … | `App`, `DrawingsPanel.tsx` |
 | `sampleDrawings.ts` | "Try the sample drawings" as steps, pure ([docs/drawings.md](../drawings.md)): `openSampleDrawings(names, page)` runs the page's own calls (`SampleDrawingsPage`: `sampleProject`, `show`, `sceneId`, `open`, `openProject`, `attach`, `keep`, `check`, `listed`, `busy`, `fail`) in order, the sheets first: a new sample project's models opened, the sheets attached and listed, both kept with the project, then the check; a project found again and not open here opened with the sheets attached before its check; one open here given them at once. A refused attach says "Could not open the sample drawings: …" and runs no check (a check clears the error line). `demoOfFiles`: the demo the open files are (server `demos.find`), for the Drawings step's offer; the busy words `SAMPLE_DRAWINGS_BUSY` and `ADDING_SAMPLE_DRAWINGS` | `openSampleDrawings`, `SampleDrawingsPage`, `demoOfFiles`, `SAMPLE_DRAWINGS_BUSY`, `ADDING_SAMPLE_DRAWINGS` | `App` |
 | `DrawingsPanel.tsx` | The Drawings step: the sheets of the open models' scene, a page viewer (zoom, fit, pan) with each item read boxed by status (confirmed by the text layer, AI only, text only), the items and the mismatches with the models (missing in the model or the drawing, size or type differs), **Read with AI** (live progress and cost), upload (drop or choose; non-PDFs listed and skipped), an element shown in 3D. "AI reads, data checks, the engineer decides." With no drawings and `onSamples` given (the open models are the sample building), "No drawings to hand?" and **Add the sample drawings** ("Adding the sample drawings…" while it runs; a failure shown with Retry). A sheet with a saved reading (`Drawing.saved_reading`, the sample sheets) carries a **Saved reading** badge, its read button says it replays the saved reading at no cost, and its reading says so in words, never as a live one: `SavedNote`, "Saved AI reading of this sample (Gemini 3.8 Flash): replayed at no cost, not read live." (the label from the server), "Replaying the saved reading of page n of N" while it runs, "Saved AI reading (…)" and "$0 (saved reading)" when done, and "(saved reading, replayed)" in an item's evidence. Props only: `sceneId`, `drawings`, `items`, `compare`, `busy`, `names`, `error`, `onRetry`, `onUpload`, `onRead`, `onFocusElement`, `onSelectItem`, `onSamples` | `DrawingsPanel`, `DrawingsPanelProps`, `ReadState`, `SavedNote`, `ReadLine`, … | `App` |
 | `drawings.css` | The Drawings step's styles (`.dwg-*`), light, on `index.css`'s tokens | (CSS) | `DrawingsPanel.tsx` |
 | `ReportDoc.tsx` | The coordination report dialog (scope, all kept checks or only the one the list shows, a typed team name per model, build PDF and BCF; for a project, `projectId` and `projectName` put its name on the cover and `onBuilt` hands the built report on to be kept with it) and the per-clash review block. Triage is optional: **Build the report** needs only the teams table; `reportCounts` gives the pages (a fix, or a real clash nobody marked) and the clashes not triaged (no verdict, fix or mark), shown as "n not triaged (listed by clash test)" with **Triage all** as a secondary to sort them | `ReportDialog`, `ReviewBlock`, `reviewersOf`, `reportCounts` | `App` |
-| `ReportList.tsx` | The left pane over a report: Clashes / Insights tabs, impact bar, the report's line (tests, in the model, a "Naming n…" pill while titles land; the line wraps under a narrow panel, never clipped), the check picker (`picker`, from App), the search on its own row and the filters under it (with `coord`, the coordination overview's filter, a class, severity or status applied by the page, as a chip that shows every clash again), each only when it would change the list (In the model when some clashes are not in the open models; by status once anything is fixed or reviewed: All, To fix, Fixed, Reviewed, also from the header's "N fixed" and "N reviewed" chips; "n shown"), the list with lazy thumbnails, drawing only the rows on screen (below,
-"The clash list draws what is on screen"; `rowWindow`, `reveal` scrolls to a clash not drawn yet), each row's proposal (Proposing… while it runs, then "N fixes ready" or "No fix found", with View when it is not on screen: `proposing`, `ready`, `panel`, `onViewProposal`), and each row's quick actions on hover, keyboard focus or the selected row (`RowActions`: Isolate the clashing elements, pressed on the clash isolated now (`isolating`, `onIsolate`); Propose fixes when both elements are in the model and it may need one, Mark as not a clash, and its same-element clashes with their count, narrowing the list to the clashes sharing either element, `sameElements`, through `onFocus`) | `ReportList`, `sameElements`, `clashLabel`, `mm`, `linkState`, `Review`, `rowWindow`, `FIRST_ROWS`, `OVERSCAN` | `App`, `ClashPanel.tsx`, `ContextPlan.tsx`, `PlanPanel.tsx`, `ReportDoc.tsx` |
+| `ReportList.tsx` | The left pane over a report: Clashes / Insights tabs, impact bar, the report's line (tests, in the model, a "Naming n…" pill while titles land; the line wraps under a narrow panel, never clipped), the check picker (`picker`, from App), then the status tabs with their counts (All · Open · Fixed · Reviewed, `statusCounts`: a fixed clash counts as fixed even when also reviewed; Fixed and Reviewed off while empty), the search on its own row and the filters under it (with `coord`, the coordination overview's filter, a class, severity or status applied by the page, as a chip that shows every clash again), each only when it would change the list (In the model when some clashes are not in the open models; "n shown"), the list with lazy thumbnails, drawing only the rows on screen (below, "The clash list draws what is on screen"; `rowWindow`, `reveal` scrolls to a clash not drawn yet). A row shows its mark, `#N` (mono), the title and the distance badge (`badgeMm`: a true minus, red for an overlap, amber for a gap), and a pill only when there is something to say (Fixed, By design or For author, a triage verdict, Proposing… while a proposal runs, then "N fixes ready" or "No fix found", with View when it is not on screen: `proposing`, `ready`, `panel`, `onViewProposal`). Its quick actions (`RowActions`) show on hover or keyboard focus, or from a ⋮ menu that is always there on a touch screen: Isolate the clashing elements, pressed on the clash isolated now (`isolating`, `onIsolate`); Propose fixes when both elements are in the model and it may need one; Not a clash; and its same-element clashes with their count, narrowing the list to the clashes sharing either element (`sameElements`, through `onFocus`) | `ReportList`, `sameElements`, `clashLabel`, `mm`, `badgeMm`, `statusCounts`, `StatusTab`, `linkState`, `Review`, `rowWindow`, `FIRST_ROWS`, `OVERSCAN` | `App`, `ClashPanel.tsx`, `ContextPlan.tsx`, `PlanPanel.tsx`, `ReportDoc.tsx`, `coordination.ts` (types) |
 | `Requirements.tsx` | The requirements dialog: level cards, strictness, the check matrix, who moves, the kind of project (building or machine) and what is fixed in place, rules and Gemini's audit, openings | `RequirementsDialog` | `App` |
 | `Sheet.tsx` | The phone's bottom sheet bar: handle, drag and flick, snap heights | `SheetBar` | `App` |
 | `Tour.tsx` | Both guided tours (steps, spotlight, "Show me", recorded-run offer) | `Tour`, `TourState`, `TourActions`, `TOUR`, `CELL`, `TOUR_QUESTION`, `BUILDING_STEPS`, `CELL_STEPS` | `App` |
 | `Triage.tsx` | The Triage card (a head with the Step 1 pill and a full-width Triage all button before a run; two stages; verdict bar and rows; a Stop button while it runs, only for whoever started it or the owner (`can_stop`; others see "Shared with whoever started it"), and "Stopped: n of m sorted" after; "Triage N unread" when readings carried from other checks leave some to read, a failed read counted among them, and "Continue · N left" after a stop, for every report; a run queued behind the one under way, or following an earlier list's, says so; compact mode, folded to the head and the button or bar) | `TriageCard`, `TRIAGE`, `TriageRun` | `App`, `ClashPanel.tsx`, `ReportList.tsx` |
-| `ViewerToolbar.tsx` | The viewer's icon rail (modes, styles, tools, camera, views and layouts, saved views, visibility), or one Tools menu on a phone | `ViewerToolbar`, `ToolbarState`, `ViewsControls`, `STYLES` | `App` |
+| `ViewerToolbar.tsx` | The viewer's icon rail: six core tools (Home view, Go to the clash, Section box, Measure, Visibility, Save a screenshot), then **More tools** (an ellipsis), a two-column menu with the rest by name (modes, styles, the outline pair, connections, Edit the model, camera views, orthographic, back and forward, set and clear Home, saved views, the view layouts). With several panes the main rail keeps Go to the clash, Measure, Visibility, Screenshot and More tools (Edit, the layouts), and the 3D pane's rail Home, Section and **More 3D tools**. On a phone, one Tools menu | `ViewerToolbar`, `ToolbarState`, `ViewsControls`, `Rail3d`, `RemoveModel`, `STYLES` | `App` |
 | `MeasurePanel.tsx` | The Measure panel beside the rail while measuring: snap toggle, what to click next, the measurements (copy or delete each, Copy all, Clear all); its header drags it and folds it ([docs/measure.md](../measure.md)) | `MeasurePanel` | `App` |
 | `EditTool.tsx` | The Edit tool's panel beside the rail (P): the animated palette (push/pull, align, move, void, cut by shape, split, remove a section, clip, offset, join, disconnect, delete), an offset's two points along the run then Up, Down or a compass side (`offsetWays`) and how far, a join's two segments, a disconnect's joint, points snapped only to the element picked (`SNAP_ON_PICK_M`), forms that leave numbers to the server (`noValidate`), the face picked and its name (sent by its pick when only a pick places it: `faceRef`), drag or typed distance, align's target (a face, or a snapped corner, edge midpoint or edge point) with its preview at once, gap and stretch-or-move, a move's vector or two snapped points, **Take joined parts along** for push/pull, align and move (off by default, `carry` in the op, kept for the visit in `sessionStorage`), **Apply to the type** for push/pull and align (`scope: "type"`, off by default and again for each element), each shown only where the picked face's `choices` say it does something (the type named with how many others: `typeChoice`), the check's summary as the edit then a line per thing it brings along (`effects`), **Also changes N other elements** by why with **Show them** (`alsoGroups`, `frameEverywhere`), the server's check (Checking…, clear and nearest gap, the clashes it makes, the joints it leaves open, its warnings), its offer (Clip it flush, Move it on its own), Keep or Keep with N clashes · N open joints (`keepLabel`); a face the tool cannot take offers the tools it does take (`carry` keeps the face); the log folded in when the panels are not docked. App routes clicks, hovers, keys and Esc to it (`EditToolHandle`) | `EditTool`, `EditToolHandle`, `READY`, `checkStatus` | `App` |
 | `EditPanel.tsx` | The Edits panel: the scene's edit log newest first (who kept each edit, its clash, the fix a hand edit follows, its check, its warnings; Undone in an undone entry's header), Undo, Redo and the CSV at its head, Redo and Undo to here at the foot of the rows they belong to; a row frames its elements ([docs/manual-edits.md](../manual-edits.md)) | `EditPanel`, `checkLine`, `timeOf` | `App` |
@@ -124,8 +136,17 @@ small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and
 
 ## The component tree
 
-`App` renders one `div.app` whose classes carry the layout (`docked`, `landing`, `starting`, `phone`/`tablet`,
-`snap-*`, `list-open`, `resizing`) and whose CSS variables `--left-w` / `--right-w` carry the dragged pane widths.
+`App` renders the app shell (below, "The app shell"): `div.shell` (`shell-rail` while the sidebar is collapsed to its
+rail on a desktop; `shell-compact shell-phone` or `shell-tablet` on phones and tablets) holds the `Sidebar` and
+`div.shell-main`, which is the `TopBar` over `div.shell-body`. The body holds the workspace, one `div.app` absolutely
+filling it, whose classes carry the layout (`notched` on a desktop, a name left from the notch that `frame.css` places
+the floating cards by; `docked`, `landing`, `starting`, `phone`/`tablet`, `snap-*`, `list-open`, `resizing`) and whose
+CSS variables `--left-w` / `--right-w` carry the dragged pane widths. The workspace is always mounted, so the 3D view
+and its panels stay drawn under any page. The page over it, Home (`div.proj-shell.home-shell`) or the projects and a
+project's page (`div.proj-shell`), is drawn among the last children of `div.app` and placed over it with
+`position: absolute` (`frame.css`), inside the body, not fixed over the window. `NewProjectDialog` is rendered at the
+shell's root.
+
 Each panel's content (the left pane, the stage, the Clash, Plan and Chat bodies, Activity) is drawn into a slot of its
 own (`dock.tsx`, [docs/panels.md](../panels.md)), and the slots are placed in one of two ways:
 
@@ -133,30 +154,38 @@ own (`dock.tsx`, [docs/panels.md](../panels.md)), and the slots are placed in on
   middle and side bars that collapse, float and pop out.
 - **The classic layout** (phones, tablets, the landing, Classic layout on): the old grid, the slots placed with
   `SlotHost` as `display: contents`, so the five regions are grid items as before and CSS re-places them (phone: the
-  panes become the sheet's body).
+  panes become the sheet's body). Its resizers measure from the workspace's own edges, since the sidebar is to its left.
 
-Nothing remounts when a panel moves or the layout changes: only the slot elements move.
+Nothing remounts when a panel moves, the layout changes or a page opens over the workspace: only the slot elements
+move.
 
 ```mermaid
 flowchart TD
   main["main.tsx"] --> app["App"]
-  app --> header["Notch and corner menu in the stage (desktop), or header.bar (phone and tablet)"]
-  app --> slots["inSlot: each panel's content into its slot"]
+  app --> shell["div.shell"]
+  shell --> side["Sidebar: Home, Projects, Workspace, the open project's steps, Help, Settings, the reviewer (a drawer on phone and tablet)"]
+  shell --> smain["div.shell-main"]
+  shell --> newp["NewProjectDialog"]
+  smain --> top["TopBar: the toggle, or the hamburger and logo"]
+  smain --> body["div.shell-body"]
+  top --> head["PageHeader slim: crumbs, title, the one status line (desktop workspace)"]
+  top --> search["SearchBox (not on phones)"]
+  top --> acts["Actions: OwnerSettingsMenu, then New project, Open workspace, or the workspace's Save, Report, Export"]
+  body --> work["div.app: the workspace"]
+  work --> slots["inSlot: each panel's content into its slot"]
   slots --> left["aside.pane.left (Coordination)"]
   slots --> stage["main.stage (Model: the Viewer canvas lives here)"]
   slots --> bodies["Clash, Plan and Chat bodies"]
-  slots --> dock["footer.dock: Activity (not on phone and tablet)"]
-  app --> place{"docked?"}
+  slots --> dock["footer.dock: Activity (desktop)"]
+  work --> place{"docked?"}
   place -->|"yes"| dockhost["DockHost: dockview, side bars, floating and pop-out windows"]
   place -->|"no"| classic["SlotHost per slot, aside.pane.right with its tabs, two resizers"]
-  app --> sheet["SheetBar (phone)"]
-  app --> drawer["drawer-scrim (tablet)"]
-  app --> menu["MenuSheet (phone and tablet)"]
-  app --> tips["Tooltips"]
-  app --> dialogs["Dialogs"]
-  header --> pops["Popover: Models, Coordinate, Panels and layout"]
-  header --> owner["OwnerSettingsMenu"]
-  dialogs --> about["AboutIris, About Iris in tabs"]
+  work --> sheet["SheetBar (phone)"]
+  work --> drawer["drawer-scrim (tablet)"]
+  work --> sheets["MenuSheet: Settings and Help"]
+  work --> tips["Tooltips"]
+  work --> pages["Over it: Home (StartScreen) or ProjectsHome or ProjectOverview"]
+  work --> dialogs["Dialogs"]
   dialogs --> agent["AgentDialog"]
   dialogs --> tour["Tour"]
   dialogs --> req["RequirementsDialog"]
@@ -171,16 +200,17 @@ flowchart LR
     list --> insights["DetectSummary and Insights"]
     list --> lazy["LazyThumb or ClashThumb per row"]
     setup["DetectSetupCard (models, no report)"]
+    empty["EmptyState (nothing open)"]
   end
   subgraph stagePane["stage"]
-    toolbar["ViewerToolbar"]
+    toolbar["ViewerToolbar: six tools and More tools"]
     panes["ViewPanes: pane headers, clash chip, splitters"]
-    landing["About (landing) or ProjectStart"]
-    overlays["props card, pilot pill, compare bar, toasts"]
+    start["ProjectStart (a blank project)"]
+    overlays["props card, pilot glow, compare bar, toasts; on phone and tablet the busy, gone, pilot and error overlays"]
   end
   subgraph rightPane["pane.right: tabs Clash, Plan, Chat"]
-    clashTab["ClashPanel, ReviewBlock, BuiltView"]
-    fixCards["Thinking, Recommended, NoFix, option cards with ProofStrip"]
+    clashTab["ClashHeader, Propose fixes, ClashPanel, ReviewBlock, BuiltView"]
+    fixCards["Thinking, Recommended, NoFix, ProposalCard per option with ProofStrip"]
     activity["Activity (compact layouts)"]
     planTab["PlanPanel or ContextPlan"]
     chatTab["ChatPanel"]
@@ -189,16 +219,112 @@ flowchart LR
 
 - In the dock every panel draws its content whatever `tab` says (Clash and Chat can both be on screen); in the classic
   layout the Clash, Plan and Chat bodies are hidden by `tab` as before.
+- The Clash tab is `ClashHeader`, then its actions (Propose fixes, Explore wider fix, Go to the clash) right under it,
+  so Propose fixes shows without scrolling, then `ClashPanel`. A fixed clash (`fixedHere`: a kept fix, or resolved by
+  the re-run check) leaves the actions out: `ClashPanel` shows its calm Fixed ✓ card, and after it only **Next clash**.
+  "Your name, recorded with each decision" shows above the options only when no name was kept at load (`askName`).
 - `ChatPanel` is always mounted (hidden when another tab is open) with `key={sceneId:chatReport}`, so it keeps its
   history across tabs and restarts only when the scene changes or the user opens another report. A report the chat
   opened itself (`adoptChatReport`) does not change `chatReport`, so the turn that opened it keeps answering.
 - The Plan tab holds either `PlanPanel` (a batch or root-cause plan) or `ContextPlan` (a wider fix), switched by
   `planKind`; a segmented control appears when both exist.
-- `About` is the landing when nothing is open (`landing = !stats && !report && !blank`). **About Iris**
-  (`AboutIris`) is a separate full page over everything, open while `aboutTab` is set: the header's About Iris
-  button, the phone menu and the landing's "Go deeper" card call `openAbout`, and `#about` / `#about/<tab>` in the
-  address opens it on load or on Back and Forward (`hashchange` / `popstate`). `aboutPushed` remembers that the page
-  added the history entry, so closing goes Back over it.
+- `landing` (`!stats && !report && !blankish`) still names the workspace with nothing open, but App mounts neither the
+  landing (`About`) nor About Iris (`AboutIris`) at HEAD: Home is the first screen, and an `/about` address only sets
+  `aboutTab` ("no longer offered", docs/ui-design.md §10).
+
+## The app shell
+
+Iris is an app with a left sidebar, not a website (the owner's brief, Nov 22). `AppShell.tsx` draws the shell's parts
+from props; `App` owns the route, the rail state, the reviewer's name and what each item does; `frame.css` places
+the workspace and the pages in it.
+
+- **Layout.** The sidebar on the left (264 px; on a desktop it collapses to a 64 px icon rail, the width animated),
+  then the main column: the top bar (56 px) over the body. The body holds the workspace (`div.app`), always mounted,
+  and over it the page shown. On phones and tablets the sidebar is a drawer over a light scrim, opened from the slim
+  top bar's hamburger ("`layout.ts`, `Sheet.tsx`, `AppMenu.tsx`", below).
+- **Pages.** Home (`StartScreen`) shows when no project page is asked for and either Home was asked for (`homeAsked`:
+  the sidebar's Home, `/home`, or `/` on load; a session open stays open behind it) or nothing is open (no models,
+  report, blank project, busy line or loading). `/projects` is `ProjectsHome`; a project's Overview, Drawings, Reports
+  and Activity are `ProjectOverview`; its Models, Coordination and Clash review are the workspace itself (`workStep`),
+  as is `/workspace`, a session open outside a project. An error on a page over the workspace shows as one line at its
+  top (`pageAlert`, `.proj-shell-alert`; a click dismisses it).
+- **Sidebar items.** The logo (Iris by Techjays: a click goes Home), **Home** (`/home`), **Projects** (`/projects`), and
+  **Workspace** only for a session open outside a project (labelled with the open models' name, "Clash report" or
+  "Workspace"). Then the open project's group (`project`: the last project loaded): a small grey "Project" over its
+  full name, folding, with its seven steps, each a link: Overview, Models, Drawings, Coordination, Clash review,
+  Reports, Activity. Counts show only where known (`navProject`): models (the project's files), drawings (while its
+  models are open), Clash review's open clashes (the open page's live counts when its models are open, else the
+  project's last known; a red-tinted pill while above 0) and reports. At the foot: **Help**, **Settings**, then the
+  reviewer (`UserBlock`: the initial, the name from `iris.reviewer` or "Add your name", **Edit** inline; there is no
+  login, so no log out). The page shown is marked (`navActive`: home, projects, the route's step or workspace) as a
+  white pill with a hairline, a soft shadow and a 2 px holo left edge, `aria-current="page"`. Every item is a real
+  link (`hrefOf`): a plain click goes through `nav`, a new tab gets the address.
+- **The rail.** Icons only, each with its name as an `aria-label` and a tip on the right (with its count). The state
+  is kept apart for pages and for the 3D workspace in `iris.sidebar` (`shellNav.readRail` / `writeRail`): pages
+  expanded and the workspace collapsed by default (`RAIL_DEFAULT`). The top bar's toggle flips the one for where the
+  page is.
+- **Top bar.** The collapse toggle (desktop) or the hamburger and logo (phone, tablet); on the desktop workspace, the
+  slim `PageHeader` in the middle (crumbs Projects › project, the step's label or the open models' name as the title,
+  and the one status line); the search box (`SearchBox`, not on phones); then the actions. The owner's settings
+  (`OwnerSettingsMenu`) are mounted on every page and show only to the owner. The primary action is the page's: **New
+  project** on Home and Projects (`data-shell="new-project"`), **Open workspace** on a project's page (it opens the
+  project's models and goes to Clash review; **Import models** when it has none; `data-shell="open-workspace"`), and on
+  the workspace `div.work-actions`: the requirements pill, the agent pill, the tablet's **Clashes**, the project's busy
+  line, **Save** (`SaveButton`, in a project) and **Report** (with a report), neither on a phone, and **Export**,
+  primary, with the kept-fix count (`export-n`; an icon and the count where the window is 1200 px or narrower). There is no ☰ Menu button: its contents are in Settings.
+- **Search** (`searchHits`, given to `SearchBox`): projects by name (up to 4), the open clash list by number (`#42` or
+  `42`), title or element names (up to 10 hits in all), the open models' elements by name or GlobalId (2 characters or
+  more, up to 5), and the pages Home and Projects. The popover groups them by kind and lists the first 8. "/" (outside
+  a field) or Ctrl/⌘+K focuses it, unless a dialog is open.
+- **The one status line** (`headerStatus`, the desktop workspace's header only), the first that applies: an error
+  (`status-error`, with dismiss); the server let go of the models (`status-gone`, with the reopen button); the agent
+  driving the view (`status-pilot`, Take the view or Let Iris drive); what Iris is doing (`status-work`, from
+  `notchStatus`: opening, busy, checking, fixing #N with the proposal's line, a plan, a wider fix, triage; with the AI
+  shimmer while an AI model works: a proposal, a plan, a wider fix, triage); else a quiet summary (N clashes · N fixed).
+  It replaces the notch over the model and the floating status cards. Phones and tablets keep the in-view overlays
+  instead (error, gone, pilot, busy).
+- **Settings** (the sidebar's): `MenuSheet title="Settings"`, what the old menu held: Models (open the samples, add,
+  upload), Coordinate (check, run all, back to Iris's checks, the Navisworks XML import), This session (Requirements,
+  Report, Export, Connect an agent; not on the landing), Panels and layout (desktop, not the landing).
+- **Help** (the sidebar's): `MenuSheet title="Help"`: the principle and the eight steps (`PROJECT_FLOW`), Try the
+  sample building and Try the sample drawings (when the server has them), and good to know: projects are private to
+  this browser by an unguessable id, the name under the sidebar is recorded with each decision, "/" to search, Esc to
+  leave a clash.
+- **New project.** `NewProjectDialog` (from `ProjectsHome.tsx`) at the shell's root, opened from Home's tile, the top
+  bar and the Projects empty state; `busy` while `createProject` runs (`creating`), with its own error line
+  (`createError`); then the new project's Overview. Rename and Remove from this browser are in the projects table's
+  row menu (`renameProjectNow`, `removeProjectHere`).
+- **Removed** with the shell: the notch over the model (`Notch` is no longer rendered), the corner (Export, the menu
+  button, the pills), the ☰ Menu button, the project step bar over the workspace (`ProjectSteps`, `.app.projected`), the
+  compact `header.bar` and its step picker, and the tablet's "Watch Iris fix a clash" (`startGolden`).
+
+## Theme and motion
+
+- **Tokens** (`index.css` `:root`, from lifemed's palette): a white page (`--bg`, `--surface` #ffffff; `--raised`
+  #fafafa, `--panel` #f2f2f2 for soft grey tracks and table bands, `--hover`), hairlines (`--line` #e6e6e6,
+  `--line-soft`, `--line-strong`), ink for text and primary buttons (`--ink` #1a1a1a, `--ink-2`, `--ink-hover`,
+  `--muted` #6a6a6a; `--navy` kept as an alias of the ink for older rules), the lavender accent (`--accent` #b07af2,
+  `--accent-ink` #7340c4 legible as text, `--accent-soft`, `--accent-line`, `--on-accent`), the holographic gradient
+  `--holo` (120°: #8f9bff, #b07af2, #ff5cd6, #7dd3fc) for AI-made things, glass (`--glass-bg`, `--glass-border`,
+  `--glass-blur`), a light `--scrim`, and the engineering meanings kept: `--red` #e0473f, `--green` #2fb153, `--amber`
+  #f5a623 and `--ok` / `--fail` / `--warn` with their `-soft` tints; shadows `--shadow-soft`, `--shadow`,
+  `--shadow-lift`, `--shadow-pill`. `web/index.html`'s theme colour is #ffffff.
+- **Light only.** No dark mode and no dark fills: tooltips, toasts and labels over the 3D view are white with a
+  hairline, scrims are a light veil with a blur, dockview is light (white panels, `--panel` tab strips, a 2 px lavender
+  underline on the active tab). Buttons: `.btn` white with a hairline at weight 500, `.btn.primary` the ink, `.btn.ghost`
+  accent-ink text; focus rings 2 px lavender. Segmented controls (`.seg`, `.fseg`) are a `--panel` track with a white
+  pill segment. Big titles are weight 400–500, numbers IBM Plex Mono; only clickable cards lift on hover.
+- **The ribbon** (`HoloRibbon`): on Home's hero, small on empty states (`EmptyState`) and Home's no-projects line.
+- **Text reveal** (`TextReveal`): Home's greeting and tagline, word by word from a lavender blur to ink, once per page
+  load.
+- **Count-up** (`CountUp`): the project overview's stat cards, from 0 with a slight lavender blur the first time.
+- **AI shimmer** (`.ai-shimmer`): a soft holo band across the workspace's status line while an AI model works, and the
+  Drawings step's opening line.
+- **Holo edge** (`.holo-edge`): a 1 px `--holo` border on what the AI made and geometry has not proved (AI-proposed and
+  Unverified proposal cards), on Home's Try the sample drawings tile and on the Propose step in How Iris works. What
+  the geometry proved wears the green check instead.
+- **Reduced motion:** under `prefers-reduced-motion` (or with no window) the ribbon, the reveal, the count-up and the
+  shimmer are still (`useReducedMotion`, `holo.css`).
 
 ## `App.tsx`: state by concern
 
@@ -225,12 +351,13 @@ is `useState`; refs hold what callbacks must read without re-rendering (counters
 | Requirements | `reqSaved` (`{ doc, enabled }`), `reqId`, `reqOpen` | | `reqLabel` |
 | Coordination report | `modelTeams`, `signoffs`, `docOpen`, `docReady` | | `signoffKey` |
 | Show it built | `builtOn`, `builtRuns` | `sceneClasses`, `builtFixes`, `builtDone`, `builtPending`, `latest` | `buildable`, `canBuild`, `builtKey` |
-| Projects and drawings ([docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)) | `route`, `projects`, `project`, `projectBusy` (what a project action is doing, in words; the first screen spins the sample button it belongs to: "Opening the sample drawings…" is the drawings one), `importRows`; the Drawings step's `drawings`, `drawingItemsBy`, `drawingCompare`, `drawingsError`, `drawingsTry` (bumped to read them again after an upload, a reading or the sample drawings attached) | `autoOpened` (the project whose models this page opened itself, once a visit), `importBatch` | `projectHere`, `projectOpen`, `sampleSet`, `sampleDrawings` (the sample building lists sample drawings: the first screen offers them), `sceneSampleDrawings` (the open models are a demo's set with sample drawings, `demoOfFiles` in `sampleDrawings.ts`: the Drawings step offers them) |
+| Projects and drawings ([docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)) | `route`, `projects`, `project`, `projectBusy` (what a project action is doing, in words; Home spins the sample tile it belongs to: "Opening the sample drawings…" is the drawings one), `reviewer` (`iris.reviewer`; `askName`, whether the Clash tab asks for it: only when none was kept at load), `importRows`; the Drawings step's `drawings`, `drawingItemsBy`, `drawingCompare`, `drawingsError`, `drawingsTry` (bumped to read them again after an upload, a reading or the sample drawings attached) | `autoOpened` (the project whose models this page opened itself, once a visit), `importBatch` | `projectHere`, `projectOpen`, `sampleSet`, `sampleDrawings` (the sample building lists sample drawings: Home and Help offer them), `sceneSampleDrawings` (the open models are a demo's set with sample drawings, `demoOfFiles` in `sampleDrawings.ts`: the Drawings step offers them) |
 | Owner | `ownerSettings`, `modelsAsked` | | |
 | Agent link and session | `agentLink`, `agentOpen`, `agentLog`, `agentBusy`, `agentError`, `resumable` | `agentStream`, `agentHandler` | |
 | Models the server let go of | `goneIds` (`{ scene, report }`: the ids the server said are gone) | `holding` (the ids on screen, for the handler), `sceneUploaded`, `sampleReports` (report id → sample), `goneWords` (the server's words for it, never shown as an error line) | `goneScene`, `goneReport`, `gone` (only while those ids are on screen), `reopenable()`, `reopenLabel`, `builtReopen` |
 | Tour | `touring`, `tourWhich`, `replaying`, `about` | | `tourState`, `tourActions` |
-| Layout and sheet | `widths`, `resizing`, `listOpen`, `snap`, `menuOpen` | `followed` | `layout`, `compact`, `coarse`, `peekLine` |
+| Layout and sheet | `widths`, `resizing`, `listOpen`, `snap`, `menuOpen` (the Settings sheet) | `followed` | `layout`, `compact`, `coarse`, `peekLine` |
+| The app shell (below, "The app shell") | `homeAsked` (Home asked for: `/home`, `/` on load, the sidebar's Home), `rails` (`{pages, workspace}` from `iris.sidebar`), `drawerOpen` (phones and tablets), `helpOpen`, `newOpen`, `creating` and `createError` (the New project dialog) | | `homePage` (`showHome`), `projectPage`, `onPage`, `navActive`, `navProject` (its counts), `navWorkspace`, `rail`, `searchHits`, `headerStatus` (from `notchStatus`), `workHeader`, `topActions` (`workActions` on the workspace), `pageAlert` |
 | Panels (docs/panels.md) | `tab` (set through `setTab`, which also shows the panel in the dock), `classic`, `popouts` (pop-out windows open now) | `dock` (`DockHandle`), `dockedNow`; `slots` (`usePanelSlots`) | `docked`, `dockTabs`, `showPanel`, `layoutMenu` |
 | Selected element | `selected` (GlobalId and `api.element`'s card data), `elementProps` (`api.properties`, read on each selection) | | `elementCard` (`ElementCard` with `cardActions`: the card, its breadcrumbs, icon bar, links and sets; folded on the card over the model), `idsWith` (a facet value's elements, for isolate all with / this level); the card shows over the model in the classic layout (sets under All properties) and in the dock's Properties panel |
 | Thumbnails queue | `thumbs` | `thumbQueue`, `thumbPaused`, `thumbTimer`, `thumbSource` | |
@@ -286,8 +413,9 @@ All are functions inside `App`. Names confirmed at HEAD.
 | `addModels(source)` | Adds samples or the visitor's files to the open scene ([docs/add-and-remove-models.md](../add-and-remove-models.md)): `modelsWait` and `addRefusal` first, then `api.addModels` / `api.addModelsStream`; on the next layout fetches only the new files (`localFile` for an uploaded IFC), `viewer.add`s them and `adoptFiles`; on any other, `reloadModels`. Then `runDetect(null, sid, { all: true })`. Never through `open()`: nothing is dropped. |
 | `askRemove(i)`, `removeModel()` | The Visibility menu's remove button: the question (`removalWarning` with `clashesWith` the list and `editsIn` the log), then `api.removeModel`, `viewer.remove`, `shiftHidden` on the toolbar's hidden models, `adoptFiles`, `adoptRun` with the answer's list (an imported report stays and is matched again), and A, B, the selection and stand-ins dropped when they were in the model. A 409 (the list changed) reloads the files. |
 | `adoptFiles(scene, drawn)`, `reloadModels(sid, live)` | The file list as the server has it after an add or remove (names, STEP files, revision, `sceneLayout`, stats; `infoRev` and `layoutRev` bumped; the filters on screen carried to the new set). `reloadModels` draws every file again from `api.sceneInfo`, as after a restart: a layout this page doesn't know. `applyToViewer` calls it for a patch on another layout. |
-| `startGolden()` | Sets `golden`, then `openDemo`; an effect then selects `clashOfPair(TOUR.duct)` (else the deepest clash) and calls `propose`. |
-| `trySample()`, `trySampleDrawings()`, `sampleProject()`, `openProjectScene(p, opened?)` | The first screen's sample ways in. `sampleProject` finds this browser's sample project by name (`SAMPLE_PROJECT`, one holding models) or makes it and keeps its id. `trySample` opens it on Clash review (a new one gets the sample models, `samplesInto`). `trySampleDrawings` runs `openSampleDrawings` (`sampleDrawings.ts`) with the page's own calls: it opens it on its Drawings step (`/projects/<pid>/drawings`) with the sample PDFs attached (`addSampleDrawings`, then `drawingsTry`): straight away when the project's models are the ones open; else through `openProjectScene(p, attach)`, which attaches them once the project's kept list is read and before any check; for a new project, the sample models opened (`open`), the sheets attached, both kept with the project (`keepModels`), then the check (`runDetect`, which sets `detecting`, not `busy`, so the sheets can be read meanwhile). `projectBusy` says "Opening the sample drawings…", then "Adding the sample drawings…"; a failure says "Could not open the sample drawings: …" and runs no check after it (a check clears the error line). Reading the sheets then replays their saved readings: no model call. |
+| `goHome()`, `goWorkspace()`, `goRoute(next)`, `goStep(s)`, `goProjects()`, `nav(id)`, `toggleRail()` | The shell's moves: `goHome` pushes `/home` and sets `homeAsked` (a session stays open behind Home); `goWorkspace` goes to `/workspace` (or `/home` with nothing open); `goRoute` shows a project address and clears `homeAsked`; `popstate` reads both from the path. `nav` is the sidebar's click (it closes the drawer); `toggleRail` flips the rail for where the page is (`pages` or `workspace`) and keeps it with `writeRail` |
+| `newProject(name)`, `renameProjectNow(id, name)`, `removeProjectHere(id)` | The New project dialog's create (`createProject`, `creating` while it runs, `createError` on failure; then the new project's Overview), the row menu's Rename (`patchProject` `name`) and Remove from this browser (`forgetProject`: the server keeps the project, and its address still opens it) |
+| `trySample()`, `trySampleDrawings()`, `sampleProject()`, `openProjectScene(p, opened?)` | Home's (and Help's) sample ways in. `sampleProject` finds this browser's sample project by name (`SAMPLE_PROJECT`, one holding models) or makes it and keeps its id. `trySample` opens it on Clash review (a new one gets the sample models, `samplesInto`). `trySampleDrawings` runs `openSampleDrawings` (`sampleDrawings.ts`) with the page's own calls: it opens it on its Drawings step (`/projects/<pid>/drawings`) with the sample PDFs attached (`addSampleDrawings`, then `drawingsTry`): straight away when the project's models are the ones open; else through `openProjectScene(p, attach)`, which attaches them once the project's kept list is read and before any check; for a new project, the sample models opened (`open`), the sheets attached, both kept with the project (`keepModels`), then the check (`runDetect`, which sets `detecting`, not `busy`, so the sheets can be read meanwhile). `projectBusy` says "Opening the sample drawings…", then "Adding the sample drawings…"; a failure says "Could not open the sample drawings: …" and runs no check after it (a check clears the error line). Reading the sheets then replays their saved readings: no model call. |
 | `loadReport(get, what)` | Replaces the report (refused while `busy`), resets report state, sets `chatReport`. |
 | `upload(list)` | Navisworks XML and images → `loadReport(api.uploadReport)`. |
 | `isolateClash(c)`, `endIsolation()` | A row's Isolate: turns `isolating` on and opens the clash (on the clash already isolated, shows everything again); an effect isolates the clash on screen's pair (as `goToClash` draws it, with a kept fix's pieces from `edits` and what the kept edits for the clash changed or made, `keptFor`: from the edit log, the clash's by its id or, kept without one, its pair; an undone entry leaves it) and flies to it once per clash, also with Fly to clash off (the parts changing after a Keep or an undo leaves the camera where it is). `endIsolation` (the chip's Show all, the toolbar's Reset) shows everything again; the element card's hide and isolate replace it. |
@@ -327,7 +455,7 @@ All are functions inside `App`. Names confirmed at HEAD.
 
 | Runs when | Calls | Sets |
 |---|---|---|
-| Mount | `new Viewer`, `new Pilot`, `api.samples`, `api.reportSamples` | `samples`, `demos` (server: `demos.py`), `picked` (the first demo's own files, else the first sample), `reportSamples`; the start label, the cell's sample and `cellOpen` come from `demos`, never a file-name pattern, and so does whether the first screen offers the sample drawings (`Demo.drawings`, `api.ts`: the sheets the server lists for a demo) |
+| Mount | `new Viewer`, `new Pilot`, `api.samples`, `api.reportSamples` | `samples`, `demos` (server: `demos.py`), `picked` (the first demo's own files, else the first sample), `reportSamples`; the start label, the cell's sample and `cellOpen` come from `demos`, never a file-name pattern, and so does whether Home offers the sample drawings (`Demo.drawings`, `api.ts`: the sheets the server lists for a demo) |
 | `ownerSettings`, `modelsAsked` change | `api.models` | `triageModel`, `uploadMax`, `escalation`, `builtOn` |
 | `report`, `sceneId` | `api.match` | `matches` |
 | `report`, `sceneId`, `matches` | `api.patterns` (and clears root causes) | `patterns` |
@@ -535,11 +663,20 @@ with a getter for the viewer, a framing function (`frameFix` on the trial's piec
 - `SheetBar` (phone only) is the sheet's bar: the handle (tap steps `nextSnap`: peek, half, full, peek; arrow keys
   step too), the peek line and the Clashes · Fix · Plan · Chat tabs (rendered by `App`). Dragging sets
   `--sheet-drag`; release settles with `nearestSnap` (a flick over 0.5 px/ms goes one step its way). Heights: peek is
-  the bar's own height (published as `--peek-h`), half is 55% of the window, full is up to the header. The panes under
-  it are `App`'s own left and right panes, placed by CSS.
-- `MenuSheet` (phone and tablet) holds every header action by name; the Models and Coordinate bodies are the same
-  render functions the desktop popovers use (`modelsMenu`, `coordinateMenu`). Escape or the scrim closes it.
-- The tablet keeps the right pane and shows the list as a drawer (`listOpen`, header **Clashes**, `drawer-scrim`).
+  the bar's own height (published as `--peek-h`), half is 55% of the window, full is up to the shell's top bar
+  (`--shell-top-h`, `frame.css`). The panes under it are `App`'s own left and right panes, placed by CSS.
+- **Phones and tablets** (`compact`) have no header of their own: the shell's slim, light top bar (52 px;
+  `--shell-top-h` adds the safe area) shows a hamburger ("Open the menu") and the logo, then the actions. The
+  hamburger opens the sidebar as a drawer (`drawerOpen`; Escape, the scrim, its ✕ or an item close it; focus stays
+  inside while it is open and goes back after). There is no step picker: the drawer lists the project's steps. Tablets keep the search box, phones do not.
+  The workspace's actions sit in the top bar on both: the tablet's **Clashes** button, then Save and Report (not on a
+  phone) and Export. Errors, the server letting go of the models, the agent driving the view and the busy line stay
+  as overlays in the view.
+- `MenuSheet` is a panel from the right on every layout, and App opens two from the sidebar: **Settings** (the
+  Models, Coordinate, This session and Panels and layout sections; `modelsMenu`, `coordinateMenu` and `layoutMenu`
+  render them) and **Help** (below, "The app shell"). Escape or the scrim closes either.
+- The tablet keeps the right pane and shows the list as a drawer (`listOpen`, the top bar's **Clashes**,
+  `drawer-scrim`); in the shell the drawer starts under the top bar.
 
 ### `dock.tsx`, `dockLayout.ts`
 
@@ -549,7 +686,10 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
 `DockviewReact` with Iris's theme (`dockview-theme-iris` in `index.css`):
 
 - **Default layout** (`build`): the model locked in the middle (no tab, no drops into it); side bars (edge groups)
-  left (Coordination), right (Clash, Plan, Chat) and bottom (Activity), sized from `iris.left-w` / `right-w`.
+  left (Coordination), right (Clash, Plan, Chat) and bottom (Activity), sized from `iris.left-w` / `right-w`. The
+  bars in `DEFAULT_COLLAPSED` (Activity's) start collapsed to their strip, also after Reset layout: a slim bar along
+  the bottom whose tab (class `strip`) carries App's `ActivityLine`, one calm line of what the last run is doing. A run
+  never opens it (`traceStart` ignores `grow`); choosing Workings, or turning it on, still grows it (`fitBar`).
 - **Tabs** (`Tab`): icon, title and `App`'s `dockTabs` (a count, a spinner), `data-tour` for the tour. A click is the
   user choosing the panel (`onTab`, which `App` maps to its classic tab handlers); in a side bar it opens the bar and
   never closes it.
@@ -564,8 +704,9 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
 - **Empty side bars** (`fitEdges`): a bar with no panel is hidden (dockview's `setEdgeGroupVisible`) and the model takes
   its room; it shows again, at its width, when a panel docks there. Fitted after every panel added, removed or moved,
   a layout change, a loaded layout and a pop-out window opening or closing.
-- **Saving:** `toJSON` into `iris.dock.v1` a moment after a layout change or a collapse (`writeLayout`, which
-  puts pop-out panels back in their bars first); on load `readLayout` and `fromJSON`, else the default.
+- **Saving:** `toJSON` into `iris.dock.v2` (`{ v: 2, layout }`) a moment after a layout change or a collapse
+  (`writeLayout`, which puts pop-out panels back in their bars first); on load `readLayout` and `fromJSON`, else the
+  default. A layout kept under `iris.dock.v1` (Activity open) is not read, so the new default shows once.
 - **`DockHandle`** for `App`: `show(id, { dock })` (`showSteps`: reopen at home, open the bar, focus the window or bring
   it home), `reset()`, `gather()` (the tour: closed panels reopened, every panel back in this window, every bar open),
   `isOpen(id)`, `closeFloating(id)` (Properties, when the Edit tool opens: a floating one closes, a docked one stays). `DockHost` reports `onReady(handle)`, `onGone(handle)` on a real unmount (App lets go only if it is still
@@ -582,6 +723,8 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
 
 ### `Tour.tsx`
 
+- **No control starts a tour at HEAD** ("no longer offered", docs/ui-design.md §10): nothing in the page sets
+  `touring`, and the tour's hooks stay.
 - **Two tours:** `BUILDING_STEPS` (30 steps in 10 acts: design coordination, triage, one fix live, a joint, the root
   cause, not everything needs a fix, your standard, people decide, hand-off, and a closing act named Iris) and
   `CELL_STEPS` (12 steps in 6 acts). `Tour` takes `which`; `App` keys it by `tourWhich`.
@@ -604,8 +747,9 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
   same element pairs. Accepting a replayed fix edits the model for real.
 - **Finding the control:** `find()` runs every 250 ms, takes the visible copy of the target (a phone has some
   twice), scrolls it into view for 1.5 s after it appears, and spotlights it (`tour-hole`). When no copy is visible
-  it calls `actions.reveal(selector, el)` once: `App` switches the left pane's tab (`[data-left-view]`), and on phone
-  and tablet opens the drawer, the sheet's tab or the header menu that hides it. A clash row (`[data-clash="…"]`) may
+  it calls `actions.reveal(selector, el)` once: `App` switches the left pane's tab (`[data-left-view]`), opens
+  Settings for Report, Export or Requirements (on a desktop and a phone), and on phone and tablet opens the drawer or
+  the sheet's tab that hides it. A clash row (`[data-clash="…"]`) may
   not be drawn at all (the list draws the rows on screen): `App` hands its id to the list (`listReveal`, `reveal`),
   which scrolls to it, and it is drawn there.
 - **Card:** beside the target, else below or above; on a phone it spans the width at the top or bottom. On a touch
@@ -675,24 +819,29 @@ dock panel, or the classic grid (where slot and host are `display: contents`). `
   `data-tip-side`), flipped and clamped to the window. On touch, press and hold any control with a tip to read it
   (500 ms, not on the canvas), and a tap on a `data-tip-tap` element shows its tip for 3.5 s.
 
-### `index.css`
+### `index.css` and the other stylesheets
 
-One global stylesheet, no CSS modules. It opens with the tokens on `:root` (colours `--red` / `--green` for sides A
-and B, `--accent`, an escalation-model colour token, IBM Plex Sans and Mono) and base rules, then the layout grid (`.app`:
-three columns from `--left-w` / `--right-w`, rows for header, body and dock), then one commented section per feature
-roughly in the app's order (buttons, tooltips, popovers, rail, list, tabs, clash, option cards, plan, activity, chat,
-lightbox, Insights, Triage, pilot, the shared prose and dialog frame, NoFix, escalation, Show it built, landing, reasoning,
-clash pictures, voice, reviews, tour, owner, wider fix, detection, agent dialog, requirements). `.app.landing` drops the
-panes, dock and resizers so the start page fills the window; the start page's own styles are `landing/landing.css`. The **Responsive** block at the end (after its long comment) holds the
-toast and pop-sheet base, touch targets (`@media (pointer: coarse)`: 44 px, 36 for small buttons), the menu panel,
-`.app.tablet` (drawer), `.app.phone` (the sheet: `--sheet-h` per `snap-*`, `--peek-h`, `--sheet-drag`, `.list-open`
-choosing which pane shows), what floats over the model, popovers as sheets, full-screen dialogs, the requirements
-matrix as a list, the left pane's tabs, and the blank project. Near the top, one rule hides the header buttons'
-`.lbl` text below 1280 px (About Iris, Tour, Requirements, the agent button), leaving their icons.
+One global stylesheet, no CSS modules. It opens with the lifemed tokens on `:root` (below, "Theme and motion"; `--red`
+/ `--green` still mark sides A and B, `--wonder`, `--spark` and `--image` the model families, `--viewer-bg` the 3D
+view's empty background, IBM Plex Sans and Mono) and base rules, then the layout grid (`.app`: three columns from
+`--left-w` / `--right-w`, rows for header, body and dock), then one commented section per feature roughly in the app's
+order (dockview's light theme `dockview-theme-iris`, buttons, segmented controls, tooltips, popovers, rail, list, tabs,
+clash, option cards, plan, activity, chat, lightbox, Insights, Triage, pilot, the shared prose and dialog frame, NoFix,
+escalation, Show it built, landing, reasoning, clash pictures, voice, reviews, tour, owner, wider fix, detection, agent
+dialog, requirements). `.app.landing` drops the panes, dock and resizers. The **Responsive** block at the end (after
+its long comment) holds the toast and pop-sheet base, touch targets (`@media (pointer: coarse)`: 44 px, 36 for small
+buttons), the menu panel, `.app.tablet` (drawer), `.app.phone` (the sheet: `--sheet-h` per `snap-*`, `--peek-h`,
+`--sheet-drag`, `.list-open` choosing which pane shows), what floats over the model, popovers as sheets, full-screen
+dialogs, the requirements matrix as a list, the left pane's tabs, and the blank project. The rules of the old header,
+notch and corner (`.bar`, `.notch*`, `.corner`) are still there, though App no longer renders them.
 
-The engineer-workflow components import their own stylesheets (`projects.css`, `import.css`, `model-summary.css`,
-`coordination.css`, `proposal.css`), each built only on the tokens above, so a theme that redefines them restyles
-those pages too.
+The shell brought six stylesheets, each imported by the file it styles: `frame.css` by `main.tsx` (after
+`index.css`), `appShell.css` by `AppShell.tsx`, `page.css` by `PageHeader.tsx`, `home.css` by `StartScreen.tsx`,
+`holo.css` by `Holo.tsx` and `workspace.css` by `dock.tsx`. App's imports load before `main.tsx` loads `index.css`, so
+`index.css` comes later in the cascade: `workspace.css` writes every rule more specific than the `index.css` rule it
+overrides. The engineer-workflow components import theirs (`projects.css`, `import.css`, `model-summary.css`,
+`coordination.css`, `proposal.css`), and `DemoClips.tsx` `demoClips.css`. Each is built on the tokens above (most with
+the brief's value as a fallback), so a theme that redefines them restyles those pages too.
 
 ## Engineer workflow
 
@@ -702,27 +851,31 @@ the slices build to, server and web, is [docs/engineer-workflow.md](../engineer-
 [01](01-product-and-journeys.md), "An MEP engineer runs a coordination round in a project", and the flows in [03](03-end-to-end-flows.md).
 Iris VisionBench (the Track 2 benchmark) is a separate pipeline and never appears here.
 
-**Where it stands at HEAD:** wired into `App` (Nov 22). The first screen is `StartScreen` (`/home`); its **Try the
-sample building** and **Try the sample drawings** open the same sample project, on Clash review or on Drawings with
-the sample sheets attached (`trySample`, `trySampleDrawings`, above); `/projects` is
-`ProjectsHome`; a project's Overview, Drawings, Reports and Activity are `ProjectOverview` pages over the workspace
-(`.proj-shell`, fixed; the workspace and its 3D view stay mounted beneath), and Models, Coordination and Clash review
-are the workspace itself with `ProjectSteps` as a row of the page's grid above it (`.app.projected`; a step picker in
-the header on a phone or tablet). Opening a project (`openProject`) adopts its scene as a resumed session is, then
-runs the checks when it holds no list; importing into a project is the upload (or the sample) and then `attachScene`;
-**Save** is `saveProject`; the coordination numbers go to the project (`patchProject` `counts`, a second after they
-change). The Models step's left pane is `ImportPanel` (every upload, with Retry: the same files again), the models open
+**Where it stands at HEAD:** wired into `App`, inside the app shell (Nov 22; above, "The app shell"). The first
+screen is Home (`StartScreen`, `/home`); its **Try the sample building** and **Try the sample drawings** open the same
+sample project, on Clash review or on Drawings with the sample sheets attached (`trySample`, `trySampleDrawings`,
+above); `/projects` is `ProjectsHome`, with **New project** a dialog (`NewProjectDialog`). A project's Overview,
+Drawings, Reports and Activity are `ProjectOverview` pages over the workspace inside the shell's body (`.proj-shell`,
+absolute; the workspace and its 3D view stay mounted beneath), and Models, Coordination and Clash review are the
+workspace itself. The sidebar's project group carries the steps, with counts, on every layout (the drawer on a phone
+or tablet); there is no step bar and no step picker. Opening a project (`openProject`) adopts its scene as a resumed
+session is, then runs the checks when it holds no list; importing into a project is the upload (or the sample) and
+then `attachScene`; **Save** is `saveProject`, in the overview's header and in the workspace's top bar (`SaveButton`:
+"Saving…", then "Saved ✓" or "Not saved" with the reason in its tip); the coordination numbers go to the project
+(`patchProject` `counts`, a second after they change). The Models step's left pane is `ImportPanel` (every upload, with Retry: the same files again), the models open
 (show, hide, remove) and `ModelSummary` (click to isolate); Coordination puts `CoordinationOverview` at the head of the
 Clashes tab (elsewhere at the head of Insights), its numbers filtering the list (`ReportList` `coord`, through
 `coordination.passes`); the Clash panel has `ClashHeader` over `ClashPanel`, a `ProposalCard` per option (Show in 3D
 over each; Accept on the chosen one carries the tour's `data-tour="accept"`), the attempts geometry refused under
 "What was tried", the idea being checked as AI-proposed, and a recommendation as Unverified. Who decides is a name kept
-in this browser (`iris.reviewer`, "Your name" above the options), sent with every keep and decision; **Accept** sends
+in this browser (`iris.reviewer`: the sidebar's user block, and "Your name" above the options when none was kept
+at load), sent with every keep and decision; **Accept** sends
 it with the keep and reads the `accepted` decision from the reply (never posting one of its own), **Reject** (with
 its reason), **Modify** (the Edit tool; the hand edit kept for that clash records `modified`) and **Request another**
 (a second, longer look when there is one, else a new try) post theirs. Server times are seconds (`toMs`). A report
 built while the project is open carries `project_id` and is kept with it (`addReport`). The tests:
-`web/tests/engineer-workflow.test.mjs` (routes, the step bar, opening a project, accept and reject decisions).
+`web/tests/engineer-workflow.test.mjs` (routes, New project, the sidebar's project steps each on its real panel,
+opening a project, accept and reject decisions).
 
 ### Addresses and steps
 
@@ -733,30 +886,31 @@ reload or a shared link opens the same page. An old hash address is replaced by 
 
 | Path | Shows |
 |---|---|
-| `/` , `/home` | `StartScreen` (`/` is replaced by `/home`) |
+| `/` , `/home` | Home, the dashboard (`StartScreen`; `/` is replaced by `/home`); a session open stays open behind it |
 | `/workspace` | The open session without a project (the address the page takes once models or a report open outside one) |
-| `/projects` | `ProjectsHome`: the projects this browser knows (ids in `iris.projects`), Create project, the sample building |
-| `/projects/<pid>` | That project's Overview (`ProjectOverview`, `ProjectSteps` above it) |
+| `/projects` | `ProjectsHome`: the projects this browser knows (ids in `iris.projects`) as a table with status tabs and a row menu, the sample building; New project opens the dialog (no inline form) |
+| `/projects/<pid>` | That project's Overview (`ProjectOverview`: stat cards, models, coordination, next step, activity, reports) |
 | `/projects/<pid>/<step>` | `models`, `drawings`, `coordination`, `clashes` (Clash review), `reports`, `activity`; an unknown step opens Overview |
 | `/projects/<pid>/clashes/<n>` | Clash review with clash #n open: written as clashes are picked, opened from the address once the list has it |
 | `/about`, `/about/<tab>` | About Iris (`AboutIris.tsx`) |
 | `/settings` | The owner's settings opened (`Owner.tsx`, as `#owner` was) |
 
 Each step is a page of the project's own facts, and a way to the workspace panel that already does that work (the
-workspace keeps its viewer, dock panels and clash panel as they are; the step bar sits over it):
+workspace keeps its viewer, dock panels and clash panel as they are; the sidebar's project group links every step):
 
 | Step (`ProjectStep`) | The project page shows (`ProjectOverview`) | The workspace panel that does the work |
 |---|---|---|
-| `overview` · Overview | The next step (`nextAction`), then the Models, Coordination, Reports (newest five) and Recent activity (newest six) cards | — |
+| `overview` · Overview | Four stat cards (Models, Clashes, Open, Resolved, counting up), the next step (`nextAction`), then the Models, Coordination, Reports (newest five) and Recent activity (newest six) cards | — |
 | `models` · Models | Each file's type, size and SHA-256; **Import models** | The import table (`ImportPanel` over `importRows`: per-file rows, Retry) and the model summary (`ModelSummary`: disciplines and systems from the facet index, click to isolate) |
 | `drawings` · Drawings | `DrawingsPanel` over the open models (PDF sheets uploaded here or from the import; read with AI, checked against each PDF's text layer, compared with the models; a mismatch's element shown in 3D on Models). With the sample building open and no drawings, **Add the sample drawings** (`onSamples`); a sample sheet's reading is its saved one, replayed and said so. With the models not open, "Open the project's models", or the line of what is opening while `busy` or `projectBusy` | — |
 | `coordination` · Coordination | Unresolved against resolved and reviewed, live from the open page or the project's last known (`knownCounts`), and the review decisions recorded | The clash list with `CoordinationOverview` over it (`coordination.overview`; each number filters the list), the Detect and Triage cards |
-| `clash` · Clash review | The same tally and **Open workspace** | The Clash panel with `ClashHeader` over it, a `ProposalCard` per proposal, Before / After in 3D |
+| `clash` · Clash review | The same tally and **Open workspace** | The Clash panel: `ClashHeader`, then Propose fixes, Explore wider fix and Go to the clash, then `ClashPanel` (a fixed clash: its calm Fixed ✓ card and Next clash), a `ProposalCard` per proposal, Before / After in 3D |
 | `reports` · Reports | Every report kept with the project, a download each (`projectReportUrl`) | The report dialog (`ReportDialog`: PDF and BCF) |
 | `activity` · Activity | The activity lines the page keeps (imports, checks, decisions, saves: `ActivityItem`) and the saved states | The Edits panel (`EditPanel`: the edit log) and the Activity panel |
 
-**Save** (at the step bar's right end) keeps the open scene's edited models, edit log and decisions as the project's
-next saved state (`saveProject`); opening the project again starts from the newest one (`openProject`).
+**Save** (the overview's header, and the workspace's top bar in a project, not on a phone) keeps the open scene's
+edited models, edit log and decisions as the project's next saved state (`saveProject`); `SaveButton` says how it
+went. Opening the project again starts from the newest one (`openProject`).
 
 ### Proposal states
 
@@ -807,13 +961,14 @@ Everything but one key (below the table) is `localStorage`, read and written ins
 
 | Key | Written by | Holds |
 |---|---|---|
-| `iris.session` | `App` (`SESSION_KEY`) | `SavedSession`: scene id, report id, files, fixes, agent link, time, the check the list showed; read on load for "Pick up where you left off" |
+| `iris.session` | `App` (`SESSION_KEY`) | `SavedSession`: scene id, report id, files, fixes, agent link, time, the check the list showed; read on load for Home's resume card |
 | `iris.left-w`, `iris.right-w` | `App` (`stored`, `remember`) | Dragged pane widths in the classic layout (clamped by `PANE`); the dock's default side bar widths |
-| `iris.dock.v1` | `dockLayout.ts` (`writeLayout`), for `DockHost` | `{ v: 1, layout }`: the dock's layout (dockview's `toJSON`), pop-out panels put back in their bars |
+| `iris.dock.v2` | `dockLayout.ts` (`writeLayout`, `LAYOUT_KEY`), for `DockHost` | `{ v: 2, layout }`: the dock's layout (dockview's `toJSON`), pop-out panels put back in their bars. The old `iris.dock.v1` (Activity open) is not read: the default, with Activity collapsed, shows once |
+| `iris.sidebar` | `shellNav.ts` (`writeRail`, `SIDEBAR_KEY`; read by `readRail`), for `App` | `{"pages": bool, "workspace": bool}`: whether the sidebar is collapsed to its rail on ordinary pages and on the 3D workspace; missing, pages expanded and the workspace the rail (`RAIL_DEFAULT`) |
 | `iris.dock.properties` | `dock.tsx` (`setPropsHome`; read by `dockLayout.readPropsHome`) | `float` or `right`: where Properties opens |
 | `iris.dock.classic` | `App` | `"1"`: the Classic layout switch is on (fixed panes on the desktop) |
 | `iris.signoffs:clash:<clash id>` (a detection run) / `iris.signoffs:import:<title>:<files>` (an imported report) | `signoffs.ts`, for `App` (`signoffKey`, `changeSignoffs`) | Team reviews per detected clash, or per imported report. The old `iris.signoffs.<report title>` keys move over as their reports open (`migrateTitleKeyed`) |
-| `iris.reviewer` | `ReportDoc.tsx` (read by `App`'s tour sign-off) | The reviewer's name |
+| `iris.reviewer` | `App` (`setReviewer`: the sidebar's user block, the Clash tab's "Your name"), `ReportDoc.tsx` | The reviewer's name: Home's greeting, the sidebar, every decision and keep, the report, the tour's sign-off |
 | `iris.requirements` | `reqFile.ts` | The requirements file and whether it is in use |
 | `iris.owner` | `Owner.tsx` | The owner's own settings (the token is never stored: the server sets an HttpOnly cookie) |
 | `iris.triage.compact` | `Triage.tsx` | Whether the Triage card is folded |
@@ -876,9 +1031,9 @@ IndexedDB is used.
   record screen takes of the app with Playwright (`web/tests/record-demo.test.mjs` covers the recorder). Not served by
   the app.
 - **`web/public/`:** `favicon.svg`, `brand/` (above), `popout.html` (the page a panel's own window opens: dockview moves the panel in
-  and copies the styles), `demos/*.webp` (the stills, the landing's clips with their stills, and the clips the first screen's "See it work" names in `DemoClips.DEMO_CLIPS`, each with a `-still.webp`), `tour/*.json` (the five recordings), and the generated `wasm/`.
+  and copies the styles), `demos/*.webp` (the stills, the landing's clips with their stills, and the clips Home's "See it work" names in `DemoClips.DEMO_CLIPS`, each with a `-still.webp`), `tour/*.json` (the five recordings), and the generated `wasm/`.
 - **`web/index.html`:** the shell (`#root`, `viewport-fit=cover`, the IBM Plex fonts from Google Fonts, title "Iris ·
-  AI design coordination", theme colour navy `#052640`, the icon and manifest links, the Open Graph image). `#root`
+  AI design coordination", theme colour white `#ffffff`, the icon and manifest links, the Open Graph image). `#root`
   starts with the boot splash: the wordmark's letters arrive once (inline CSS) until React mounts and replaces it.
 - **Serving:** on one origin the server mounts `web/dist` at `/` when `index.html` exists (`app.WEB_DIST`, env
   `IRIS_WEB_DIST`). Split, Firebase Hosting serves `web/dist` and the server is the API only; see
@@ -889,14 +1044,20 @@ IndexedDB is used.
   lists, in `web/tests/app-host.mjs` and in `web/tests/app-replacement.test.mjs`**, or `npm test` cannot resolve it;
   `fixKinds`, `chatRequest`, `uploads`, `signoffs`, `aboutRoute`, `dockLayout` and `ContextPlan` are compiled for real,
   the rest are stubbed (`./dock`'s `inSlot` returns what it is given, so the tests see each panel's content in place).
+  The host's `find` walks children and the app shell's element slots too (a top bar's `actions` and `search`, a page
+  header's `status`), and `menu()` opens Settings through the `Sidebar`'s `onSettings` and returns that `MenuSheet`.
   The transform cannot read `for (const [a, b] of …)` in `App`: iterate keys. Other tests cover `dockLayout.ts`, `layout.ts`,
   `uploads.ts`, `signoffs.ts`, `reqFile.ts`, `fixKinds.ts`, and `Viewer.load` / `viewer/patch.ts` with real three.js
   batches. `built-view.test.mjs` and `workings.test.mjs` map `./api` to the compiled `api.ts` (for `apiUrl`). The
   engineer-workflow modules have their own: `project-route.test.mjs`, `projects-api.test.mjs`,
   `import-rows.test.mjs`, `model-summary.test.mjs` (which also keeps `FRAME` equal to the server's `domains._FRAME`),
   `coordination.test.mjs` and `proposal-state.test.mjs`; the Drawings step `drawings.test.mjs` and
-  `drawings-samples.test.mjs` (saved readings, the sample offer), the first screen `start-screen.test.mjs` (its ways in
-  in the real `App`, "See it work"). More in [18](18-testing-and-evals.md).
+  `drawings-samples.test.mjs` (saved readings, the sample offer), Home `start-screen.test.mjs` (the greeting, the
+  tiles, recent projects, "See it work", the eight steps, its ways in in the real `App`). The app shell has
+  `sidebar.test.mjs` (links, the active item, the project group, the rail, the user block, the drawer, the rail kept in
+  storage), the 3D toolbar `viewer-toolbar.test.mjs` (six core tools, the rest under More tools, several panes, the
+  phone's Tools sheet), the fixed clash `clash-fixed.test.mjs`, the report dialog without triage
+  `report-dialog.test.mjs`, and the workspace's top-bar actions `corner.test.mjs` (Export's kept-fix count, the owner's tip, Settings' sections). More in [18](18-testing-and-evals.md).
 
 ## When to update this doc
 
@@ -913,6 +1074,9 @@ IndexedDB is used.
   starting to mount the engineer-workflow components ("Engineer workflow"; also
   [docs/engineer-workflow.md](../engineer-workflow.md)).
 - A change to the breakpoints, `follow()`, the sheet's snaps, or the Responsive CSS's structure.
+- The app shell: a sidebar item or count, what the rail remembers (`iris.sidebar`), a top bar action, what the search
+  finds, what the one status line says, what Settings or Help holds ("The app shell"); a token, or where the ribbon,
+  reveal, count-up, shimmer or holo edge are used ("Theme and motion").
 - A new or renamed panel, a change to the default layout, the side bars' buttons, what is saved, or how `setTab` and
   the dock follow each other (also [docs/panels.md](../panels.md)).
 - A new tour, act, `TourState` field, `TourActions` action or recording in `web/public/tour/`.

@@ -20,11 +20,17 @@ stays on screen with a **bottom sheet** over it, and **every feature stays reach
 | Width | Layout |
 |---|---|
 | > 1100 px | Desktop, as before. Checked box for box against `main` at 1280, 1440 and 1920 px. |
-| 761–1100 px | **Tablet** (`.app.tablet`): the model and the fix panel. The clash list is a drawer from the left (header **Clashes**, with the count); a scrim or picking a clash closes it. Report and Export stay in the header; the rest is in **Menu**. |
-| ≤ 760 px | **Phone** (`.app.phone`): header (logo, fixed count, **Menu**), the model full width, the sheet. |
+| 761–1100 px | **Tablet** (`.app.tablet`): the model and the fix panel. The clash list is a drawer from the left (the top bar's **Clashes**, with the count); a scrim or picking a clash closes it. Save, Report and Export sit in the top bar's actions; Settings and Help are in the sidebar. |
+| ≤ 760 px | **Phone** (`.app.phone`): the top bar (menu, logo, Export with the kept-fix count), the model full width, the sheet. Report and Requirements are in Settings. |
+
+On both, the top bar is slim and light: a hamburger ("Open the menu") and the logo at its left, the page's actions at
+its right, and the search box on a tablet (none on a phone). The hamburger opens the sidebar as a drawer from the left
+(`Sidebar` with `drawer`, AppShell.tsx): Home, Projects, the open project's steps with their counts, Help, Settings and
+the reviewer's name. Escape, the scrim, its ✕ or picking an item closes it; Tab stays inside it while it is open and the
+focus goes back where it was. There is no step picker in the header any more: the project's steps are in the drawer.
 
 `useLayout()` picks the layout from the window width; `(pointer: coarse)` sets touch sizes on its own, so an iPad in
-landscape (desktop width or tablet) still gets finger-sized targets. Heights use `100dvh`, and the header, sheet,
+landscape (desktop width or tablet) still gets finger-sized targets. Heights use `100dvh`, and the top bar, sheet,
 menus and dialogs keep clear of the notch and home bar (`viewport-fit=cover`, `env(safe-area-inset-*)`).
 
 ## The phone's sheet (`web/src/Sheet.tsx`)
@@ -32,7 +38,7 @@ menus and dialogs keep clear of the notch and home bar (`viewport-fit=cover`, `e
 - **Bar:** a handle, the peek line (what is happening now and one button), and the tabs **Clashes · Fix · Plan · Chat**
   with their counts. The panes under it are App's own left and right panes, re-placed by CSS: nothing remounts when the
   sheet moves, the layout changes or the phone turns (chat history, scroll positions and the viewer stay).
-- **Heights:** peek (the bar only), half (55% of the screen; the model keeps the rest), full (up to the header; the
+- **Heights:** peek (the bar only), half (55% of the screen; the model keeps the rest), full (up to the top bar; the
   model stays at its half size behind it). Drag the bar, flick it (one step its way), or tap the handle
   (peek → half → full → peek); arrow keys on the handle.
 - **Follows activity** (`follow()` in layout.ts, one effect in App.tsx next to `viewPlan`): a report or the models open
@@ -73,7 +79,7 @@ way at full height when it has no button: an iPhone 13 at full shows 6 clashes (
 ## Tour
 
 The tour finds the control that shows (a phone has some twice: the sheet's tabs and the pane's own), and when it is
-hidden it asks App to open what hides it (`TourActions.reveal`: the sheet's tab, the drawer, the header menu). On a
+hidden it asks App to open what hides it (`TourActions.reveal`: the sheet's tab, the clash list's drawer, Settings). On a
 phone its card spans the width above or below the control, and its copy says tap instead of click.
 
 ## Checked (Oct 29)

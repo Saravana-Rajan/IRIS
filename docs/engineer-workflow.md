@@ -90,21 +90,26 @@ name on the cover and, with no live edit log, its newest saved state's decisions
 ## Web contract
 
 Navigation lives in the path (the History API; the first version used hashes, still read and replaced): `/home` (the
-first screen), `/projects` (the list), `/projects/<pid>` (Overview) and `/projects/<pid>/<step>` with step one of
+Home dashboard), `/projects` (the list), `/projects/<pid>` (Overview) and `/projects/<pid>/<step>` with step one of
 `models | drawings | coordination | clashes | reports | activity` (`/projects/<pid>/clashes/<n>`: clash #n open),
 `/workspace` (a session outside a project), `/about`, `/settings`. The existing workspace (viewer, dock panels, clash
-panel) stays as is; the project shell adds a step bar and routes each step to the panel that already does the work.
+panel) stays as is, inside the app shell's body (`AppShell.tsx`). The sidebar's group for the open project lists its
+seven steps with counts (models, drawings, open clashes, reports) and routes each step to the panel that already does
+the work: Models, Coordination and Clash review are the workspace itself; Home, the projects, and a project's Overview,
+Drawings, Reports and Activity are pages over it in the shell's body.
 
 New files (each self-contained, props only, no direct App state):
 
 | File | Purpose |
 |---|---|
 | `web/src/projectsApi.ts` | Typed calls for the routes above (uses `api.ts`'s request helper) |
-| `web/src/projectRoute.ts` | Parse/format `#projects` and `#project/<pid>/<step>` (pure; mirrors `aboutRoute.ts`) |
-| `web/src/ProjectsHome.tsx` | List, create, open projects; per-project status (files, open / resolved, last saved) |
-| `web/src/ProjectOverview.tsx` | One project: models, coordination counts, unresolved / resolved, reports, recent activity, next step |
+| `web/src/projectRoute.ts` | Parse/format `/projects` and `/projects/<pid>/<step>` (pure; mirrors `aboutRoute.ts`); the first `#project/…` hashes still read |
+| `web/src/AppShell.tsx` + `shellNav.ts` | The sidebar (Home, Projects, the open project's steps with counts, Help, Settings, the reviewer's name), the top bar and its search box |
+| `web/src/StartScreen.tsx` | Home (`/home`): New project, the sample building and drawings, recent projects, See it work, How Iris works |
+| `web/src/ProjectsHome.tsx` | The projects table (status tabs with counts, a status pill per project, a ⋮ menu: Open, Rename, Remove from this browser) and `NewProjectDialog`, the New project dialog opened from Home's tile, the top bar and the empty state |
+| `web/src/ProjectOverview.tsx` | One project: four stat cards (models, clashes, open, resolved), the models, the coordination tally, the next step, recent activity, reports; `SaveButton` |
 | `web/src/importRows.ts` + `ImportPanel.tsx` | Per-file import rows from the existing upload events; Retry |
-| `web/src/modelSummary.ts` + `ModelSummary.tsx` | Discipline / system summary from the facet index; click to isolate |
+| `web/src/modelSummary.ts` + `ModelSummaryPanel.tsx` | Discipline / system summary from the facet index; click to isolate |
 | `web/src/coordination.ts` + `CoordinationOverview.tsx` | Classes / severity / status aggregation and the overview card |
 | `web/src/ClashHeader.tsx` | Structured header for the clash investigation |
 | `web/src/ProposalCard.tsx` | One proposal: state chip, element, direction, distance, reason, constraints, expected outcome, decision buttons |
@@ -127,14 +132,16 @@ New files (each self-contained, props only, no direct App state):
 **Status**: *Open*; *Fix kept, awaiting re-check* (in `fixes`, check stale); *Resolved by geometry* (the re-run
 check's `diff.resolved`); *Reviewed: by design*; *Sent to author*.
 
-### Save, the share closed, a fixed clash and the report (Nov 22)
+### Save, the share closed, the Clash tab, a fixed clash and the report (Nov 22)
 
-- **Save** (`SaveButton`, the Overview's header and the workspace's step bar) says how it went: "Saving…", then
-  "Saved ✓" for about 2 s, or "Not saved" with the reason in its tip.
+- **Save** (`SaveButton`, in a project page's header and, on the workspace, in the top bar's actions, not on phones)
+  says how it went: "Saving…", then "Saved ✓" for about 2 s, or "Not saved" with the reason in its tip.
 - **The share closed** on the Overview is never rounded to a false claim (`closedText`): 1 of 464 is "<1% closed",
   463 of 464 ">99% closed".
+- **The Clash tab** reads top down: the clash header (`ClashHeader`), then Propose fixes, Explore wider fix and Go to
+  the clash right under it, so Propose fixes shows without scrolling, then the clash panel (`ClashPanel`).
 - **A fixed clash** shows "Fixed ✓" in its panel: what was kept, Undo when the newest kept edit is its fix, and
-  "Propose a different fix" as a secondary; no primary Propose fixes.
+  "Propose a different fix" as a secondary; no primary Propose fixes, and after the panel only "Next clash".
 - **The report does not need triage.** A clash with a fix, a kept edit or a decision gets its page; one with no
   verdict, fix, edit, decision or mark is listed by clash test as "not triaged" (never as noise or as needing action),
   and the report stays DRAFT while any is. Triage only sorts them.

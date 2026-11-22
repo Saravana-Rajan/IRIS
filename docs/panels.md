@@ -22,14 +22,14 @@ It is Iris's own work, with no code from other products.
 
 | Panel | Holds | Default place |
 |---|---|---|
-| Model | The stage: the canvas, PR 49's view panes, the rail, the element card, the pilot pill, toasts | the middle; never moves, floats or pops out |
+| Model | The stage: the canvas, PR 49's view panes, the rail, the element card, the pilot's glow, toasts (the pilot's words and buttons are in the page header's status line) | the middle; never moves, floats or pops out |
 | Coordination | The left pane: the clash list and Insights (their own tabs), or the check's set-up card | left side bar |
 | Filters | Filters by property ([filters.md](filters.md)): the list and the editor | left side bar (tab, behind Coordination) |
 | Clash | The Clash tab's body | right side bar |
 | Plan | `PlanPanel` or `ContextPlan` | right side bar (tab) |
 | Chat | `ChatPanel` | right side bar (tab) |
 | Edits | The edit log (`EditPanel`): every kept edit, who kept it, its clash, the fix it follows; Undo, Redo, Undo to here, CSV ([manual-edits.md](manual-edits.md)) | right side bar (tab), put there behind the tab in front the first time something is kept (`DockHandle.place`) |
-| Activity | The agent's activity: Workings, the run drawn as it happens ([workings.md](workings.md)), or Steps, the table | bottom side bar; it grows to 380 px for a run while Workings shows (`DockHandle.fitBar`) |
+| Activity | The agent's activity: Workings, the run drawn as it happens ([workings.md](workings.md)), or Steps, the table | bottom side bar, collapsed to its slim strip by default (`DEFAULT_COLLAPSED`, also after Reset); the strip says in one line what the last run is doing (`ActivityLine`), and its tab opens the bar. A run never opens it by itself; choosing Workings (or turning it on) grows the bar to 380 px (`DockHandle.fitBar`) |
 | Properties | The selected element's card and everything its model says about it (below) | floating at the model's top right, opened by the first selection; or the right side bar, once docked there |
 
 - **Side bars** (dockview's edge groups) hold their tabs along the top while open, as the classic panes did. The
@@ -53,10 +53,10 @@ It is Iris's own work, with no code from other products.
   the floating panels while it is open.
 - **Put it back** (a button, and on the right-click menu) returns a floating, popped-out or moved panel to its side
   bar, in its place among the tabs.
-- **Close** is on the right-click menu. **Panels and layout** (in the Menu) shows any panel, closed
+- **Close** is on the right-click menu. **Panels and layout** (in Settings, from the sidebar) shows any panel, closed
   or not, resets the layout, and switches to the **Classic layout** (the fixed panes of before, `iris.dock.classic`).
-- The layout is kept in this browser (`iris.dock.v1`, dockview's `toJSON`, saved a moment after each change and
-  after a collapse). A layout that can't be Iris's (another version, a panel it doesn't have, the model anywhere but the
+- The layout is kept in this browser (`iris.dock.v2`, dockview's `toJSON`, saved a moment after each change and
+  after a collapse). The old `iris.dock.v1` (Activity open) is no longer read, so the new default applies once. A layout that can't be Iris's (another version, a panel it doesn't have, the model anywhere but the
   middle) gives way to the default. Pop-out windows come back docked after a reload: a browser opens a window only on
   a click.
 
@@ -146,8 +146,8 @@ did not change. Crossing 1100 px moves slots between the dock and the grid; noth
 **Into the dock under a cover.** Switching into the dock (the first models drawn from the start page, a report, the dock
 chosen again) left the page blank for a few frames: dockview lays out its panels in an effect, then each panel takes its
 slot, and until then nothing `App` draws is in the page (on Northbank in a software-rendered test browser, 2.5 s). So
-`App` covers the switch (`dockCover`): a layer over the whole window in the empty 3D view's colour, with the notch and
-the load card as the opening ended, until the stage is inside the dock (`.dock-host`), laid out and three frames drawn
+`App` covers the switch (`dockCover`): a layer over the whole window in the empty 3D view's colour, with the load card
+as the opening ended, until the stage is inside the dock (`.dock-host`), laid out and three frames drawn
 there (6 s at most), then a 0.2 s fade. Opening the first models from the start page on a desktop, that layer is the
 loading screen itself (`coverLoading`), so the new models never show behind the card before the switch either. Models
 opened again over open ones, phones, tablets and the Classic layout have no switch and no cover.

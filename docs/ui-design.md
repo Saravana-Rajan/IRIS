@@ -2,6 +2,16 @@
 
 **AI proposes. Geometry proves. The engineer decides.**
 
+> **Status (Nov 22, 2026).** The owner's later direction replaced parts of this file, and the app follows it, not
+> them: **light only** on lifemed's palette (white, ink, a lavender accent `--accent` `#b07af2`, the holographic
+> `--holo` gradient for AI-made things; no dark theme, no navy, no Appearance control), and a **sidebar app shell**
+> (Home, Projects, the open project's steps, Help and Settings in a left sidebar; a top bar with the page's actions and
+> search) in place of §6's step rail, context bar and status bar. So §3's token values, §6, §10.1 (the first screen),
+> §10.3 (corner and notch) and §10.4 (the menu) are superseded: the notch, the corner and the ☰ Menu button are gone,
+> the menu's contents are in **Settings** and **Help** (both from the sidebar), and the first screen is the Home
+> dashboard. What was built is in `docs/architecture/12-web-app.md` ("The app shell", "Theme and motion"). The rest
+> (the proof grammar's meaning, the critique, components, accessibility) still applies where it does not contradict that.
+
 This file is the design contract for the integration and polish agents working on `web/src`. It covers the critique of
 the current app, the tokens (light and dark), type, spacing, the project shell, the component rules, motion,
 accessibility, a remove/hide/keep inventory (§10), and a prioritised change list with exact selectors and variables. Everything here can be built in plain
@@ -97,6 +107,8 @@ phone-overflow fix (P2-5).
 ---
 
 ## 3. Tokens
+
+> Superseded (Nov 22): the app is light only on the lifemed tokens in `index.css :root`; see the status note at the top.
 
 All tokens live in `index.css :root`. Existing names stay valid: they are kept as aliases, so the new component CSS
 files and the 2,000 existing rules keep working. The theme resolves in this order: `[data-theme="dark"]` (explicit),
@@ -398,6 +410,9 @@ theme.
 ---
 
 ## 6. The app shell
+
+> Superseded (Nov 22): built as a sidebar shell (`AppShell.tsx`, `frame.css`), not this rail and context bar; see the
+> status note at the top.
 
 ### 6.1 Desktop (above 1100 px)
 
@@ -842,6 +857,9 @@ reports and activity. If not, it goes.
 
 ### 10.1 The first screen
 
+> Superseded (Nov 22): the first screen is the Home dashboard (`StartScreen.tsx`): a greeting, New project, the two
+> samples, recent projects, See it work and How Iris works.
+
 The app no longer opens on the marketing landing. With no hash, `App.tsx:3722-3740` renders `About` today. Instead it
 renders a lean **start screen**. `#projects` stays the Projects home and `#about` stays the product page.
 
@@ -895,6 +913,10 @@ renders a lean **start screen**. `#projects` stays the Projects home and `#about
 
 ### 10.3 Corner cluster and header (`App.tsx:3405-3425` `corner`, `Brand.tsx:51` `Notch`)
 
+> Done differently (Nov 22): the corner, the notch and the Menu button are all gone, on every page. The requirements
+> pill, the agent pill, Save, Report and Export (primary, with the kept-fix count) sit in the top bar's actions, and
+> the live status is the one status line in the workspace's header.
+
 | Element | Verdict |
 |---|---|
 | "Watch Iris fix a clash" primary in the corner while on the landing (`App.tsx:3407`, tablet `:3615`) | **REMOVE**. It duplicates the hero |
@@ -907,6 +929,10 @@ renders a lean **start screen**. `#projects` stays the Projects home and `#about
 | Notch: the wordmark hanging from the stage, which grows into the status | **REMOVE** in the project shell. The logo goes to the rail's brand slot and the live status to `.shell-context .run` |
 
 ### 10.4 The menu (`App.tsx:4064-4095` `MenuSheet`, plus `modelsMenu`, `coordinateMenu` and `layoutMenu` at `:3465-3530`)
+
+> Done differently (Nov 22): there is no menu button and no More (⋯). The menu's sections (Models, Coordinate, This
+> session, Panels and layout) moved as they were into **Settings**, and the flow, the samples and the shortcuts into
+> **Help**, both `MenuSheet`s opened from the sidebar.
 
 Today the menu holds four jobs. After the change it holds only rare things, because each step owns its own actions.
 

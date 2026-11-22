@@ -4,8 +4,9 @@
 > `triage.py`, `titles.py`, `chat.py`, `agents.py`, `requirements.py`, `settings.py`, `limits.py`, `spend.py`,
 > `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `app.py` (its module-level stores), and the browser storage
 > in `web/src/` (`App.tsx`, `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`, `reqFile.ts`,
-> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings, saved drawing
-> readings; re-branded on 2026-11-11) ·
+> `signoffs.ts`, `shellNav.ts`, `dockLayout.ts`, `projectsApi.ts`, `EditTool.tsx`) · **Checked against code:** 2026-11-22
+> (projects, reviews, decisions, 2D drawings, saved drawing readings, the browser storage keys of the sidebar shell;
+> re-branded on 2026-11-11) ·
 > **Deeper design:** [docs/detection.md](../detection.md), [docs/requirements.md](../requirements.md),
 > [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md)
@@ -713,14 +714,16 @@ redeploy. Without a bucket, projects sit on the container's in-memory disk and g
 
 ### The browser
 
-`localStorage` only; there is no `sessionStorage` or IndexedDB. Every access is wrapped so a private window simply
-does without.
+`localStorage`, and one `sessionStorage` key (`iris.edit.carry`, below); there is no IndexedDB. Every access is wrapped
+so a private window simply does without.
 
 | Key | Written by | Holds |
 |---|---|---|
 | `iris.session` | `App.tsx` | The session to resume: `scene_id`, `report_id`, `files`, `fixes` (clash id → fix title), `link` (the agent link, token included), `saved_at`, `check` (the kept check the list showed, null for all). Removed by Start fresh, or when the server no longer has the scene |
 | `iris.signoffs:clash:<clash id>` (a detection run) / `iris.signoffs:import:<title>:<files>` (an imported report) | `signoffs.ts` (`saveSignoffs`, called by `App.tsx`) | Reviews (team, name, decision, note, time) for the PDF's sign-off: one entry per detected clash, or one per imported report by clash id (the sign-off key, under Identifiers). A clash with no review left is dropped, and an import's key when none has any. The old title-keyed `iris.signoffs.<report title>` entries (every detection run shared "Coordination · N models") move over when a report with that title opens, for the clashes it has (`migrateTitleKeyed`); what is left waits for its own report |
-| `iris.reviewer` | `ReportDoc.tsx`, read by `App.tsx` | The reviewer's name |
+| `iris.reviewer` | `App.tsx` (`setReviewer`: the sidebar's name, edited inline, and the Clash tab's "Your name"), `ReportDoc.tsx` | The reviewer's name, recorded with each decision |
+| `iris.sidebar` | `shellNav.ts` (`readRail`, `writeRail`, called by `App.tsx`) | `{"pages": bool, "workspace": bool}`: whether the sidebar is collapsed to its icon rail on ordinary pages and on the 3D workspace; unset, pages are expanded and the workspace collapsed (`RAIL_DEFAULT`) |
+| `iris.projects` | `projectsApi.ts` (`rememberProject`, `forgetProject`, `pruneProjectIds`) | The project ids this browser created or opened, most recent first: the only list of "my projects" ([docs/engineer-workflow.md](../engineer-workflow.md)) |
 | `iris.requirements` | `reqFile.ts` | The requirements file and whether it is in use (`{doc, enabled}`); the page registers it with the server and sends its id |
 | `iris.owner` | `Owner.tsx` | The owner's "For me" settings, sent as `X-Iris-Settings` (read by the server only with the owner cookie) |
 | `iris.left-w`, `iris.right-w` | `App.tsx` | Side pane widths |
@@ -732,7 +735,8 @@ does without.
 | `iris.measure.snap`, `iris.measure.at` | `App.tsx` | Snapping while measuring (default on), and where the Measure panel was dragged to |
 | `iris.workings` | `App.tsx` | Workings on or off in the Activity panel (`"0"` / `"1"`, default on) and the view it shows ([docs/workings.md](../workings.md)) |
 | `iris.dock.properties` | `dock.tsx` (`setPropsHome`) | Where the Properties panel opens: floating or the right side bar ([docs/panels.md](../panels.md)) |
-| `iris.dock.v1`, `iris.dock.classic` | `dockLayout.ts` (`saveLayout`, called by `dock.tsx`) | The desktop's panel layout (dockview's `toJSON`) and whether the Classic layout is on ([docs/panels.md](../panels.md)) |
+| `iris.dock.v2`, `iris.dock.classic` | `dockLayout.ts` (`writeLayout`, called by `dock.tsx`; the classic switch by `App.tsx`) | The desktop's panel layout (`{v: 2, layout}`, dockview's `toJSON`) and whether the Classic layout is on ([docs/panels.md](../panels.md)). The old `iris.dock.v1` (Activity open) is no longer read, so the new default, Activity collapsed, applies once |
+| `iris.edit.carry` (`sessionStorage`) | `EditTool.tsx` | Take joined parts along, for this visit only |
 | `iris.views.<project>` | `App.tsx` (`saveViews`) | `{home, saved}`: the Home pose and the saved views (pose, projection, style, mode, filters, section box, and the filter rules as `rules`) for a set of models, keyed by `About.projectName` |
 | `iris.filters.<project>` | `App.tsx` (`filtersKey`) | `{v: 1, rules, colours, greyRest}`: the filters for a set of models ([docs/filters.md](../filters.md)) |
 
