@@ -510,9 +510,10 @@ canvas with the viewer's screenshot button, and crops it to 16:10 WebP with Pill
 Recapture after the viewer's look or the demo models change; the cards, the README table and the landing numbers move
 together and only from measured runs.
 
-### First-screen clips ("See it work")
+### The demo clips (once Home's "See it work")
 
-The first screen's **See it work** (`DemoClips.tsx`) plays two clips side by side: `check.webp` (the 3D clash check,
+Home no longer shows them (the owner removed "See it work" on Nov 22, and `DemoClips.tsx` with it); the files stay in
+`web/public/demos/` for the submission video. There were two clips: `check.webp` (the 3D clash check,
 from `capture-proposals.cjs --landing`, below) and `drawings.webp` (the 2D drawing reader), each 1000 × 625 with a
 `-still.webp`. `web/scripts/capture-drawings.cjs` records `drawings.webp` in the app from a fresh browser: Try the
 sample drawings, the sample building opening (sped up), the clean sheet read (its boxes, items and status chips),

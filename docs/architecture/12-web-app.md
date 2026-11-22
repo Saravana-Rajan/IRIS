@@ -298,9 +298,8 @@ the workspace and the pages in it.
   Report, Export, Connect an agent; not on the landing), Panels and layout (desktop, not the landing).
 - **Help** (the sidebar's): `MenuSheet title="Help"`: the principle and the eight steps (`PROJECT_FLOW`), Try the
   sample building and Try the sample drawings (when the server has them), and good to know: projects are private to
-  this browser by an unguessable id, the reviewer's name is recorded with each decision (its line still says "the name
-  under the sidebar"), "/" to search, Esc to
-  leave a clash.
+  this browser by an unguessable id, your name (in Settings, or above the proposals) is recorded with each decision, "/" to
+  search, Esc to leave a clash.
 - **New project.** `NewProjectDialog` (from `ProjectsHome.tsx`) at the shell's root, opened from Home's tile, the top
   bar and the Projects empty state; `busy` while `createProject` runs (`creating`), with its own error line
   (`createError`); then the new project's Overview. Rename and Remove from this browser are in the projects table's

@@ -4913,8 +4913,8 @@ export function App() {
                   <FileText size={16} aria-hidden /> Try the sample drawings</button>}
               </section>}
               <section className="menu-section"><h3>Good to know</h3>
-                <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet. The name under the
-                  sidebar is recorded with each decision you make.</p>
+                <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet. Your name (in
+                  Settings, or above the proposals) is recorded with each decision you make.</p>
                 <p className="hint">Press <kbd>/</kbd> to search, <kbd>Esc</kbd> to leave a clash.</p>
               </section>
             </MenuSheet>}
