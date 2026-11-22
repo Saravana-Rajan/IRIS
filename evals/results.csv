@@ -1,0 +1,1 @@
+date,dataset,clash,model,images,run,latency_s,candidates,passing,top1_pass,top1_delta_m,top1_clearance_mm,reference_delta_m,notes

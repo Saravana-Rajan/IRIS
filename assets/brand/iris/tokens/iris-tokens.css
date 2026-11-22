@@ -1,0 +1,10 @@
+:root {
+  --iris-ink: #11161B;
+  --iris-navy: #052640;
+  --iris-white: #FFFFFF;
+  --iris-paper: #F5F7F8;
+  --iris-line: #DDE3E7;
+  --iris-muted: #52636E;
+  --iris-font-support: "Segoe UI", Arial, sans-serif;
+  --iris-clearspace-ratio: 0.25;
+}

@@ -1,0 +1,40 @@
+[project]
+name = "iris-server"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "cadquery-ocp==8.0.1.1.0",
+    "defusedxml>=0.7.1",
+    "fastapi>=0.162.0",
+    "google-genai>=3.1.0",
+    "httpx>=0.28.1",
+    "ifcopenshell>=0.9.0.post1",
+    "mcp>=2.3.0",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.1",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.54.0",
+    "weasyprint>=70.0",
+]
+
+[project.scripts]
+iris-bench = "iris_bench.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["iris", "iris_bench"]
+
+[tool.uv]
+package = true

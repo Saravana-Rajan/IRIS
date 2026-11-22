@@ -1,0 +1,15 @@
+# Upload filter for `gcloud builds submit` (passed with --ignore-file). Without it gcloud falls back to .gitignore,
+# which would drop the optional, gitignored samples (samples/reports, samples/step-cache) from the build.
+# The image itself is filtered again by the root .dockerignore.
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+web/dist
+web/public/wasm
+server/.iris-settings.json
+evals/runs

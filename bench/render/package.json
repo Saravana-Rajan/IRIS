@@ -1,0 +1,10 @@
+{
+  "name": "iris-bench-render",
+  "private": true,
+  "type": "module",
+  "description": "Headless deterministic renders of Iris Bench scenes (three.js + Playwright Chromium, SwiftShader).",
+  "dependencies": {
+    "playwright": "1.65.0",
+    "three": "0.186.1"
+  }
+}

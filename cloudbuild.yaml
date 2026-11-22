@@ -1,0 +1,39 @@
+# Cloud Build: build the root Dockerfile and push it to Artifact Registry.
+#
+# Manual (deploy/deploy.sh does this for you):
+#   gcloud builds submit --config cloudbuild.yaml --ignore-file deploy/.gcloudignore \
+#     --substitutions _REGION=asia-south1,_REPO=iris,_TAG=manual-$(date +%Y%m%d-%H%M%S) .
+# CI: a Cloud Build trigger on the main branch with this file; with _TAG empty the tag is the commit's short SHA
+# (or the build ID when there is no commit).
+#
+# Image: ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:<tag> and :latest
+# Shell variables are written $$NAME so Cloud Build does not treat them as substitutions.
+substitutions:
+  _REGION: asia-south1
+  _REPO: iris
+  _IMAGE: iris
+  _TAG: ""
+options:
+  machineType: E2_HIGHCPU_8      # the web build and the OpenCASCADE wheels are heavy; this keeps a build to minutes
+  logging: CLOUD_LOGGING_ONLY
+  env:
+    - DOCKER_BUILDKIT=1
+timeout: 1800s
+steps:
+  - id: build-and-push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        TAG="${_TAG}"
+        [ -n "$$TAG" ] || TAG="$SHORT_SHA"
+        [ -n "$$TAG" ] || TAG="$BUILD_ID"
+        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}"
+        docker pull "$$IMAGE:latest" || true
+        docker build --cache-from "$$IMAGE:latest" --build-arg BUILDKIT_INLINE_CACHE=1 \
+          -t "$$IMAGE:$$TAG" -t "$$IMAGE:latest" .
+        docker push "$$IMAGE:$$TAG"
+        docker push "$$IMAGE:latest"
+        echo "Pushed $$IMAGE:$$TAG"
