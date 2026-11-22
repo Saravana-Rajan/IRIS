@@ -31,7 +31,7 @@ def test_the_web_apps_preflight_is_allowed_with_credentials(cross):
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == SITE
     assert r.headers["access-control-allow-credentials"] == "true"
-    assert {"GET", "POST", "PUT", "DELETE"} <= {m.strip() for m in r.headers["access-control-allow-methods"].split(",")}
+    assert {"GET", "POST", "PUT", "PATCH", "DELETE"} <= {m.strip() for m in r.headers["access-control-allow-methods"].split(",")}
     allowed = r.headers["access-control-allow-headers"].lower()
     assert "x-iris-settings" in allowed and "x-iris-requirements" in allowed and "content-type" in allowed
     assert _preflight(cross, "https://iris-test.firebaseapp.com").headers["access-control-allow-origin"] \
@@ -117,3 +117,13 @@ def test_one_origin_the_root_is_the_web_app(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module, "WEB_DIST", tmp_path)
     r = TestClient(app_module.app).get("/")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html") and "<title>Iris" in r.text
+
+
+def test_every_method_the_api_routes_use_is_allowed_across_origins(cross):
+    """A route whose method the preflight refuses works on one origin and fails from Firebase Hosting (PATCH did)."""
+    from iris.app import app as api
+    used = {m for r in api.routes for m in (getattr(r, "methods", None) or ()) if getattr(r, "path", "").startswith("/api/")}
+    for method in sorted(used - {"HEAD", "OPTIONS"}):
+        r = cross.options("/api/projects/x", headers={"Origin": SITE, "Access-Control-Request-Method": method})
+        assert r.status_code == 200, method
+        assert method in {m.strip() for m in r.headers["access-control-allow-methods"].split(",")}, method

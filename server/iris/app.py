@@ -94,7 +94,7 @@ class _CrossOrigin:
     outermost: an answer `_OwnerContext` gives itself (409 requirements_unknown) carries the headers too. It only adds
     headers, so streams keep `Content-Encoding: identity` and flow as before."""
 
-    METHODS = ("GET", "POST", "PUT", "DELETE")
+    METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")   # PATCH: a project's changes (projectsApi.patchProject)
     HEADERS = ("Content-Type", owner.HEADER, requirements.HEADER)
     EXPOSE = ("X-Iris-Gone", "Content-Disposition")   # what the page reads from an answer (api.ts goneOf), downloads
 
