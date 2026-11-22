@@ -48,7 +48,7 @@
 .side-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .side-item:hover, .side-group-head:hover { background: var(--panel, #f2f2f2); color: var(--ink, #1a1a1a); }
 .side-item:hover .side-icon, .side-group-head:hover .side-icon { color: var(--ink, #1a1a1a); }
-.side-item:focus-visible, .side-group-head:focus-visible, .side-close:focus-visible, .side-edit:focus-visible {
+.side-item:focus-visible, .side-group-head:focus-visible, .side-close:focus-visible {
   outline: 2px solid var(--accent, #b07af2); outline-offset: 1px; }
 
 /* The page shown: a white pill with a hairline, a soft shadow and a 2 px holographic left edge */
@@ -80,20 +80,16 @@
 
 /* Help, Settings, then the reviewer */
 .side-foot { flex: none; padding: 8px 12px 0; }
+/* "Built by Techjays": quiet, small, the mark beside it */
+.side-built { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 10px; min-width: 0; color: var(--muted, #6a6a6a);
+  font-size: 12px; white-space: nowrap; }
+.sidebar-rail .side-built { justify-content: center; padding: 0; }
+.side-built-text b { font-weight: 500; color: var(--ink, #1a1a1a); }
 .side-divider { height: 1px; margin: 8px 0 0; border: 0; background: var(--line, #e6e6e6); }
-.side-user { display: flex; align-items: center; gap: 10px; height: 64px; padding: 0 4px; min-width: 0; }
-.side-avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center;
   border: 1.5px solid transparent; color: var(--accent-ink, #6f3fc0); font: 600 13px/1 var(--body, "IBM Plex Sans", system-ui, sans-serif);
   background: linear-gradient(135deg, #eef0ff, #f5ecfe 50%, #ffeefa) padding-box,
     var(--holo, linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%)) border-box; }
-.side-user-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.25; }
-.side-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; color: var(--ink, #1a1a1a); }
-.side-user-name.empty { color: var(--muted, #6a6a6a); font-weight: 400; }
-.side-user-role { font-size: 11.5px; color: var(--muted, #6a6a6a); white-space: nowrap; }
-.side-edit { flex: none; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
   color: var(--accent-ink, #6f3fc0); font: 500 12.5px/1.2 var(--body, "IBM Plex Sans", system-ui, sans-serif); }
-.side-edit:hover { background: var(--accent-soft, #f4ecfd); }
-.side-user-input { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--accent, #b07af2); border-radius: 6px;
   background: var(--surface, #fff); color: var(--ink, #1a1a1a); font: 400 13.5px var(--body, "IBM Plex Sans", system-ui, sans-serif);
   outline: none; box-shadow: 0 0 0 3px var(--accent-soft, #f4ecfd); }
 

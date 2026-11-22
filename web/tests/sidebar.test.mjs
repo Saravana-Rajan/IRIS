@@ -58,7 +58,7 @@ test("the sidebar is the Main nav with the logo, Home and Projects as real links
   const html = sidebar();
   assert.match(html, /^<nav class="sidebar" aria-label="Main">/);
   const t = text(html);
-  assert.match(t, /^Iris by Techjays Home Projects Help Settings P Priya Raman Reviewer Edit$/);
+  assert.match(t, /^Iris Home Projects Help Settings Built by Techjays$/);
   assert.deepEqual(hrefs(html), ["/home", "/home", "/projects"]);   // the logo (mouse only), then the items
   assert.match(html, /<a class="side-brand" href="\/home" tabindex="-1" aria-hidden="true">/);
   assert.doesNotMatch(t, /log ?out|sign ?out/i);
@@ -117,7 +117,7 @@ test("a project step shown marks that step, opens the group and nothing else", (
 test("the rail: icons only, every item keeps its name as an aria-label and a right-side tip", () => {
   const html = sidebar({ rail: true, project, active: "models", workspace: { label: "Workspace" } });
   assert.match(html, /^<nav class="sidebar sidebar-rail" aria-label="Main">/);
-  assert.equal(text(html), "P");                                    // the avatar's initial is the only text
+  assert.equal(text(html), "");                                     // no text: icons, and the footer's mark
   assert.doesNotMatch(html, /side-label|side-badge|side-group-head|side-brand-text|side-user-text|Edit/);
   const items = tags(html).filter((tag) => tag.includes("side-item"));
   const labels = items.map((tag) => /aria-label="([^"]*)"/.exec(tag)?.[1]);
@@ -129,21 +129,17 @@ test("the rail: icons only, every item keeps its name as an aria-label and a rig
   }
   assert.match(html, /<div class="side-group open has-active">/);  // the steps' icons, under their divider
   assert.match(html, /<a class="side-item sub active" href="\/projects\/[^"]+\/models" aria-current="page" aria-label="Models \(4\)"/);
-  assert.match(html, /<div class="side-user"><span class="side-avatar" role="img" aria-label="Reviewer: Priya Raman" data-tip="Priya Raman" data-tip-side="right">P<\/span><\/div>/);
+  assert.match(html, /<div class="side-built" role="note" aria-label="Built by Techjays" data-tip="Built by Techjays" data-tip-side="right">/);
   // Expanded, no item carries a tip (its label is on show)
   assert.doesNotMatch(sidebar({ project }), /side-item[^>]*data-tip/);
 });
 
-test("the user block: the initial and name, or 'Add your name' when there is none", () => {
-  const named = sidebar({ reviewer: "  élodie Martin " });
-  assert.match(named, /<span class="side-avatar" aria-hidden="true">É<\/span>/);
-  assert.match(named, /<span class="side-user-name">élodie Martin<\/span>/);
-  assert.match(named, /<button type="button" class="side-edit" aria-label="Edit your name">Edit<\/button>/);
-  const empty = sidebar({ reviewer: "" });
-  assert.match(empty, /<span class="side-avatar" aria-hidden="true">\?<\/span>/);
-  assert.match(empty, /<span class="side-user-name empty">Add your name<\/span>/);
-  assert.match(empty, /aria-label="Add your name">Edit<\/button>/);
-  assert.match(sidebar({ reviewer: "", rail: true }), /aria-label="No reviewer name yet"/);
+test("the footer: \"Built by Techjays\" with the small mark, and no person's name or avatar", () => {
+  const html = sidebar({ reviewer: "Priya Raman" });
+  assert.match(html, /<div class="side-built" role="note" aria-label="Built by Techjays">/);
+  assert.match(text(html), /Built by Techjays$/);
+  assert.doesNotMatch(html, /Priya|side-user|side-avatar|Add your name|Reviewer/);
+  assert.doesNotMatch(html, /by Techjays<\/span><\/span><\/a>/, "the brand at the top is just Iris");
 });
 
 test("phones and tablets: the drawer is open or closed over a light scrim, with labels and a close button", () => {

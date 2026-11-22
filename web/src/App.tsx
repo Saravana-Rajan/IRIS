@@ -338,8 +338,6 @@ export function App() {
   const [coordFilter, setCoordFilter] = useState<CoordinationFilter | null>(null);
   // Who decides (docs/engineer-workflow.md, step 9): a name kept in this browser, sent with every decision and keep.
   const [reviewer, setReviewerState] = useState<string>(() => { try { return localStorage.getItem("iris.reviewer") ?? ""; } catch { return ""; } });
-  // The decision panel asks for a name only when none was kept here at load (the sidebar's user block sets it after).
-  const [askName] = useState(() => !reviewer.trim());
   const setReviewer = (name: string) => {
     setReviewerState(name);
     try { if (name.trim()) localStorage.setItem("iris.reviewer", name.trim()); else localStorage.removeItem("iris.reviewer"); } catch { /* private window */ }
@@ -4422,7 +4420,7 @@ export function App() {
     <div className={`shell${rail ? " shell-rail" : ""}${compact ? ` shell-compact shell-${layout}` : ""}`}>
       <Sidebar active={navActive} project={navProject} workspace={navWorkspace} rail={rail}
         drawer={compact ? (drawerOpen ? "open" : "closed") : undefined} onCloseDrawer={() => setDrawerOpen(false)}
-        onNav={nav} hrefOf={navHref} reviewer={reviewer} onReviewer={setReviewer}
+        onNav={nav} hrefOf={navHref}
         onHelp={() => { setDrawerOpen(false); setHelpOpen(true); }} onSettings={() => { setDrawerOpen(false); setMenuOpen(true); }} />
       <div className="shell-main">
         <TopBar rail={rail} onToggle={toggleRail} compact={compact} onMenu={() => setDrawerOpen(true)}
@@ -4720,7 +4718,7 @@ export function App() {
                 {proposing && progress?.checking && <ProposalCard item={{ title: progress.checking.title, kind: progress.checking.kind, model: progress.model }}
                   state="ai_proposed" names={{}} />}
                 {proposal && !proposing && <h2 ref={optionsHead}>Verified options</h2>}
-                {proposal && !proposing && (proposal.options.length > 0 || proposal.recommendation) && askName && (
+                {proposal && !proposing && (proposal.options.length > 0 || proposal.recommendation) && (
                   <label className="field reviewer-field">Your name, recorded with each decision
                     <input value={reviewer} maxLength={120} placeholder="Reviewer (no sign-in: a name you type)" autoComplete="name"
                       onChange={(e) => setReviewer(e.target.value)} /></label>)}
@@ -4880,6 +4878,11 @@ export function App() {
             {/* Settings (the sidebar's): what the old menu held, in the order of the work: models, coordinate, this
                 session's outputs and requirements, the agent, the panels (docs/architecture/12-web-app.md, "The app shell"). */}
             {menuOpen && <MenuSheet title="Settings" onClose={() => setMenuOpen(false)}>
+        <section className="menu-section"><h3>Your name for review decisions</h3>
+          <label className="field reviewer-field">Recorded with each accept, reject or request, and in the reports
+            <input value={reviewer} maxLength={120} placeholder="Your name (no sign-in)" autoComplete="name"
+              onChange={(e) => setReviewer(e.target.value)} /></label>
+        </section>
               <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
                 title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
                 {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>

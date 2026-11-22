@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { ApertureMark } from "./Brand";
 import { PROJECT_STEPS, isProjectStep, ownClick, type ProjectStep } from "./projectRoute";
-import { cleanName, groupHits, initials, isSearchKey, NAME_MAX, type NavId, type SearchHit } from "./shellNav";
+import { groupHits, isSearchKey, type NavId, type SearchHit } from "./shellNav";
 import "./appShell.css";
 
 export type { NavId, SearchHit } from "./shellNav";
@@ -13,7 +13,7 @@ export type { NavId, SearchHit } from "./shellNav";
 /**
  * The app shell (style brief §3): the sidebar on the left (expanded, the 64 px icon rail, or a drawer on phones and
  * tablets), the top bar over the page and its search box. Props only: App owns the route, the rail state
- * (shellNav.readRail / writeRail), the reviewer's name and what each item does. Every item is a real link (`hrefOf`)
+ * (shellNav.readRail / writeRail) and what each item does. Every item is a real link (`hrefOf`)
  * whose plain click goes to `onNav`, so a new tab still works. Layout classes: appShell.css.
  */
 
@@ -92,9 +92,10 @@ export interface SidebarProps {
   onNav(id: NavId): void;
   /** Each item's real address (links, so a new tab works); undefined makes the item a button. */
   hrefOf(id: NavId): string | undefined;
-  /** The reviewer's name (localStorage `iris.reviewer`, kept by App) and its inline edit. */
-  reviewer: string;
-  onReviewer(name: string): void;
+  /** The reviewer's name (localStorage `iris.reviewer`) is asked for where decisions are made (the proposals, the review
+   *  queue, Settings), not shown in the sidebar: these are kept so a caller that still passes them compiles. */
+  reviewer?: string;
+  onReviewer?(name: string): void;
   onHelp(): void;
   onSettings(): void;
 }
@@ -102,7 +103,7 @@ export interface SidebarProps {
 /** The left sidebar: the logo, Home, Projects, the workspace, the open project's steps, then Help, Settings and the
  *  reviewer. A `nav` landmark labelled "Main". */
 export function Sidebar({ active, project = null, workspace = null, rail: railPref, drawer, onCloseDrawer, onNav, hrefOf,
-  reviewer, onReviewer, onHelp, onSettings }: SidebarProps) {
+  onHelp, onSettings }: SidebarProps) {
   const inDrawer = drawer !== undefined;
   const isOpen = drawer === "open";
   const rail = railPref && !inDrawer;           // the drawer always shows the labels
@@ -168,7 +169,7 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
           <a className="side-brand" href={home ?? "#"} tabIndex={-1} aria-hidden
             onClick={(e) => { if (!ownClick(e)) return; e.preventDefault(); go("home"); }}>
             <LogoTile size={32} />
-            {!rail && <span className="side-brand-text"><span className="side-brand-name">Iris</span><span className="side-brand-by">by Techjays</span></span>}
+            {!rail && <span className="side-brand-text"><span className="side-brand-name">Iris</span></span>}
           </a>
           {inDrawer && (
             <button type="button" className="side-close" aria-label="Close the menu" onClick={() => onCloseDrawer?.()}>
@@ -210,60 +211,21 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
             <li><SideLink label="Settings" icon={Settings} rail={rail} onSelect={() => { onSettings(); shut(); }} /></li>
           </ul>
           <hr className="side-divider" />
-          <UserBlock name={reviewer} rail={rail} onSave={onReviewer} />
+          <BuiltBy rail={rail} />
         </div>
       </nav>
     </>
   );
 }
 
-/** The reviewer: a round avatar with the initial, the name and an Edit button that turns the name into an input
- *  (Enter or leaving it saves, Escape cancels). In the rail, the avatar alone. There is no login, so no log out. */
-export function UserBlock({ name, rail, onSave }: { name: string; rail: boolean; onSave(name: string): void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  const settled = useRef(false);
-  const refocus = useRef(false);
-  const edit = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (!editing && refocus.current) { refocus.current = false; edit.current?.focus(); } }, [editing]);
-
-  const has = name.trim() !== "";
-  const start = () => { setDraft(name); settled.current = false; setEditing(true); };
-  const finish = (save: boolean, keyboard: boolean) => {
-    if (settled.current) return;                // Enter or Escape already ended it; the blur that follows is not a save
-    settled.current = true;
-    if (save) { const next = cleanName(draft); if (next !== name.trim()) onSave(next); }
-    refocus.current = keyboard;
-    setEditing(false);
-  };
-  const avatar = (
-    <span className="side-avatar" aria-hidden={!rail || undefined} role={rail ? "img" : undefined}
-      aria-label={rail ? (has ? `Reviewer: ${name.trim()}` : "No reviewer name yet") : undefined}
-      data-tip={rail ? (has ? name.trim() : "Add your name: expand the sidebar") : undefined} data-tip-side={rail ? "right" : undefined}>
-      {initials(name)}
-    </span>
-  );
-  if (rail) return <div className="side-user">{avatar}</div>;
+/** The sidebar's quiet footer: the small Aperture mark and "Built by Techjays"; in the rail, the mark alone with that as
+ *  its tip. */
+export function BuiltBy({ rail }: { rail: boolean }) {
   return (
-    <div className="side-user">
-      {avatar}
-      {editing ? (
-        <input className="side-user-input" value={draft} maxLength={NAME_MAX} autoFocus aria-label="Your name, recorded with each decision"
-          placeholder="Your name" onChange={(e) => setDraft(e.target.value)} onFocus={(e) => e.currentTarget.select()}
-          onBlur={() => finish(true, false)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); finish(true, true); }
-            else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false, true); }
-          }} />
-      ) : (
-        <>
-          <span className="side-user-text">
-            <span className={`side-user-name${has ? "" : " empty"}`}>{has ? name.trim() : "Add your name"}</span>
-            <span className="side-user-role">Reviewer</span>
-          </span>
-          <button ref={edit} type="button" className="side-edit" onClick={start} aria-label={has ? "Edit your name" : "Add your name"}>Edit</button>
-        </>
-      )}
+    <div className="side-built" role="note" aria-label="Built by Techjays" data-tip={rail ? "Built by Techjays" : undefined}
+      data-tip-side={rail ? "right" : undefined}>
+      <ApertureMark size={rail ? 18 : 16} />
+      {!rail && <span className="side-built-text" aria-hidden>Built by <b>Techjays</b></span>}
     </div>
   );
 }
