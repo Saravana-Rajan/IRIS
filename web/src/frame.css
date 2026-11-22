@@ -67,6 +67,9 @@
 .fixed-calm-head .why { color: var(--muted); font-size: 12.5px; }
 .fixed-calm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Settings and Help (AppMenu.tsx's sheet): its title in the page's type */
+.menu-head .menu-title { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); display: block; }
+
 /* Help */
 .help-flow { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .help-flow li { display: flex; gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.45; }

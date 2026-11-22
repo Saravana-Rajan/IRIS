@@ -440,7 +440,15 @@ export function DockHost({ slots, sizes, tabs, onReady, onGone, onTab, onShown, 
       api.onDidAddPanel(fit), api.onDidRemovePanel(fit), api.onDidMovePanel((e) => { fit(); remember(e.panel); }), api.onDidAddPopoutGroup(windows),
       api.onDidRemovePopoutGroup(windows), api.onDidActivePanelChange((e) => front(e.panel?.id))];
     front(api.getGroup(EDGE_GROUP.right)?.activePanel?.id);   // a restored layout may have Plan or Chat in front
-    cleanup.current = () => { window.clearTimeout(timer); unwire(); for (const s of subs) s.dispose(); };
+    // The dock's box moves and narrows when the page beside it changes (the app shell's sidebar collapsing or opening):
+    // dockview re-places a panel drawn "always" only when its own group changes size, so a side bar that kept its width
+    // stayed drawn where it was. Each change of the dock's size re-places them all, a frame later.
+    const inner = (api as unknown as { component?: { element?: HTMLElement; debouncedUpdateAllPositions?: () => void } }).component;
+    const box = inner?.element ?? null;
+    const placed = typeof ResizeObserver !== "undefined" && box && inner?.debouncedUpdateAllPositions
+      ? new ResizeObserver(() => inner.debouncedUpdateAllPositions?.()) : null;
+    if (placed && box) placed.observe(box);
+    cleanup.current = () => { window.clearTimeout(timer); unwire(); placed?.disconnect(); for (const s of subs) s.dispose(); };
 
     const handle: DockHandle = {
       show(id, opts) {

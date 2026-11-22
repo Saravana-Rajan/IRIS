@@ -1,9 +1,8 @@
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { Wordmark } from "./Brand";
 
-/** Iris's menu (the model's top right corner on a desktop, the header on phones and tablets): every action in one panel from the right, each with its name,
- * in the order of the work (models, coordinate, this session's outputs, help). Escape or the scrim closes it. */
+/** A sheet from the right, opened from the app shell's sidebar: Settings (every action the old menu held, by name, in the
+ * order of the work: models, coordinate, this session's outputs, the panels) and Help. Escape or the scrim closes it. */
 export function MenuSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -18,8 +17,8 @@ export function MenuSheet({ title, onClose, children }: { title: string; onClose
     <div className="menu-sheet" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="menu-panel" ref={panel} onClick={(e) => e.stopPropagation()}>
         <div className="menu-head">
-          <span className="brand"><Wordmark height={24} title={title} /></span>
-          <button type="button" className="ibtn" aria-label="Close the menu" onClick={onClose}><X size={20} aria-hidden /></button>
+          <h2 className="menu-title">{title}</h2>
+          <button type="button" className="ibtn" aria-label={`Close ${title}`} onClick={onClose}><X size={20} aria-hidden /></button>
         </div>
         {children}
       </div>
