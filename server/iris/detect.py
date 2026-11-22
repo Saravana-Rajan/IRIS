@@ -45,6 +45,10 @@ CAP = env_int("IRIS_DETECT_CAP", 5000)   # clashes kept per test; a test that re
 RULES = ("same_element", "connected", "assembly", "host")
 RULE_LABEL = {"same_element": "same element", "connected": "joined by ports", "assembly": "one assembly",
               "host": "door or window in its wall"}
+# The measurement's version, part of a saved check's key (saved_checks.py): bump it with any change to what a test
+# measures (`_candidates`, `_tree`, `_measure`, `_Solids`, `_same_shape`, the boxes), so a check saved by older code is
+# never replayed; then make the saved checks again (`python -m iris.saved_checks`).
+VERSION = 1
 
 Event = Callable[[dict], None]
 
@@ -218,6 +222,7 @@ class Run:
     seconds: float
     offset: list[float]       # what the triangle tree was shifted by (zero unless the models are far from the origin)
     state: dict               # what the next run compares against
+    saved: bool = False       # measured from a saved check of the unchanged sample models (saved_checks.py), not anew
 
 
 # ------------------------------------------------------------------------------------------------- the open models
@@ -688,14 +693,29 @@ def clash_id(test_id: str, a: str, b: str) -> str:
     return "s" + hashlib.sha1(f"{test_id}|{x}|{y}".encode()).hexdigest()[:9]
 
 
+def _plan(ix: _Index, tests: list[Test]) -> list[tuple[Test, list[str], list[str] | None, list[tuple[str, str]]]]:
+    """The broad phase of every test: (test, side A, side B or None, candidate pairs)."""
+    plans = []
+    for t in tests:
+        a = _sized(ix, ix.select(t.a), t.min_size_m)
+        b = None if t.b is None else _sized(ix, ix.select(t.b), t.min_size_m)
+        margin = t.clearance_m if t.kind == "clearance" else t.tolerance_m
+        plans.append((t, a, b, _candidates(ix, a, b, margin)))
+    return plans
+
+
 def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None = None, previous: dict | None = None,
-        cap: int = CAP, title: str | None = None, known: dict | None = None, root: Path | None = None) -> Run:
+        cap: int = CAP, title: str | None = None, known: dict | None = None, root: Path | None = None,
+        replay: bool = True, measured: dict | None = None) -> Run:
     """Run the tests (default: `default_tests`) over the open models and return them as a clash report.
 
     `previous`: the state this run compares with (what it calls new, resolved or no longer checked): the same check's
     last run. `known`: every clash the scene has given an id and a number ({"clashes": id → {kind, a, b}, "numbers",
     "open": ids in the open list}, `checks.Register.known`); without it, `previous` is all the run knows. `root`: the
-    folder the report keeps its files in (a new temporary one, deleted with the report, by default)."""
+    folder the report keeps its files in (a new temporary one, deleted with the report, by default). `replay`: take
+    the measurement from a saved check when the scene is shipped sample models, unchanged, under the same tests
+    (saved_checks.py); everything after the measurement is made as in a live run. `measured`: filled with each test's
+    measurement, test id → (candidate pairs, hits, touches), for saving a check."""
     emit = on_event or (lambda e: None)
     if known is None:
         was = (previous or {}).get("clashes", {})
@@ -709,16 +729,20 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
     emit({"type": "start", "elements": len(ix.entity), "tests": [{"id": t.id, "name": t.name, "kind": t.kind}
                                                                    for t in tests]})
     # Broad phase for every test first, so the triangle tree is built once over just what can clash.
-    plans = []
-    for t in tests:
-        a = _sized(ix, ix.select(t.a), t.min_size_m)
-        b = None if t.b is None else _sized(ix, ix.select(t.b), t.min_size_m)
-        margin = t.clearance_m if t.kind == "clearance" else t.tolerance_m
-        plans.append((t, a, b, _candidates(ix, a, b, margin)))
+    plans = _plan(ix, tests)
     needed = {g for _, _, _, pairs in plans for p in pairs for g in p}
     offset = _offset(ix)
-    emit({"type": "phase", "text": f"Building geometry for {len(needed)} elements"})
-    tree = _tree(ix, needed, offset) if needed else None
+    saved = None
+    if replay and needed:
+        from . import saved_checks   # it reads this module's measures
+        saved = saved_checks.find(scene, ix, tests, plans, offset)
+    if saved is not None:
+        emit({"type": "phase", "text": f"The sample models are unchanged: using their saved check of {len(needed)} "
+                                       "elements"})
+        tree = None
+    else:
+        emit({"type": "phase", "text": f"Building geometry for {len(needed)} elements"})
+        tree = _tree(ix, needed, offset) if needed else None
     solids = _Solids(ix)
 
     hits_found: list[tuple[Test, object]] = []
@@ -728,7 +752,12 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
     for n, (t, a, b, pairs) in enumerate(plans):
         t1 = time.perf_counter()
         emit({"type": "test", "index": n, "id": t.id, "name": t.name, "candidates": len(pairs)})
-        hits, touches = _measure(ix, solids, t, pairs, tree, offset) if tree is not None else ({}, [])
+        if saved is not None:
+            hits, touches = saved[t.id]
+        else:
+            hits, touches = _measure(ix, solids, t, pairs, tree, offset) if tree is not None else ({}, [])
+        if measured is not None:
+            measured[t.id] = (pairs, hits, touches)
         contacts.update(frozenset(p) for p in touches)
         touching = len(touches)
         excluded: Counter = Counter()
@@ -798,7 +827,7 @@ def run(scene: IfcScene, tests: list[Test] | None = None, on_event: Event | None
              "selections": selections, "numbers": numbers, "contacts": [sorted(p) for p in contacts]}
     seconds = round(time.perf_counter() - t0, 2)
     return Run(report, coverage, {k: v for k, v in diff.items() if k != "new_ids"}, len(checked_ids), seconds,
-               [float(x) for x in offset], state)
+               [float(x) for x in offset], state, saved=saved is not None)
 
 
 def _assign_ids(hits: list[tuple[Test, object]], known: dict[str, dict]) -> list[str]:

@@ -241,6 +241,14 @@ class IfcScene:
             self._bounds = self._measure(range(len(self.models)), progress)
         return self._bounds
 
+    def big(self) -> bool:
+        """Whether every box goes through CGAL, extrusions too: the files together reach `IRIS_BIG_MODEL_MB`. The whole
+        scene's size, so a file added later is measured as it would be had it opened with the rest."""
+        try:
+            return sum(p.stat().st_size for p in self.paths) >= BIG_MODEL_BYTES
+        except OSError:
+            return False
+
     def _measure(self, indexes, progress: Callable[[int, int], None] | None = None) -> dict[str, np.ndarray]:
         """The boxes of every physical element in these files, in model order."""
         settings = ifcopenshell.geom.settings()
@@ -254,10 +262,7 @@ class IfcScene:
                     groups.setdefault((i, meshes_only(p)), []).append(p)
                     order.append(p.GlobalId)
         total, done = sum(len(g) for g in groups.values()), 0
-        try:   # the whole scene's size, so a file added later is measured as it would be had it opened with the rest
-            big = sum(p.stat().st_size for p in self.paths) >= BIG_MODEL_BYTES
-        except OSError:
-            big = False
+        big = self.big()
         # Meshes through OpenCASCADE cost 20-30 ms each (it sews them into shells); CGAL reads them in about 1 ms with
         # the same vertices. Everything else keeps the default kernel, so boxes do not change. In batches: an
         # iterator holds what it made until it is dropped (a 150 MB model in one went past 4.5 GB).
