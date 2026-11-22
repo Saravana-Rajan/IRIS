@@ -1180,3 +1180,24 @@ Android and maskable icons, the pinned tab and a white manifest theme; the boot 
 the shell: Review fixes is Clash review's primary action at the right of the top bar, with Export beside it as a
 secondary, and the queue covers the shell's body, so the sidebar and the top bar stay
 ([docs/review-queue.md](../review-queue.md), "Mounting it in `App.tsx`").
+
+**Nov 22 (2026-11-22), Home's hero: the Aperture in 3D glass** ([12](12-web-app.md)). The owner asked for a hero like a
+glass reference site's; we did not reuse that site's video or any of its assets, and the striped CSS ribbon (and a
+first glass ribbon) were dropped at the owner's word. Home's hero (`StartScreen.tsx`, `home.css`) now has the greeting,
+the tagline in two lines of large regular type ("AI proposes. Geometry proves." / "The engineer decides.") and what
+Iris does at the left, and at the right **our Aperture logo as thick iridescent 3D glass** (`HeroGlass.tsx`,
+`heroGlass.css`, `glass.ts`, `glassModel.ts`): the mark's six blades parsed from `Brand.tsx`'s paths and extruded with a
+rounded bevel round an ink hexagonal pupil, floating over a white pedestal with a contact shadow, turning slowly,
+breathing open and closed (8 s; the blades slide out and turn a little, the pupil grows) and leaning toward the mouse
+(about ±12°, eased in the render loop; it opens a little more while the pointer is over the hero; off on touch and
+under reduced motion). Rendered live with three.js (`MeshPhysicalMaterial` with transmission, thickness, iridescence,
+clearcoat and dispersion; a generated studio environment in the holo colours with PMREM; a backdrop only the
+transmission pass sees, so the page stays white while the glass bends colour; ACES, sRGB), lazy-loaded with
+`React.lazy`, drawn only while visible and the tab is showing, at most 2x pixels, one still frame under reduced
+motion, freed on unmount; a square "↓" cue scrolls to the start tiles. Stills from the same code
+(`web/scripts/render-glass.mjs`, `render-glass.html`, `glassStill.ts`, headless Chromium on the GPU):
+`web/public/hero/aperture.webp` (the poster and the no-WebGL picture, 27 KB) and transparent `web/public/glass/`
+`aperture.webp`, `ring.webp`, `pill.webp` (2x, 15–38 KB) for empty states and cards; Home's no-projects line uses the
+aperture. Checked: `npm test` (new `tests/hero-glass.test.mjs`; `start-screen.test.mjs` updated), `tsc`, `vite build`,
+`test_docs_map.py`, and headless Chromium screenshots of `/home` at 1512×805 and 390×844 on the GPU against a local
+one-origin server (no Gemini call).
