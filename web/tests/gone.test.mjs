@@ -40,7 +40,7 @@ test("models the server let go of: one notice, kept fixes no longer claimed, and
   host.state.fixes = { clash: "Raise the duct" };
   host.state.evidence = { clash: accepted, other: { ...accepted, status: "proposed" } };
   host.state.error = LOST; host.render();
-  const errorLine = () => host.find((n) => String(n.props?.className).includes("overlay error"));
+  const errorLine = () => host.find((n) => String(n.props?.className).includes("status-error"));
   const exportLink = () => host.find((n) => n.props?.["data-tour"] === "export");
   assert.ok(errorLine() && exportLink());
 
@@ -61,10 +61,10 @@ test("models the server let go of: one notice, kept fixes no longer claimed, and
   assert.deepEqual(checked, ["scene-2"]);
   assert.equal(host.state.sceneId, "scene-2");
   assert.equal(host.state.report.id, "report-2");
-  assert.equal(host.find((n) => n.props?.className === "overlay gone"), undefined);
+  assert.equal(host.find((n) => String(n.props?.className).includes("status-gone")), undefined);
   host.gone({ kind: "report", id: "report", detail: "Clash report not loaded. Open it again." });   // the old one, late
   host.state.error = "Clash report not loaded. Open it again."; host.render();   // and the call that asked says so
-  assert.equal(host.find((n) => n.props?.className === "overlay gone"), undefined);
+  assert.equal(host.find((n) => String(n.props?.className).includes("status-gone")), undefined);
   assert.equal(errorLine(), undefined);
   host.unmount();
 });
@@ -102,6 +102,6 @@ test("the visitor's own models are picked again; a sample report is opened again
   await again.settle();
   assert.deepEqual(reports, ["sample", "sample"]);
   assert.notEqual(again.state.report.id, first);
-  assert.equal(again.find((n) => n.props?.className === "overlay gone"), undefined);
+  assert.equal(again.find((n) => String(n.props?.className).includes("status-gone")), undefined);
   again.unmount();
 });

@@ -3,7 +3,7 @@ import test from "node:test";
 import { appHost, option, projectOf } from "./app-host.mjs";
 
 /** The engineer-first workflow wired into the actual App (docs/engineer-workflow.md, "Web contract"): the project pages
- * by address, the step bar over the workspace, and decisions recorded once, by the right route. */
+ * by address, the sidebar's project steps, and decisions recorded once, by the right route. */
 
 async function completed(host) {
   const work = host.button("Propose fixes").props.onClick(); host.render();
@@ -11,15 +11,19 @@ async function completed(host) {
   await work; host.render();
 }
 
-test("/projects shows the projects home; creating one keeps its id and opens its overview", async () => {
+test("/projects shows the projects home; New project asks for a name, keeps the new id and opens its overview", async () => {
   const host = await appHost({ path: "/projects", projects: { ids: ["p-old"],
     getProject: async (id) => projectOf({ id, name: id === "p-new" ? "Tower B" : "Old" }) } });
   await host.settle();
   const home = host.component("ProjectsHome");
   assert.ok(home, "the projects home is the page");
   assert.deepEqual(host.projects.calls[0], ["list", ["p-old"]], "the ids this browser keeps are asked for");
-  home.props.onCreate("Tower B");
+  assert.equal(host.component("NewProjectDialog"), undefined);
+  home.props.onNew(); host.render();
+  assert.equal(host.component("TopBar").props.actions.props.children[1].props["data-shell"], "new-project", "New project is the top bar's action");
+  host.component("NewProjectDialog").props.onCreate("Tower B");
   await host.settle();
+  assert.equal(host.component("NewProjectDialog"), undefined, "the dialog closes once the project is made");
   assert.deepEqual(host.projects.calls.find((c) => c[0] === "create"), ["create", "Tower B"]);
   assert.equal(host.location.pathname, "/projects/p-new");
   assert.deepEqual(host.state.route, { view: "project", pid: "p-new", step: "overview" });
@@ -32,7 +36,7 @@ test("/projects shows the projects home; creating one keeps its id and opens its
   host.unmount();
 });
 
-test("/projects/<pid>/<step>: the step bar over the workspace, each step on its real panel", async () => {
+test("/projects/<pid>/<step>: the sidebar's project steps, each step on its real panel", async () => {
   const files = [{ name: "model.ifc", kind: "IFC", size: 1, sha256: "0" }];
   const asked = [];
   const host = await appHost({ path: "/projects/p1/coordination",
@@ -40,9 +44,12 @@ test("/projects/<pid>/<step>: the step bar over the workspace, each step on its 
   await host.settle();
   assert.deepEqual(asked, ["p1"]);
   assert.equal(host.projects.calls.some((c) => c[0] === "open"), false, "its models are the ones open: not opened again");
-  const bar = host.component("ProjectSteps");
-  assert.ok(bar, "the step bar is over the workspace");
-  assert.equal(bar.props.step, "coordination");
+  const side = host.component("Sidebar");
+  assert.equal(side.props.active, "coordination", "the sidebar marks the step");
+  assert.equal(side.props.project.id, "p1");
+  assert.equal(side.props.project.counts.models, 1, "the project's models are counted on its step");
+  assert.equal(side.props.hrefOf("clash"), "/projects/p1/clashes");
+  assert.equal(host.component("PageHeader").props.title, "Coordination", "the workspace's header names the step");
   assert.equal(host.component("ProjectOverview"), undefined, "Coordination is the workspace, not a page");
   const lead = [host.component("ReportList").props.triageCard.props.children].flat();
   assert.equal(lead[0].type.name, "CoordinationOverview", "the list leads with the coordination overview");
@@ -51,14 +58,14 @@ test("/projects/<pid>/<step>: the step bar over the workspace, each step on its 
   assert.equal(host.component("ReportList").props.coord.label, "Open", "a number filters the list");
   assert.equal(host.component("ReportList").props.coord.keep(host.state.report.clashes[0]), true);
   // Models: the import and the model summary take the left pane.
-  bar.props.onStep("models");
+  side.props.onNav("models");
   host.render();
   assert.equal(host.location.pathname, "/projects/p1/models");
   assert.ok(host.component("ImportPanel"), "import rows and Retry");
   assert.ok(host.component("ModelSummary"), "disciplines from the facet index");
   assert.equal(host.component("ReportList"), undefined);
   // Overview, Reports and Activity are the project's pages.
-  host.component("ProjectSteps").props.onStep("reports");
+  host.component("Sidebar").props.onNav("reports");
   host.render();
   assert.equal(host.location.pathname, "/projects/p1/reports");
   assert.equal(host.component("ProjectOverview").props.step, "reports");

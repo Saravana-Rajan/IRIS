@@ -45,10 +45,14 @@ export async function viewerModule(loader = "export const loadIfc=()=>null;") {
     "./patch": await compiled("../src/viewer/patch.ts", { three, "./normals": normals, "./origin": origin }),
     "./edit": await compiled("../src/viewer/edit.ts", { three }) }));
 }
+/** The first element in a tree that `predicate` accepts: through children, and through the app shell's slots that
+ * hold elements (a top bar's `actions` and `search`, a page header's `status`). */
 export function find(node, predicate) {
   if (!node || typeof node !== "object") return;
   if (predicate(node)) return node;
-  for (const child of [node.props?.children].flat(Infinity)) { const result = find(child, predicate); if (result) return result; }
+  for (const child of [node.props?.children, node.props?.actions, node.props?.status, node.props?.search].flat(Infinity)) {
+    const result = find(child, predicate); if (result) return result;
+  }
 }
 export const hasText = (node, text) => typeof node === "string" ? node.includes(text)
   : !!node && [node.props?.children].flat(Infinity).some((child) => hasText(child, text));
@@ -133,15 +137,15 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
   globalThis.setInterval = () => Symbol(); globalThis.clearInterval = () => {};
   const react = url(`const h=globalThis.${key}.hooks; export const useState=(...a)=>h.useState(...a),useRef=(...a)=>h.useRef(...a),useMemo=(...a)=>h.useMemo(...a),useEffect=(...a)=>h.useEffect(...a);`);
   const apiModule = url(`export const api=globalThis.${key}.api; export class ApiError extends Error { constructor(message,status){super(message);this.status=status;} } export const setRequirements=()=>{}; export const setGoneHandler=(fn)=>{globalThis.${key}.gone=fn;}; export const apiUrl=(p)=>p; export const wsUrl=(p)=>p; export const apiFetch=(p,i)=>globalThis.fetch(p,i);`);
-  const names = ["DrawingsPanel", "serverLine", "StartScreen", "ImportPanel", "ModelSummary", "CoordinationOverview", "ClashHeader", "ProposalCard", "ProjectsHome", "ProjectOverview", "ProjectSteps", "Activity", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon"];
+  const names = ["DrawingsPanel", "serverLine", "StartScreen", "ImportPanel", "ModelSummary", "CoordinationOverview", "ClashHeader", "ProposalCard", "ProjectsHome", "ProjectOverview", "ProjectSteps", "Activity", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon", "Sidebar", "TopBar", "SearchBox", "PageHeader", "NewProjectDialog", "EmptyState", "HoloRibbon", "CountUp", "TextReveal"];
   // The page's layout is none (not desktop, phone or tablet) unless a test asks for one: appHost({ layout }).
   const mocks = url(`${names.filter((name) => name !== "useLayout").map((name) => `export function ${name}(){return null;}`).join("\n")}
     export function useLayout(){return globalThis.__hostLayout ?? null;}
-    export const TOUR={duct:[],joint:[],girder:""},TOUR_QUESTION="",CELL={ladder:[],post:[],pipe:[],rails:[]}; export const mm=(v)=>String(v); export const noClash=()=>null; export const shownVerdicts=(clashes,triage)=>triage;
+    export const PROJECT_FLOW=[]; export const TOUR={duct:[],joint:[],girder:""},TOUR_QUESTION="",CELL={ladder:[],post:[],pipe:[],rails:[]}; export const mm=(v)=>String(v); export const noClash=()=>null; export const shownVerdicts=(clashes,triage)=>triage;
     export const clashLabel=(c)=>"#"+c.number; export const inSlot=(s,n)=>n; export const usePanelSlots=()=>({}); export const STYLES=[{id:"shaded"},{id:"consistent"},{id:"edges"},{id:"hidden"},{id:"xray"}];
     export class Viewer {constructor(){return globalThis.${key}.viewer;}} export const serverPointToViewer=(v)=>v;
     export class Pilot { start(){} event(){} cancel(){globalThis.${key}.viewer.preview([]);} finish(fn){fn();} takeOver(){} }`);
-  const icons = url(["Bot", "Plus", "Plug", "Boxes", "Brain", "Building2", "Check", "ChevronRight", "CircleCheck", "ClipboardCheck", "ClipboardPlus", "Compass", "Download", "FileSpreadsheet", "FileText", "FolderOpen", "Hand", "Info", "LocateFixed", "MessageSquare", "Move", "Navigation", "Network", "Radar", "Sparkles", "Upload", "Wand2", "X", "RefreshCw", "Trash2", "List", "Menu", "LayoutPanelLeft", "RotateCcw"].map((name) => `export function ${name}(){return null;}`).join("\n"));
+  const icons = url(["Bot", "Plus", "Plug", "Boxes", "Brain", "Building2", "Check", "ChevronRight", "CircleCheck", "ClipboardCheck", "ClipboardPlus", "Compass", "Download", "FileSpreadsheet", "FileText", "FolderOpen", "Hand", "Info", "LocateFixed", "MessageSquare", "Move", "Navigation", "Network", "Radar", "Sparkles", "Upload", "Wand2", "X", "RefreshCw", "Trash2", "List", "Menu", "LayoutPanelLeft", "RotateCcw", "ArrowRight", "Save", "TriangleAlert"].map((name) => `export function ${name}(){return null;}`).join("\n"));
   const ownership = await compiled("../src/chatRequest.ts");
   const kinds = await compiled("../src/fixKinds.ts", {});
   const uploads = await compiled("../src/uploads.ts", {});
@@ -171,10 +175,10 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     "./importRows": await compiled("../src/importRows.ts", {}), "./coordination": await compiled("../src/coordination.ts", {}),
     "./proposalState": await compiled("../src/proposalState.ts", { "./fixKinds": kinds }), "./projectRoute": await compiled("../src/projectRoute.ts", {}),
     "./drawingsApi": await compiled("../src/drawingsApi.ts", { "./api": apiModule }),
-    "./sampleDrawings": await compiled("../src/sampleDrawings.ts", {}),
+    "./sampleDrawings": await compiled("../src/sampleDrawings.ts", {}), "./shellNav": await compiled("../src/shellNav.ts", {}),
     "./projectsApi": projectsModule };
   for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons",
-    "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ProjectsHome", "./ProjectOverview"]) dependencies[name] = mocks;
+    "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ProjectsHome", "./ProjectOverview", "./AppShell", "./PageHeader", "./Holo"]) dependencies[name] = mocks;
   const { App } = await import(await compiled("../src/App.tsx", dependencies, true));
   function render() {
     let passes = 0;
@@ -190,9 +194,9 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     component(name) { return find(tree, (n) => n.type?.name === name); },
     find(predicate) { return find(tree, predicate); },
     input(id) { return find(tree, (n) => n.type === "input" && n.props.id === id); },
-    /** Iris's menu (the model's top right corner on a desktop): opened, and what it holds. */
-    menu() { const b = find(tree, (n) => n.type === "button" && n.props["data-tour"] === "menu"); b.props.onClick(); render();
-      return find(tree, (n) => n.type?.name === "MenuSheet"); },
+    /** What the old menu held, now Settings (the sidebar's Settings): opened, and what it holds. */
+    menu() { find(tree, (n) => n.type?.name === "Sidebar").props.onSettings(); render();
+      return find(tree, (n) => n.type?.name === "MenuSheet" && n.props.title === "Settings"); },
     reportMenu() { return this.menu(); },
     fileInput(kind) { return find(tree, (n) => n.type === "input" && n.props.type === "file"
       && (kind === "folder" ? "webkitdirectory" in n.props : String(n.props.accept ?? "").includes(".xml"))); },

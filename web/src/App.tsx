@@ -1,4 +1,4 @@
-import { Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, Menu, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Save, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
@@ -45,7 +45,7 @@ import { SheetBar } from "./Sheet";
 import { MenuSheet } from "./AppMenu";
 import { shortNames } from "./names";
 import { DEFAULT_AI_NAMES, setAiNames, type AiNames } from "./aiNames";
-import { AppIcon, KeptToast, LoadCard, Notch, Wordmark, serverLine, type LoadProgress, type NotchStatus } from "./Brand";
+import { KeptToast, LoadCard, serverLine, type LoadProgress, type NotchStatus } from "./Brand";
 import { DockHost, SlotHost, inSlot, usePanelSlots, type DockHandle } from "./dock";
 import { FiltersPanel, blankRule } from "./FiltersPanel";
 import { ElementCard, type CardActions } from "./ElementCard";
@@ -61,10 +61,14 @@ import { ClashHeader } from "./ClashHeader";
 import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
-import { ProjectsHome } from "./ProjectsHome";
-import { ProjectOverview, ProjectSteps } from "./ProjectOverview";
-import { PROJECT_STEPS, PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, ownClick, projectPath, showPath, showProjectRoute, type ProjectRoute, type ProjectStep } from "./projectRoute";
-import { addReport, attachScene, createProject, getProject, listProjects, myProjectIds, openProject, patchProject, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
+import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
+import { ProjectOverview } from "./ProjectOverview";
+import { PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
+import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
+import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
+import { readRail, writeRail, type NavId } from "./shellNav";
+import { PageHeader, type Crumb } from "./PageHeader";
+import { EmptyState } from "./Holo";
 import { DrawingsPanel } from "./DrawingsPanel";
 import { addSampleDrawings, compareDrawings, drawingItems, listDrawings, readDrawing, uploadDrawings, type Comparison, type Drawing, type Item as DrawingItem } from "./drawingsApi";
 import { demoOfFiles, openSampleDrawings, SAMPLE_DRAWINGS_BUSY } from "./sampleDrawings";
@@ -333,6 +337,8 @@ export function App() {
   const [coordFilter, setCoordFilter] = useState<CoordinationFilter | null>(null);
   // Who decides (docs/engineer-workflow.md, step 9): a name kept in this browser, sent with every decision and keep.
   const [reviewer, setReviewerState] = useState<string>(() => { try { return localStorage.getItem("iris.reviewer") ?? ""; } catch { return ""; } });
+  // The decision panel asks for a name only when none was kept here at load (the sidebar's user block sets it after).
+  const [askName] = useState(() => !reviewer.trim());
   const setReviewer = (name: string) => {
     setReviewerState(name);
     try { if (name.trim()) localStorage.setItem("iris.reviewer", name.trim()); else localStorage.removeItem("iris.reviewer"); } catch { /* private window */ }
@@ -349,9 +355,19 @@ export function App() {
   /** Where the page is when it is on no project's page: the open session (`/workspace`), else the first screen. */
   const homePath = () => (sceneId || report ? "/workspace" : "/home");
   /** Go to a project page (`push`: a new history entry, so Back returns), or back to the workspace (null). */
-  const goRoute = (next: ProjectRoute | null, push = true) => { showProjectRoute(next, push, homePath()); setRoute(next); };
-  /** A link the page follows itself: its real address for a new tab, a plain click handled here. */
-  const linkTo = (href: string, go: () => void) => ({ href, onClick: (e: React.MouseEvent) => { if (!ownClick(e)) return; e.preventDefault(); go(); } });
+  const goRoute = (next: ProjectRoute | null, push = true) => { showProjectRoute(next, push, homePath()); setRoute(next); setHomeAsked(false); };
+  /** Home (`/home`), asked for: shown even while a session is open, which stays open behind it (the sidebar's Home). */
+  const [homeAsked, setHomeAsked] = useState(() => /^\/(home\/?)?$/.test(currentPath()));
+  const goHome = () => { showPath("/home", true); setRoute(null); setHomeAsked(true); };
+  /** The open session outside any project (`/workspace`). */
+  const goWorkspace = () => { showPath(sceneId || report ? "/workspace" : "/home", true); setRoute(null); setHomeAsked(false); };
+  // The app shell (AppShell.tsx): the sidebar collapsed to its rail (remembered apart for the 3D workspace, where it
+  // starts collapsed, and the other pages), the phone and tablet drawer, and the dialogs it opens.
+  const shellStorage = () => (typeof localStorage === "undefined" ? null : localStorage);
+  const [rails, setRails] = useState(() => ({ pages: readRail(shellStorage(), "pages"), workspace: readRail(shellStorage(), "workspace") }));
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const goStep = (s: ProjectStep, id: string | null = pid) => { if (id) goRoute({ view: "project", pid: id, step: s }); };
   const goProjects = () => goRoute({ view: "projects" });
   useEffect(() => {   // Back, Forward or an edited address moves between the project pages
@@ -359,14 +375,16 @@ export function App() {
     const old = typeof window !== "undefined" && window.location ? legacyPath(window.location.hash ?? "") : null;
     if (old) showPath(old, false);
     else if (typeof window !== "undefined" && window.location && /^\/?(index\.html)?$/.test(currentPath())) showPath("/home", false);
-    const read = () => setRoute(currentProjectRoute());
+    const read = () => { setRoute(currentProjectRoute()); setHomeAsked(currentPath() === "/home"); setDrawerOpen(false); };
     window.addEventListener("hashchange", read);
     window.addEventListener("popstate", read);
     return () => { window.removeEventListener("hashchange", read); window.removeEventListener("popstate", read); };
   }, []);
-  // The projects home: the projects this browser created or opened (by id: there are no accounts), newest first.
+  // The projects this browser created or opened (by id: there are no accounts), newest first: the projects home's list,
+  // and Home's recent projects.
+  const listedHere = route?.view === "projects" || (homeAsked && !route);
   useEffect(() => {
-    if (route?.view !== "projects") return;
+    if (!listedHere) return;
     let live = true;
     const asked = myProjectIds();
     setProjectsLoading(true); setProjectsError(null);
@@ -374,7 +392,7 @@ export function App() {
       .catch((e: unknown) => { if (live) setProjectsError(`Could not read the projects: ${(e as Error).message}`); })
       .finally(() => { if (live) setProjectsLoading(false); });
     return () => { live = false; };
-  }, [route?.view]);
+  }, [listedHere]);
   // The project the address names: read from the server (kept in this browser's list once it answers).
   useEffect(() => {
     if (!pid) return;
@@ -451,7 +469,6 @@ export function App() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [ownerSettings, setOwnerSettingsState] = useState<OwnerSettings | null>(null);
-  const cornerEl = useRef<HTMLDivElement>(null);
   // Which model titles and triage use now, for the copy (asked again when the owner changes their own settings).
   const [triageModel, setTriageModel] = useState<TriageModel | null>(null);
   // Whether a clash Gemini Pro could not fix may go to Gemini Pro (deep think) for a second try (docs/escalation.md).
@@ -1515,9 +1532,6 @@ export function App() {
     }
   }
 
-  /** The start page's buttons: open the demo models and let Iris check them (the golden path also picks the duct
-   * through the girder and proposes a fix). A Navisworks report is optional: Coordinate › Import. */
-  async function startGolden() { golden.current = true; await openDemo(); }
   /** Cancel on the loading card: this page stops waiting for the models it was opening (the server may still open
    * them; nothing here uses them), and the import rows say so, with Retry. */
   function cancelOpen() {
@@ -1746,8 +1760,24 @@ export function App() {
       rememberProject(p.id);
       setProjects((l) => [p, ...l.filter((x) => x.id !== p.id)]);
       setProject(p);
+      setNewOpen(false);
       goStep("overview", p.id);
     } catch (e) { setProjectsError(`Could not create the project: ${(e as Error).message}`); }
+  }
+  /** Rename a project (PATCH name): the list, and the open project, take the server's answer. */
+  async function renameProjectNow(id: string, name: string) {
+    setProjectsError(null);
+    try {
+      const p = await patchProject(id, { name: name.trim().slice(0, 120) });
+      setProjects((l) => l.map((x) => (x.id === p.id ? p : x)));
+      setProject((was) => (was?.id === p.id ? p : was));
+    } catch (e) { setProjectsError(`Could not rename the project: ${(e as Error).message}`); }
+  }
+  /** Remove a project from this browser's list (the server has no delete: its address still opens it). */
+  function removeProjectHere(id: string) {
+    forgetProject(id);
+    setProjects((l) => l.filter((x) => x.id !== id));
+    if (project?.id === id && route?.view !== "project") setProject(null);
   }
 
   /** Whether a reply's layout is the one after this page's (its own add or remove), so it may update in place. */
@@ -2533,7 +2563,7 @@ export function App() {
     if (alone) traces.current[kind]?.end("Another run took its place");
     const trace = runs.start(kind, { origin, title, meta });
     if (alone) traces.current[kind] = trace;
-    if (grow && docked && workings.on && workings.view === "work") growActivity();
+    void grow;   // a run no longer opens the Activity bar by itself: the page header's status line says what is happening
     return trace;
   }
   /** An element's name, from the open report's clashes (for a run's title). */
@@ -3582,9 +3612,9 @@ export function App() {
   }, [clash?.number, route, projectOpen]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Outside a project the address says whether a session is open: /workspace once models or a report open, else /home.
   useEffect(() => {
-    if (route || aboutTab) return;
+    if (route || aboutTab || homeAsked) return;
     if ((sceneId || report) && currentPath() === "/home") showPath("/workspace", false);
-  }, [route, aboutTab, sceneId, report?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [route, aboutTab, homeAsked, sceneId, report?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   // What happened to the project, newest first: the open session's decisions and kept edits, saves and reports.
   const projectActivity = useMemo((): ActivityItem[] => {
     const out: ActivityItem[] = [];
@@ -3868,38 +3898,36 @@ export function App() {
     : contextWorking ? { title: "Exploring a wider fix" }
     : triageRun && !triageRun.done ? { title: "Triage is sorting the clashes" }
     : null;
-  // The model's top right corner (desktop): the one main action, what is connected, and the menu with everything else.
-  // It keeps clear of the notch in the middle (index.css, "The corner"): what is kept counts on Export, the owner's
-  // settings sit on their button, labels give way on a narrow model, and the working notch narrows to the room left.
   const exportable = !!sceneId && !gone?.scene;
   const ownerNote = ownerSettings ? `on for you: effort ${ownerSettings.effort ?? "default"}${ownerSettings.no_caps !== false ? " · no caps" : ""}${
     ownerSettings.escalation ? ` · second try ${ownerSettings.escalation}` : ""}` : undefined;
   const exportLabel = stepFiles.length ? "Export STEP + IFC" : "Export IFC";
   const keptNote = fixedCount > 0 ? ` · ${fixedCount} ${fixedCount === 1 ? "fix" : "fixes"} kept` : "";
-  const corner = (
-    <div className="corner" ref={cornerEl} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-      {reqLabel && !landing && <button className="btn req-pill" onClick={() => setReqOpen(true)} data-tip-side="bottom"
+  // The open session's actions at the right of the top bar (docs/architecture/12-web-app.md, "The app shell"): the
+  // requirements in use, a connected agent, Save and Report, and Export, the workspace's primary action, which counts
+  // the fixes kept. The owner's settings are mounted on every page (they apply on load) and show only to the owner.
+  const ownerPop = <span className="owner-pop"><OwnerSettingsMenu onChange={setOwnerSettingsState} onEveryone={() => setModelsAsked((n) => n + 1)} note={ownerNote} /></span>;
+  const workActions = (
+    <div className="work-actions" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      {reqLabel && !landing && !compact && <button className="btn small req-pill" onClick={() => setReqOpen(true)} data-tip-side="bottom"
         data-tip={`Checking, triage and fixes follow "${reqSaved!.doc.name}" (${reqLabel})`}><ClipboardCheck size={15} aria-hidden /><span className="req-pill-label"> {reqLabel}</span></button>}
-      {agentLink && <button className="btn agent-pill" onClick={() => setAgentOpen(true)} aria-label="Agent connected" data-tip-side="bottom"
+      {agentLink && <button className="btn small agent-pill" onClick={() => setAgentOpen(true)} aria-label="Agent connected" data-tip-side="bottom"
         data-tip={`An agent works on this session over MCP · the link has ${timeLeft(agentLink, now)} left`}>
         <Bot size={15} aria-hidden /><span className="lbl"> {agentLink.last_call ? `Agent · ${agentLink.last_call.tool}` : "Agent · waiting"}</span></button>}
-      <span className="owner-pop"><OwnerSettingsMenu onChange={setOwnerSettingsState} onEveryone={() => setModelsAsked((n) => n + 1)} note={ownerNote} /></span>
+      {layout === "tablet" && !landing && (report || sceneId) && <button className={`btn small ${listOpen ? "on" : ""}`} data-tour="drawer"
+        aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
+        <List size={15} aria-hidden /> Clashes{report ? <span className="badge-n">{(listReport ?? report).clashes.length}</span> : null}</button>}
+      {pid && projectHere && layout !== "phone" && <button type="button" className="btn small" disabled={!projectOpen || !!projectBusy || !!busy} onClick={() => void saveProjectNow()}
+        data-tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"}
+        data-tip-side="bottom"><Save size={14} aria-hidden /> Save</button>}
+      {report && layout !== "phone" && <button type="button" className="btn small" data-tour="report" onClick={() => { setDocOpen(true); setDocReady(false); }}>
+        <FileText size={14} aria-hidden /> Report</button>}
       {exportable && <a className="btn primary export" data-tour="export" href={api.exportUrl(sceneId!)} data-tip-side="bottom" aria-label={`${exportLabel}${keptNote}`}
         data-tip={`${stepFiles.length ? "Download the changed models: the STEP with its fixes, and the IFC" : "Download the changed IFC files"}${keptNote}`}>
-        <Download size={15} aria-hidden /><span className="export-label">{exportLabel}</span>
+        <Download size={15} aria-hidden /><span className="export-label">{compact ? "Export" : exportLabel}</span>
         {fixedCount > 0 && <span className="export-n"><Check size={11} strokeWidth={3} aria-hidden />{fixedCount}</span>}</a>}
-      <button className="btn menu-btn" data-tour="menu" aria-expanded={menuOpen} aria-label="Menu" data-tip="Models, coordinate, requirements, report, agent, help" data-tip-side="bottom"
-        onClick={() => setMenuOpen(true)}><Menu size={18} aria-hidden /></button>
     </div>
   );
-  // The working notch narrows to what the corner leaves it: the corner's width, kept on the stage for the CSS.
-  useEffect(() => {
-    const el = cornerEl.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => { el.parentElement?.style.setProperty("--corner-w", `${Math.ceil(el.offsetWidth)}px`); });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [compact]);
   // The phone sheet's peek line: what is happening now, and the one next step, so the sheet is useful folded down.
   const peekLine: { text: React.ReactNode; live?: boolean; action?: { label: string; run: () => void; disabled?: boolean; tour?: string } } =
     busy ? { text: busy, live: true }
@@ -4124,42 +4152,28 @@ export function App() {
       {projectOpen && !facetIndex && facetsError && <p className="hint">The model summary could not be read: {facetsError}
         <button className="btn small ghost" onClick={() => setFacetsTry((n) => n + 1)}>Try again</button></p>}
     </div>);
-  // The step bar over the workspace (desktop): the project's steps, Save, and the report.
-  const workBar = pid && workStep && !compact ? (
-    <div className="proj-workbar">
-      <ProjectSteps step={projStep!} onStep={(st) => goStep(st)} project={projectHere} onProjects={goProjects}
-        hrefOf={(st) => projectPath(pid, st)} projectsHref={PROJECTS_PATH}
-        counts={liveCounts ?? projectHere?.counts ?? null}
-        actions={<>
-          {projectBusy && <span className="hint"><i className="spinner" aria-hidden /> {projectBusy}</span>}
-          {projectError && <span className="bad small">{projectError}</span>}
-          <button type="button" className="btn small" disabled={!projectOpen || !!projectBusy || !!busy} onClick={() => void saveProjectNow()}
-            data-tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"}
-            data-tip-side="bottom">Save</button>
-          {report && <button type="button" className="btn small" onClick={() => { setDocOpen(true); setDocReady(false); }}>
-            <FileText size={14} aria-hidden /> Report</button>}
-        </>} />
-    </div>) : null;
   const decisionsList = journal?.decisions ?? [];
   // GlobalId → name for the Drawings step's model side (the open models' own names).
   const drawingNames = projStep === "drawings" ? Object.fromEntries(Object.entries(sceneClasses.current?.map ?? {}).map(([g, cn]) => [g, cn[1]])) : {};
   // The open models are a demo's set with sample drawings: the Drawings step offers them (POST .../drawings/samples).
   const sceneSampleDrawings = projStep === "drawings" && !!demoOfFiles(sceneFiles, demos)?.drawings?.length;
   // The project pages (the projects home, and a project's Overview, Reports and Activity) over the workspace.
+  // An error on a page over the workspace (Home, the projects, a project's page): one line at its top.
+  const errorShown = error && !goneWords.current.has(error) ? error : null;
+  const pageAlert = errorShown && (
+    <div className="proj-shell-alert" role="alert" onClick={() => setError(null)}><TriangleAlert size={14} aria-hidden /> <span>{errorShown}</span> <X size={13} aria-hidden /></div>);
+  // The project pages (the projects home, and a project's Overview, Drawings, Reports and Activity) over the workspace.
   const projectPage = route?.view === "projects" ? (
     <div className="proj-shell" role="region" aria-label="Projects">
-      <div className="proj-shell-top">
-        <button type="button" className="brand" onClick={() => goRoute(null)} aria-label="Iris: back"><Wordmark height={20} /></button>
-        <span className="spacer" />
-        <button type="button" className="btn small ghost" onClick={() => goRoute(null)}>{stats || report ? "Back to the workspace" : "Back to Iris"}</button>
-      </div>
+      {pageAlert}
       <ProjectsHome projects={projects} loading={projectsLoading} error={projectsError ?? undefined}
-        onCreate={(n) => void newProject(n)} onOpen={(id) => goStep("overview", id)} hrefOf={(id) => projectPath(id)}
-        onDemo={sampleSet.length ? () => { goRoute(null); void openDemo(sampleSet); } : undefined} />
+        onNew={() => setNewOpen(true)} onOpen={(id) => goStep("overview", id)} hrefOf={(id) => projectPath(id)}
+        onRename={(id, n) => renameProjectNow(id, n)} onRemove={removeProjectHere}
+        onDemo={sampleSet.length ? () => void trySample() : undefined} />
     </div>)
     : pid && (!workStep || !projectHere) ? (
     <div className="proj-shell" role="region" aria-label="Project">
-      {error && !goneWords.current.has(error) && <div className="proj-shell-alert" role="alert" onClick={() => setError(null)}>{error} <X size={13} aria-hidden /></div>}
+      {pageAlert}
       {projectHere ? (
         <ProjectOverview project={projectHere} step={projStep ?? "overview"} onStep={(st) => goStep(st)} onProjects={goProjects}
           stepHref={(st) => projectPath(projectHere.id, st)} projectsHref={PROJECTS_PATH}
@@ -4178,14 +4192,15 @@ export function App() {
             </section>
           ) : (
             <section className="proj-card" aria-label="Drawings">
-              <div className="proj-card-head"><h2>Drawings</h2></div>
               {busy || projectBusy
-                ? <p className="live-line" data-drawings="opening" role="status"><i className="spinner" aria-hidden /> {projectBusy ?? busy}</p>
-                : <p className="proj-text proj-empty-line">{projectHere.files.length
-                  ? "Open the project's models first: each PDF drawing is read against the open models."
-                  : "Import the models first: each PDF drawing is read against them."}</p>}
-              {projectHere.files.length > 0 && <div className="proj-card-foot"><button type="button" className="btn small primary"
-                disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>Open the project's models</button></div>}
+                ? <p className="live-line ai-shimmer" data-drawings="opening" role="status"><i className="spinner" aria-hidden /> {projectBusy ?? busy}</p>
+                : <EmptyState compact title={projectHere.files.length ? "Open the models to read drawings" : "No models yet"}
+                  line={projectHere.files.length ? "Each PDF drawing is read against the open models, then compared with them."
+                    : "Import the models first: each PDF drawing is read against them."}
+                  action={projectHere.files.length > 0
+                    ? <button type="button" className="btn primary" disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>
+                      <FolderOpen size={15} aria-hidden /> Open the project's models</button>
+                    : <button type="button" className="btn primary" onClick={() => goStep("models")}><Upload size={15} aria-hidden /> Import models</button>} />}
             </section>))}
           {projStep === "reports" && (
             <section className="proj-card" aria-label="Build a report">
@@ -4235,6 +4250,143 @@ export function App() {
         </div></div></div>)}
     </div>) : null;
 
+  // The clash tab's actions, right under its header so Propose fixes shows without scrolling: Propose fixes (unless the
+  // clash reads as not one), a wider fix, and the way back to the clash in 3D.
+  const clashActions = (
+    <div className="actions">
+      {!hideFix && <button className="btn primary big" data-tour="propose" disabled={!a || !b || !sceneId || !!busy || proposing || (!!running && running.id !== clash?.id)} onClick={propose}>
+        {proposing ? <><i className="spinner" aria-hidden /> Working…</>
+          : running && running.id !== clash?.id ? <><i className="spinner" aria-hidden /> {`Waiting for #${running.number}`}</>
+          : <><Sparkles size={16} aria-hidden /> Propose fixes</>}</button>}
+      <button className="btn" disabled={!a || !b || a === b || !sceneId || !!busy || contextWorking || proposing || planning}
+        onClick={() => void exploreContext()}><Network size={15} aria-hidden /> Explore wider fix</button>
+      <button className="btn ghost" disabled={!a && !b} onClick={focusNow}><LocateFixed size={15} aria-hidden /> Go to the clash</button>
+    </div>);
+  // Home (StartScreen.tsx): asked for at /home (the session, if any, stays open behind it), or the page with nothing
+  // open and no project's page asked for.
+  const showHome = !route && (homeAsked || (!stats && !report && !blankish && !busy && !loading));
+  const homePage = showHome && (
+    <div className="proj-shell home-shell" role="region" aria-label="Home">
+      {pageAlert}
+      <StartScreen name={reviewer} onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
+        onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
+        onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
+        recent={projects} recentLoading={projectsLoading} onOpenProject={(id) => goStep("overview", id)} projectHref={(id) => projectPath(id)}
+        resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
+          agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
+          onResume: () => { setHomeAsked(false); void resumeSession(); }, onFresh: startFresh } : undefined} />
+    </div>);
+  // ------------------------------------------------------------------ the app shell (AppShell.tsx)
+  /** The open session (models or a clash report) outside the project shown in the sidebar. */
+  const sessionOpen = !!(sceneId || report);
+  const sessionName = sceneFiles.length ? projectName(sceneFiles) : report ? "Clash report" : "Workspace";
+  /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
+  const onPage = !!homePage || !!projectPage;
+  const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
+  const navProject = project ? { id: project.id, name: project.name || "Untitled project", counts: {
+    ...(project.files.length ? { models: project.files.length } : {}),
+    ...(projectOpen && drawings.length ? { drawings: drawings.length } : {}),
+    ...(((project.id === pid ? liveCounts : null) ?? project.counts)?.open ? { clash: ((project.id === pid ? liveCounts : null) ?? project.counts)!.open } : {}),
+    ...(project.reports.length ? { reports: project.reports.length } : {}),
+  } } : null;
+  const navWorkspace = (sessionOpen && !projectOpen) || (blank && !pid) ? { label: sessionName } : null;
+  const navHref = (id: NavId): string | undefined => (id === "home" ? "/home" : id === "projects" ? PROJECTS_PATH
+    : id === "workspace" ? "/workspace" : navProject ? projectPath(navProject.id, id) : undefined);
+  const nav = (id: NavId) => {
+    setDrawerOpen(false);
+    if (id === "home") goHome();
+    else if (id === "projects") goProjects();
+    else if (id === "workspace") goWorkspace();
+    else if (navProject) goStep(id, navProject.id);
+  };
+  const rail = !compact && (onPage ? rails.pages : rails.workspace);
+  const toggleRail = () => {
+    const where = onPage ? "pages" : "workspace", next = !rail;
+    setRails((r) => ({ ...r, [where]: next }));
+    writeRail(shellStorage(), where, next);
+  };
+  // The search in the top bar: projects by name, the open clash list by number, title or element, the open models'
+  // elements by name or GlobalId, and the pages.
+  const searchHits = (q: string): SearchHit[] => {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    const hits: SearchHit[] = [];
+    const known = project && !projects.some((x) => x.id === project.id) ? [project, ...projects] : projects;
+    for (const x of known) {
+      if (hits.length >= 4) break;
+      if ((x.name || "Untitled project").toLowerCase().includes(s)) hits.push({ id: `p:${x.id}`, kind: "project", label: x.name || "Untitled project",
+        sub: plural(x.files.length, "model"), href: projectPath(x.id), run: () => goStep("overview", x.id) });
+    }
+    const list = report ? (shownReport ?? report).clashes : [];
+    const num = /^#?(\d+)$/.exec(s)?.[1];
+    for (const c of list) {
+      if (hits.length >= 10) break;
+      const words = `${c.title ?? ""} ${c.name} ${c.a.name ?? ""} ${c.b.name ?? ""}`.toLowerCase();
+      if (num ? String(c.number) === num : words.includes(s)) hits.push({ id: `c:${c.id}`, kind: "clash", label: clashLabel(c),
+        sub: c.distance_m != null ? mm(c.distance_m) : undefined,
+        href: pid ? projectPath(pid, "clash") : "/workspace",
+        run: () => { if (pid) goStep("clash"); else goWorkspace(); setTab("clash"); selectClash(c); } });
+    }
+    const named = sceneClasses.current?.map;
+    if (named && s.length >= 2) {
+      let n = 0;
+      for (const g of Object.keys(named)) {
+        if (n >= 5) break;
+        const [cls, name] = named[g];
+        if (g.toLowerCase() === s || (name ?? "").toLowerCase().includes(s)) {
+          n++;
+          hits.push({ id: `e:${g}`, kind: "element", label: name || g, sub: `${cls} · ${g}`,
+            run: () => { if (onPage) { if (pid) goStep("clash"); else goWorkspace(); } setSelected({ globalId: g, info: null }); viewer.current?.frame([g]); } });
+        }
+      }
+    }
+    for (const page of [{ id: "home", label: "Home" }, { id: "projects", label: "Projects" }] as const) {
+      if (page.label.toLowerCase().startsWith(s)) hits.push({ id: `n:${page.id}`, kind: "page", label: page.label, href: navHref(page.id), run: () => nav(page.id) });
+    }
+    return hits;
+  };
+  // The workspace's one status line in its header (desktop): an error, the server letting go of the models, the agent
+  // driving the view, or what Iris is doing now (the AI shimmer while a model works); else a quiet summary.
+  const aiWorking = proposing || !!running || planning || contextWorking || (!!triageRun && !triageRun.done);
+  const headerStatus = errorShown ? (
+      <span className="status-line status-error" role="alert"><TriangleAlert size={14} aria-hidden /><span className="status-text" title={errorShown}>{errorShown}</span>
+        <button type="button" className="ibtn" aria-label="Dismiss" onClick={() => setError(null)}><X size={13} aria-hidden /></button></span>)
+    : gone && !busy && !detecting ? (
+      <span className="status-line status-gone" role="alert">
+        <span className="status-text" data-tip={`It restarted, or made room for other visitors.${gone.scene ? " The fixes you kept went with them." : ""}`}>
+          The server no longer holds your {gone.scene ? "models" : "clash report"}</span>
+        <button type="button" className="btn small" onClick={() => void reopenGone()}><RotateCcw size={13} aria-hidden /> {reopenLabel}</button></span>)
+    : pilotStatus ? (
+      <span className={`status-line status-pilot ${pilotStatus.state}${pilotStatus.driving ? " ai-shimmer" : ""}`}>
+        {pilotStatus.driving ? <Navigation size={14} aria-hidden /> : <Hand size={14} aria-hidden />}<span className="status-text">{pilotStatus.text}</span>
+        {pilotStatus.driving
+          ? <button type="button" className="btn small" onClick={() => pilot.current?.takeOver()}>Take the view</button>
+          : <button type="button" className="btn small" onClick={() => pilot.current?.resume()}>Let Iris drive</button>}</span>)
+    : notchStatus ? (
+      <span className={`status-line status-work${aiWorking ? " ai-shimmer" : ""}`}><i className="spinner" aria-hidden /><b>{notchStatus.title}</b>
+        {notchStatus.detail && <span className="status-text">{notchStatus.detail}</span>}</span>)
+    : report ? (
+      <span className="status-line status-idle">{plural((listReport ?? report).clashes.length, "clash", "clashes")}
+        {fixedCount > 0 && <> · <CircleCheck size={13} aria-hidden className="ok" /> {fixedCount} fixed</>}</span>)
+    : null;
+  const workCrumbs: Crumb[] = pid && projectHere ? [{ label: "Projects", href: PROJECTS_PATH, onClick: goProjects },
+    { label: projectHere.name || "Untitled project", href: projectPath(projectHere.id), onClick: () => goStep("overview") }] : [];
+  const workHeader = !compact && !onPage && (
+    <PageHeader slim crumbs={workCrumbs} title={projStep ? stepLabel(projStep) : sessionName} status={headerStatus} />);
+  // The top bar's primary action: a new project (Home, the projects), the project's workspace (its pages), Export (the
+  // workspace, with Save and Report beside it).
+  const projectFiles = projectHere?.files.length ?? 0;
+  const topActions = (<>
+    {ownerPop}
+    {homePage || route?.view === "projects"
+      ? <button type="button" className="btn primary" data-shell="new-project" onClick={() => setNewOpen(true)}><Plus size={16} aria-hidden /> New project</button>
+      : projectPage && projectHere
+        ? <button type="button" className="btn primary" data-shell="open-workspace" disabled={!!projectBusy && !projectFiles}
+          onClick={() => { if (!projectFiles) { goStep("models"); return; } if (!projectOpen) void openProjectScene(projectHere); goStep("clash"); }}>
+          {projectFiles ? <>Open workspace <ArrowRight size={15} aria-hidden /></> : <><Upload size={15} aria-hidden /> Import models</>}</button>
+        : !onPage && workActions}
+  </>);
+
   const elementCard = (fold: boolean, closable: boolean) => selected && (
     <ElementCard key={selected.globalId} gid={selected.globalId} info={selected.info}
       props={elementProps?.gid === selected.globalId ? elementProps.data : null}
@@ -4242,562 +4394,550 @@ export function App() {
       actions={{ ...cardActions(selected.globalId), ...(closable ? { onClose: () => setSelected(null) } : {}) }} />);
 
   return (
-    <div className={`app ${compact ? "" : "notched"} ${docked ? "docked" : ""} ${resizing ? "resizing" : ""} ${landing ? "landing" : ""} ${starting ? "starting" : ""} ${compact ? `${layout} snap-${snap}` : ""} ${compact && listOpen ? "list-open" : ""} ${workBar ? "projected" : ""}`}
-      style={{ "--left-w": `${widths.left}px`, "--right-w": `${widths.right}px` } as React.CSSProperties}>
-      {workBar}
-      {compact ? (
-      <header className="bar">
-        <button type="button" className="brand" onClick={() => goRoute(null)} aria-label="Iris: the first screen">
-          {layout === "phone" ? <AppIcon size={30} /> : <Wordmark height={24} />}</button>
-        {pid && workStep && <select className="proj-step-pick" value={projStep ?? "overview"} aria-label={`Project step${projectHere ? `: ${projectHere.name}` : ""}`}
-          onChange={(e) => goStep(e.target.value as ProjectStep)}>
-          {PROJECT_STEPS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>}
-        <span className="spacer" />
-        {layout === "tablet" && !landing && (report || sceneId) && <button className={`btn ghost ${listOpen ? "on" : ""}`} data-tour="drawer"
-          aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
-          <List size={16} aria-hidden /> Clashes{report ? <span className="badge-n">{(listReport ?? report).clashes.length}</span> : null}</button>}
-        {landing && layout === "tablet" && <button className="btn primary" disabled={!picked.length || !!busy} onClick={startGolden}><Sparkles size={15} aria-hidden /> Watch Iris fix a clash</button>}
-        {fixedCount > 0 && <span className="chip ok">{fixedCount} fixed</span>}
-        {agentLink && <button className="btn agent-pill" onClick={() => setAgentOpen(true)} aria-label={`Agent connected · ${timeLeft(agentLink, now)} left`}><Bot size={16} aria-hidden /></button>}
-        <span className="owner-pop"><OwnerSettingsMenu onChange={setOwnerSettingsState} onEveryone={() => setModelsAsked((n) => n + 1)} /></span>
-        {layout === "tablet" && report && <button className="btn" data-tour="report" onClick={() => { setDocOpen(true); setDocReady(false); }}>
-          <FileText size={15} aria-hidden /> Report</button>}
-        {layout === "tablet" && sceneId && !gone?.scene && <a className="btn primary" data-tour="export" href={api.exportUrl(sceneId)}>
-          <Download size={15} aria-hidden /> Export</a>}
-        <button className="btn ghost menu-btn" data-tour="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}>
-          <Menu size={18} aria-hidden /><span>Menu</span></button>
-      </header>
-      ) : null}
-      <input ref={modelInput} type="file" hidden multiple accept=".ifc,.step,.stp,.pdf" disabled={!!busy}
-        onChange={(e) => {
-          // A PDF can be chosen so its row says plainly that 2D drawings are not supported yet (importRows.ts).
-          const files = [...(e.target.files ?? [])], forWhat = pickFor.current;
-          e.target.value = ""; pickFor.current = "open";
-          if (files.length) void (forWhat === "project" ? importToProject(files) : importFiles(files, forWhat === "add"));
-        }} />
-      <input ref={folderInput} type="file" hidden multiple disabled={!!busy} {...{ webkitdirectory: "" }} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
-      <input ref={filesInput} type="file" hidden multiple disabled={!!busy} accept=".xml,.png,.jpg,.jpeg" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+    <div className={`shell${rail ? " rail" : ""}${compact ? ` compact ${layout}` : ""}`}>
+      <Sidebar active={navActive} project={navProject} workspace={navWorkspace} rail={rail}
+        drawer={compact ? (drawerOpen ? "open" : "closed") : undefined} onCloseDrawer={() => setDrawerOpen(false)}
+        onNav={nav} hrefOf={navHref} reviewer={reviewer} onReviewer={setReviewer}
+        onHelp={() => { setDrawerOpen(false); setHelpOpen(true); }} onSettings={() => { setDrawerOpen(false); setMenuOpen(true); }} />
+      <div className="shell-main">
+        <TopBar rail={rail} onToggle={toggleRail} compact={compact} onMenu={() => setDrawerOpen(true)}
+          search={layout !== "phone" ? <SearchBox search={searchHits} placeholder="Search projects, clashes, elements" /> : undefined}
+          actions={topActions}>{workHeader || null}</TopBar>
+        <div className="shell-body">
+          <div className={`app ${compact ? "" : "notched"} ${docked ? "docked" : ""} ${resizing ? "resizing" : ""} ${landing ? "landing" : ""} ${starting ? "starting" : ""} ${compact ? `${layout} snap-${snap}` : ""} ${compact && listOpen ? "list-open" : ""}`}
+            style={{ "--left-w": `${widths.left}px`, "--right-w": `${widths.right}px` } as React.CSSProperties}>
+            <input ref={modelInput} type="file" hidden multiple accept=".ifc,.step,.stp,.pdf" disabled={!!busy}
+              onChange={(e) => {
+                // A PDF can be chosen so its row says plainly that 2D drawings are not supported yet (importRows.ts).
+                const files = [...(e.target.files ?? [])], forWhat = pickFor.current;
+                e.target.value = ""; pickFor.current = "open";
+                if (files.length) void (forWhat === "project" ? importToProject(files) : importFiles(files, forWhat === "add"));
+              }} />
+            <input ref={folderInput} type="file" hidden multiple disabled={!!busy} {...{ webkitdirectory: "" }} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+            <input ref={filesInput} type="file" hidden multiple disabled={!!busy} accept=".xml,.png,.jpg,.jpeg" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
 
-      {inSlot(slots.clashes, <aside className="pane left">
-        {projStep === "models" && projectHere ? modelsStep : <>
-        {importRows.length > 0 && !pid && importPanel}
-        {report
-          ? <ReportList report={listReport ?? shownReport ?? report} naming={naming} matches={matches}
-              coord={coordList} onClearCoord={() => setCoordFilter(null)}
-              thumbs={report.origin === "iris" && matches ? thumbs : undefined} onThumb={needThumb}
-              focus={listFocus} onClearFocus={() => setListFocus(null)} reveal={listReveal} selected={viewPlan || activeContext ? null : clash?.id ?? null} onSelect={(c) => { if (compact && tab === "chat") setTab("clash"); selectClash(c); }} onImage={(c, index) => setLightbox({ clash: c, index })} fixes={fixes}
-              reviewed={reviewed} checked={checked} busy={planning || proposing || !!running} triage={listTriage} triageFilter={triageFilter}
-              proposing={running?.id ?? null} ready={readyCounts} panel={tab === "clash"} onViewProposal={viewProposal}
-              isolating={isolating} onIsolate={isolateClash}
-              onCheck={(ids, on) => setChecked((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; })}
-              onFixChecked={() => runPlan({ clash_ids: [...checked] })}
-              onPropose={sceneId ? proposeFromList : undefined} onSetAside={(c, note) => review([c.id], "by_design", note)}
-              onFocus={(f) => setListFocus(f)}
-              view={leftView} onView={setLeftView} insightsCount={insightsOpen}
-              status={detecting && <p className="live-line"><i className="spinner" aria-hidden /> {detecting.phase}</p>}
-              picker={report.origin === "iris" && checks.length > 1 && <CheckPicker checks={checks} total={report.clashes.length}
-                value={viewCheck} onPick={setViewCheck} disabled={!!busy || !!detecting || !sceneId}
-                onAgain={(key) => void runDetect(null, sceneId, { check: key })} onAll={() => void runDetect(null, sceneId, { all: true })}
-                onRemove={(key) => void removeCheck(key)} />}
-              triageCard={withCoord(<TriageCard run={triageRun} active={triageModel} workers={triageWorkers} forceCompact={!!listFocus} results={listTriage} now={now} filter={triageFilter} onFilter={setTriageFilter}
-                live={Object.entries(triageLive).map(([id, text]) => ({ id, text, name: (() => { const c = shownReport?.clashes.find((x) => x.id === id); return c ? clashLabel(c) : id; })() }))}
-                onOpen={(id) => { const c = report.clashes.find((x) => x.id === id); if (c) selectClash(c); }}
-                total={(listReport ?? report).clashes.length} unread={unread} resolved={(id) => !!fixes[id] || !!reviewed[id]} onRun={runTriage} onStop={stopTriage}
-                onSetAside={(ids) => review(ids, "by_design", "Triage: by design or not physical")}
-                onFlag={(ids) => review(ids, "author", "Triage: modelling error")}
-                requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />)}
-              insights={<>{projStep !== "coordination" && coordCard}{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
-                detection={shownCheck ?? { coverage: [], diff: { new: [], resolved: [], no_longer_checked: [], first: true }, elements: 0, seconds: 0 }}
-                progress={detecting} disabled={!!busy || !sceneId}
-                onAgain={() => void (shownCheck ? runDetect(null, sceneId, { check: shownCheck.key }) : runDetect(lastTests.current))}
-                onWhole={checks.some((c) => c.key === "models") ? undefined : () => void runDetect(null)}
-                requirementsId={reqSaved?.enabled ? reqId : null} onRequirements={() => setReqOpen(true)} />}
-                <Insights rootCauses={rootCauses} patterns={patterns} verdicts={verdicts} explaining={explaining}
-                resolved={resolvedSet} focus={listFocus?.label ?? null} onFocus={(f) => { setListFocus(f); if (f) { setLeftView("clashes"); setViewCheck(null); } }}
-                busy={planning || proposing} onFixRoot={(hub) => runPlan({ hub })} onExplain={() => void explainPatterns()}
-                onSelect={(ids) => { setChecked((s) => new Set([...s, ...ids.filter((id) => !fixes[id] && !reviewed[id])])); setLeftView("clashes"); }}
-                onReview={review} onFixAll={(ids) => runPlan({ clash_ids: ids })}
-                onAddRule={sceneId ? (p, v) => void addRule(p, v) : undefined} hasRule={(p) => !!reqSaved?.enabled && hasByDesign(reqSaved.doc, p)} /></>} />
-          : sceneId
-            ? <div className="detect-slot"><DetectSetupCard setup={detectSetup} progress={detecting} disabled={!!busy}
-                onRun={(tests) => void runDetect(tests)} requirements={reqLabel} onRequirements={() => setReqOpen(true)} />
-                <p className="hint small">{coarse ? "Or tap element A in the model, then element B, and set each from its card."
-                  : "Or double-click element A, then element B, in the model."}</p></div>
-            : pid && projectHere
-            ? <div className="empty-left">
-              <Radar size={28} aria-hidden />
-              <h2>{projectBusy ?? (projectHere.files.length ? "The project's models are not open" : "No models in this project yet")}</h2>
-              <p className="hint">{projectHere.files.length ? "Open them to run the clash tests." : "Import the IFC or STEP models first."}</p>
-              {projectHere.files.length > 0
-                ? <button className="btn small primary" disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>
-                  <FolderOpen size={14} aria-hidden /> Open the project's models</button>
-                : <button className="btn small primary" onClick={() => goStep("models")}><Upload size={14} aria-hidden /> Import models</button>}
-            </div>
-            : !importRows.length && <div className="empty-left">
-              <Radar size={28} aria-hidden />
-              <h2>Nothing to coordinate yet</h2>
-              <p className="hint">Open the models: Iris checks them for clashes.</p>
-            </div>}
-        </>}
-      </aside>)}
+            {inSlot(slots.clashes, <aside className="pane left">
+              {projStep === "models" && projectHere ? modelsStep : <>
+              {importRows.length > 0 && !pid && importPanel}
+              {report
+                ? <ReportList report={listReport ?? shownReport ?? report} naming={naming} matches={matches}
+                    coord={coordList} onClearCoord={() => setCoordFilter(null)}
+                    thumbs={report.origin === "iris" && matches ? thumbs : undefined} onThumb={needThumb}
+                    focus={listFocus} onClearFocus={() => setListFocus(null)} reveal={listReveal} selected={viewPlan || activeContext ? null : clash?.id ?? null} onSelect={(c) => { if (compact && tab === "chat") setTab("clash"); selectClash(c); }} onImage={(c, index) => setLightbox({ clash: c, index })} fixes={fixes}
+                    reviewed={reviewed} checked={checked} busy={planning || proposing || !!running} triage={listTriage} triageFilter={triageFilter}
+                    proposing={running?.id ?? null} ready={readyCounts} panel={tab === "clash"} onViewProposal={viewProposal}
+                    isolating={isolating} onIsolate={isolateClash}
+                    onCheck={(ids, on) => setChecked((s) => { const n = new Set(s); for (const id of ids) { if (on) n.add(id); else n.delete(id); } return n; })}
+                    onFixChecked={() => runPlan({ clash_ids: [...checked] })}
+                    onPropose={sceneId ? proposeFromList : undefined} onSetAside={(c, note) => review([c.id], "by_design", note)}
+                    onFocus={(f) => setListFocus(f)}
+                    view={leftView} onView={setLeftView} insightsCount={insightsOpen}
+                    status={detecting && <p className="live-line"><i className="spinner" aria-hidden /> {detecting.phase}</p>}
+                    picker={report.origin === "iris" && checks.length > 1 && <CheckPicker checks={checks} total={report.clashes.length}
+                      value={viewCheck} onPick={setViewCheck} disabled={!!busy || !!detecting || !sceneId}
+                      onAgain={(key) => void runDetect(null, sceneId, { check: key })} onAll={() => void runDetect(null, sceneId, { all: true })}
+                      onRemove={(key) => void removeCheck(key)} />}
+                    triageCard={withCoord(<TriageCard run={triageRun} active={triageModel} workers={triageWorkers} forceCompact={!!listFocus} results={listTriage} now={now} filter={triageFilter} onFilter={setTriageFilter}
+                      live={Object.entries(triageLive).map(([id, text]) => ({ id, text, name: (() => { const c = shownReport?.clashes.find((x) => x.id === id); return c ? clashLabel(c) : id; })() }))}
+                      onOpen={(id) => { const c = report.clashes.find((x) => x.id === id); if (c) selectClash(c); }}
+                      total={(listReport ?? report).clashes.length} unread={unread} resolved={(id) => !!fixes[id] || !!reviewed[id]} onRun={runTriage} onStop={stopTriage}
+                      onSetAside={(ids) => review(ids, "by_design", "Triage: by design or not physical")}
+                      onFlag={(ids) => review(ids, "author", "Triage: modelling error")}
+                      requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />)}
+                    insights={<>{projStep !== "coordination" && coordCard}{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
+                      detection={shownCheck ?? { coverage: [], diff: { new: [], resolved: [], no_longer_checked: [], first: true }, elements: 0, seconds: 0 }}
+                      progress={detecting} disabled={!!busy || !sceneId}
+                      onAgain={() => void (shownCheck ? runDetect(null, sceneId, { check: shownCheck.key }) : runDetect(lastTests.current))}
+                      onWhole={checks.some((c) => c.key === "models") ? undefined : () => void runDetect(null)}
+                      requirementsId={reqSaved?.enabled ? reqId : null} onRequirements={() => setReqOpen(true)} />}
+                      <Insights rootCauses={rootCauses} patterns={patterns} verdicts={verdicts} explaining={explaining}
+                      resolved={resolvedSet} focus={listFocus?.label ?? null} onFocus={(f) => { setListFocus(f); if (f) { setLeftView("clashes"); setViewCheck(null); } }}
+                      busy={planning || proposing} onFixRoot={(hub) => runPlan({ hub })} onExplain={() => void explainPatterns()}
+                      onSelect={(ids) => { setChecked((s) => new Set([...s, ...ids.filter((id) => !fixes[id] && !reviewed[id])])); setLeftView("clashes"); }}
+                      onReview={review} onFixAll={(ids) => runPlan({ clash_ids: ids })}
+                      onAddRule={sceneId ? (p, v) => void addRule(p, v) : undefined} hasRule={(p) => !!reqSaved?.enabled && hasByDesign(reqSaved.doc, p)} /></>} />
+                : sceneId
+                  ? <div className="detect-slot"><DetectSetupCard setup={detectSetup} progress={detecting} disabled={!!busy}
+                      onRun={(tests) => void runDetect(tests)} requirements={reqLabel} onRequirements={() => setReqOpen(true)} />
+                      <p className="hint small">{coarse ? "Or tap element A in the model, then element B, and set each from its card."
+                        : "Or double-click element A, then element B, in the model."}</p></div>
+                  : pid && projectHere
+                  ? <EmptyState compact className="empty-left"
+                    title={projectBusy ?? (projectHere.files.length ? "The project's models are not open" : "No models in this project yet")}
+                    line={projectHere.files.length ? "Open them to run the clash tests." : "Import the IFC or STEP models first."}
+                    action={projectHere.files.length > 0
+                      ? <button className="btn primary" disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>
+                        <FolderOpen size={15} aria-hidden /> Open the project's models</button>
+                      : <button className="btn primary" onClick={() => goStep("models")}><Upload size={15} aria-hidden /> Import models</button>} />
+                  : !importRows.length && <EmptyState compact className="empty-left" title="Nothing to coordinate yet"
+                    line="Open the models: Iris checks them for clashes." />}
+              </>}
+            </aside>)}
 
-      {inSlot(slots.model, <main className={`stage ${tool.measure ? "measuring" : ""} ${tool.edit ? "editing" : ""} ${temporaryCount ? "temp-on" : ""}`} ref={host} onClick={onClick}
-        onPointerDown={pressStart} onPointerMove={stageMove} onPointerUp={pressEnd} onPointerCancel={pressEnd}
-        onPointerLeave={() => { if (hover.current.gid) clearHover(); if (tool.measure) viewer.current?.measureHover(null); }}
-        onContextMenu={(e) => { if (coarse) e.preventDefault(); }}>
-        {stats && <ViewerToolbar compact={layout === "phone"} state={tool} models={modelNames} hasFocus={!!(a || b || selected)} views={viewsControls} split={rail3d()}
-          onMode={(mode) => setTool((t) => ({ ...t, mode }))} onStyle={(style) => setTool((t) => ({ ...t, style }))} onToggle={toggle}
-          onView={(p) => viewer.current?.view(p)} onFit={() => viewer.current?.home()} onFocus={focusNow} onModel={setModelVisible} onShot={screenshot}
-          remove={sceneId && !gone?.scene ? { onRemove: askRemove, blocked: addWait } : undefined} />}
-        {stats && <ViewPanes viewer={viewer.current} offset={layout === "phone" ? 8 : 64} compact={layout === "phone"} clear={compact ? 0 : 52} chip={(clash || a || b) && !viewPlan && !activeContext ? (
-          <div className="clash-chip">
-            <span className="sw-pair"><i className="sw red" /><i className="sw green" /></span>
-            <span className="clash-chip-text">{clashBusy ? `Iris is working on ${clash ? `#${clash.number}` : "this pair"}` : clash ? clashLabel(clash) : "Your pair"}</span>
-            <button className="ibtn" disabled={clashBusy} onClick={leaveClash} aria-label="Leave this clash" data-tip={clashBusy ? "Iris is working on it" : "Leave this clash  ·  Esc"} data-tip-side="bottom"><X size={14} aria-hidden /></button>
-          </div>) : null} />}
-        {!docked && filtersOpen && stats && (
-          <div className="filters-sheet" role="dialog" aria-label="Filters" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <div className="filters-sheet-head"><b>Filters</b>
-              <button type="button" className="ibtn" aria-label="Close" onClick={() => setFiltersOpen(false)}><X size={15} aria-hidden /></button></div>
-            <FiltersPanel index={prepared} loading={!!sceneId && !facetIndex && !facetsError} error={facetIndex ? null : facetsError} onRetry={() => setFacetsTry((n) => n + 1)} state={filterState} onState={setFilterState}
-              draft={filterDraft} onDraft={setFilterDraft} onZoom={(ids) => { const v = viewer.current; v?.frameEverywhere(ids.filter((g) => v.isShown(g))); }} check={filterCheck}
-            drawingsWhole={drawingsShow === "whole"} onDrawingsWhole={shownLayout === "single" ? undefined : (whole) => setDrawingsShow(whole ? "whole" : "filtered")} />
-          </div>)}
-        {stats && filterKey.length > 0 && (
-          <button type="button" className="filter-chip" onClick={(e) => { e.stopPropagation(); openFilters(); }} onPointerDown={(e) => e.stopPropagation()}
-            data-tip="Filters by property: open them" data-tip-side="top">
-            {filterKey.slice(0, 6).map((k) => <span key={k.colour}><i className="fswatch" style={{ background: k.colour }} aria-hidden />{k.label}</span>)}
-            {filterKey.length > 6 && <span className="why">and more</span>}
-          </button>)}
-        {stats && temporaryCount > 0 && (
-          <div className="temp-chip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            {isolating && isolatedFor != null ? `Clash #${isolatedFor} isolated` : temporary.isolated ? "Isolated for now" : `${temporary.hidden.length} hidden for now`}
-            <button className="btn small" onClick={endIsolation}>{isolating ? "Show all" : "Reset"}</button>
-          </div>)}
-        {!stats && !report && blankish && (
-          <ProjectStart busy={!!busy || !!projectBusy} maxMb={uploadMax}
-            onModels={(files) => void (pid && projectHere ? importToProject(files) : importFiles(files, false))} onReport={(files) => upload(files)}
-            onReportFolder={() => folderInput.current?.click()} onBack={() => (pid ? goStep("overview") : setBlank(false))} />
-        )}
-        {!stats && !busy && !blankish && (
-          <StartScreen onProjects={goProjects} projectsHref={PROJECTS_PATH}
-            onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
-            onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
-            resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
-              agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
-              onResume: () => void resumeSession(), onFresh: startFresh } : undefined} />
-        )}
-        {hoverInfo && <div className="link-label" ref={hoverLabel} role="status" style={labelAt.current}>
-          {hoverInfo.name && <b>{hoverInfo.name}</b>}<span>{hoverInfo.counts}</span>
-          {!hoverInfo.counts.endsWith("whole run") && <small>Shift: the whole run</small>}</div>}
-        {tool.measure && viewer.current && <MeasurePanel measures={viewer.current.measurements} open={viewer.current.measureOpen} snap={snapping} coarse={coarse}
-          at={layout === "phone" ? null : measureAt} onMove={setMeasureAt} onSnap={setSnapping} onCopy={(text, what) => void copyToClipboard(text).then((ok) => flash(ok ? `Copied ${what}.` : "Could not copy: the browser said no."))}
-          onRemove={(id) => viewer.current?.removeMeasurement(id)} onClear={() => viewer.current?.clearMeasurements()} onClose={() => toggle("measure")} />}
-        {tool.edit && sceneId && <EditTool ref={editTool} viewer={() => viewer.current} sceneId={sceneId} busy={!!busy} coarse={coarse}
-          clash={clash ? { id: clash.id, pair: a && b ? [a, b] : null } : a && b ? { id: null, pair: [a, b] } : null}
-          journal={journal} csvUrl={api.journalCsvUrl(sceneId)} clashLabel={clashTag} showLog={!docked}
-          onKept={keptEdit} onUndo={() => void stepEdit("undo")} onRedo={() => void stepEdit("redo")} onUndoTo={(e) => void undoTo(e)}
-          onShow={(e) => { const v = viewer.current; v?.frameEverywhere([...e.elements, ...e.created].filter((g) => v.isShown(g))); }}
-          incoming={incomingEdit} onFace={(f) => { editPick.current = f; }}
-          onError={(m) => setError(m)} onClose={() => { editPick.current = null; toggle("edit"); }} />}
-        {!docked && selected && !tool.measure && (
-          <div className="props" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            {elementCard(true, true)}
-          </div>
-        )}
-        {!compact && <Notch status={notchStatus} onLogo={() => goRoute(null)} />}
-        {!compact && corner}
-        {loading && !stats && !coverLoading && <LoadCard load={loading} now={now} onCancel={cancelOpen} />}
-        {compact && busy && <div className="overlay live"><i className="spinner" aria-hidden />{busy}</div>}
-        {compact && proposing && <div className="overlay live"><i className="spinner" aria-hidden />{statusLine(progress, now, proposal?.attempts ?? [])}</div>}
-        <div className={`pilot-glow ${pilotStatus?.driving ? "on" : ""}`} aria-hidden />
-        {pilotStatus && (
-          <div className={`pilot ${pilotStatus.state}`} role="status" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            {pilotStatus.driving ? <Navigation size={14} aria-hidden /> : <Hand size={14} aria-hidden />}
-            <span>{pilotStatus.text}</span>
-            {pilotStatus.driving
-              ? <button className="btn small" onClick={() => pilot.current?.takeOver()}>Take the view</button>
-              : <button className="btn small" onClick={() => pilot.current?.resume()}>Let Iris drive</button>}
-          </div>
-        )}
-        {compareBar}
-        {gone && !busy && !detecting && (   // a reopen's check may still ask after the old report: not news
-          <div className="overlay gone" role="alert">
-            <span><b>The server no longer holds your {gone.scene ? "models" : "clash report"}</b> (it restarted, or made
-              room for other visitors).{gone.scene ? " The fixes you kept went with them." : ""}</span>
-            <button className="btn small primary" onClick={() => void reopenGone()}><RotateCcw size={13} aria-hidden /> {reopenLabel}</button>
-          </div>
-        )}
-        {error && !goneWords.current.has(error) && <div className="overlay error" role="alert" onClick={() => setError(null)}>{error}<X size={14} aria-hidden /></div>}
-        {toast ? <div className="toast" role="status">{toast}</div> : kept && <KeptToast key={kept.n} text={kept.text} detail={kept.detail} />}
-      </main>)}
+            {inSlot(slots.model, <main className={`stage ${tool.measure ? "measuring" : ""} ${tool.edit ? "editing" : ""} ${temporaryCount ? "temp-on" : ""}`} ref={host} onClick={onClick}
+              onPointerDown={pressStart} onPointerMove={stageMove} onPointerUp={pressEnd} onPointerCancel={pressEnd}
+              onPointerLeave={() => { if (hover.current.gid) clearHover(); if (tool.measure) viewer.current?.measureHover(null); }}
+              onContextMenu={(e) => { if (coarse) e.preventDefault(); }}>
+              {stats && <ViewerToolbar compact={layout === "phone"} state={tool} models={modelNames} hasFocus={!!(a || b || selected)} views={viewsControls} split={rail3d()}
+                onMode={(mode) => setTool((t) => ({ ...t, mode }))} onStyle={(style) => setTool((t) => ({ ...t, style }))} onToggle={toggle}
+                onView={(p) => viewer.current?.view(p)} onFit={() => viewer.current?.home()} onFocus={focusNow} onModel={setModelVisible} onShot={screenshot}
+                remove={sceneId && !gone?.scene ? { onRemove: askRemove, blocked: addWait } : undefined} />}
+              {stats && <ViewPanes viewer={viewer.current} offset={layout === "phone" ? 8 : 64} compact={layout === "phone"} clear={0} chip={(clash || a || b) && !viewPlan && !activeContext ? (
+                <div className="clash-chip">
+                  <span className="sw-pair"><i className="sw red" /><i className="sw green" /></span>
+                  <span className="clash-chip-text">{clashBusy ? `Iris is working on ${clash ? `#${clash.number}` : "this pair"}` : clash ? clashLabel(clash) : "Your pair"}</span>
+                  <button className="ibtn" disabled={clashBusy} onClick={leaveClash} aria-label="Leave this clash" data-tip={clashBusy ? "Iris is working on it" : "Leave this clash  ·  Esc"} data-tip-side="bottom"><X size={14} aria-hidden /></button>
+                </div>) : null} />}
+              {!docked && filtersOpen && stats && (
+                <div className="filters-sheet" role="dialog" aria-label="Filters" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  <div className="filters-sheet-head"><b>Filters</b>
+                    <button type="button" className="ibtn" aria-label="Close" onClick={() => setFiltersOpen(false)}><X size={15} aria-hidden /></button></div>
+                  <FiltersPanel index={prepared} loading={!!sceneId && !facetIndex && !facetsError} error={facetIndex ? null : facetsError} onRetry={() => setFacetsTry((n) => n + 1)} state={filterState} onState={setFilterState}
+                    draft={filterDraft} onDraft={setFilterDraft} onZoom={(ids) => { const v = viewer.current; v?.frameEverywhere(ids.filter((g) => v.isShown(g))); }} check={filterCheck}
+                  drawingsWhole={drawingsShow === "whole"} onDrawingsWhole={shownLayout === "single" ? undefined : (whole) => setDrawingsShow(whole ? "whole" : "filtered")} />
+                </div>)}
+              {stats && filterKey.length > 0 && (
+                <button type="button" className="filter-chip" onClick={(e) => { e.stopPropagation(); openFilters(); }} onPointerDown={(e) => e.stopPropagation()}
+                  data-tip="Filters by property: open them" data-tip-side="top">
+                  {filterKey.slice(0, 6).map((k) => <span key={k.colour}><i className="fswatch" style={{ background: k.colour }} aria-hidden />{k.label}</span>)}
+                  {filterKey.length > 6 && <span className="why">and more</span>}
+                </button>)}
+              {stats && temporaryCount > 0 && (
+                <div className="temp-chip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  {isolating && isolatedFor != null ? `Clash #${isolatedFor} isolated` : temporary.isolated ? "Isolated for now" : `${temporary.hidden.length} hidden for now`}
+                  <button className="btn small" onClick={endIsolation}>{isolating ? "Show all" : "Reset"}</button>
+                </div>)}
+              {!stats && !report && blankish && (
+                <ProjectStart busy={!!busy || !!projectBusy} maxMb={uploadMax}
+                  onModels={(files) => void (pid && projectHere ? importToProject(files) : importFiles(files, false))} onReport={(files) => upload(files)}
+                  onReportFolder={() => folderInput.current?.click()} onBack={() => (pid ? goStep("overview") : setBlank(false))} />
+              )}
+              {hoverInfo && <div className="link-label" ref={hoverLabel} role="status" style={labelAt.current}>
+                {hoverInfo.name && <b>{hoverInfo.name}</b>}<span>{hoverInfo.counts}</span>
+                {!hoverInfo.counts.endsWith("whole run") && <small>Shift: the whole run</small>}</div>}
+              {tool.measure && viewer.current && <MeasurePanel measures={viewer.current.measurements} open={viewer.current.measureOpen} snap={snapping} coarse={coarse}
+                at={layout === "phone" ? null : measureAt} onMove={setMeasureAt} onSnap={setSnapping} onCopy={(text, what) => void copyToClipboard(text).then((ok) => flash(ok ? `Copied ${what}.` : "Could not copy: the browser said no."))}
+                onRemove={(id) => viewer.current?.removeMeasurement(id)} onClear={() => viewer.current?.clearMeasurements()} onClose={() => toggle("measure")} />}
+              {tool.edit && sceneId && <EditTool ref={editTool} viewer={() => viewer.current} sceneId={sceneId} busy={!!busy} coarse={coarse}
+                clash={clash ? { id: clash.id, pair: a && b ? [a, b] : null } : a && b ? { id: null, pair: [a, b] } : null}
+                journal={journal} csvUrl={api.journalCsvUrl(sceneId)} clashLabel={clashTag} showLog={!docked}
+                onKept={keptEdit} onUndo={() => void stepEdit("undo")} onRedo={() => void stepEdit("redo")} onUndoTo={(e) => void undoTo(e)}
+                onShow={(e) => { const v = viewer.current; v?.frameEverywhere([...e.elements, ...e.created].filter((g) => v.isShown(g))); }}
+                incoming={incomingEdit} onFace={(f) => { editPick.current = f; }}
+                onError={(m) => setError(m)} onClose={() => { editPick.current = null; toggle("edit"); }} />}
+              {!docked && selected && !tool.measure && (
+                <div className="props" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  {elementCard(true, true)}
+                </div>
+              )}
+              {loading && !stats && !coverLoading && <LoadCard load={loading} now={now} onCancel={cancelOpen} />}
+              {compact && busy && <div className="overlay live"><i className="spinner" aria-hidden />{busy}</div>}
+              {compact && proposing && <div className="overlay live"><i className="spinner" aria-hidden />{statusLine(progress, now, proposal?.attempts ?? [])}</div>}
+              <div className={`pilot-glow ${pilotStatus?.driving ? "on" : ""}`} aria-hidden />
+              {compact && pilotStatus && (
+                <div className={`pilot ${pilotStatus.state}`} role="status" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  {pilotStatus.driving ? <Navigation size={14} aria-hidden /> : <Hand size={14} aria-hidden />}
+                  <span>{pilotStatus.text}</span>
+                  {pilotStatus.driving
+                    ? <button className="btn small" onClick={() => pilot.current?.takeOver()}>Take the view</button>
+                    : <button className="btn small" onClick={() => pilot.current?.resume()}>Let Iris drive</button>}
+                </div>
+              )}
+              {compareBar}
+              {compact && gone && !busy && !detecting && (   // a reopen's check may still ask after the old report: not news
+                <div className="overlay gone" role="alert">
+                  <span><b>The server no longer holds your {gone.scene ? "models" : "clash report"}</b> (it restarted, or made
+                    room for other visitors).{gone.scene ? " The fixes you kept went with them." : ""}</span>
+                  <button className="btn small primary" onClick={() => void reopenGone()}><RotateCcw size={13} aria-hidden /> {reopenLabel}</button>
+                </div>
+              )}
+              {compact && !onPage && errorShown && <div className="overlay error" role="alert" onClick={() => setError(null)}>{errorShown}<X size={14} aria-hidden /></div>}
+              {toast ? <div className="toast" role="status">{toast}</div> : kept && <KeptToast key={kept.n} text={kept.text} detail={kept.detail} />}
+            </main>)}
 
-      {docked ? <div className="dock-area"><DockHost slots={slots} sizes={widths} tabs={dockTabs} onReady={(d) => { dock.current = d; }}
-        onGone={(d) => { if (dock.current === d) dock.current = null; }} onShown={setTabState} onTab={showPanel}
-        onWindows={setPopouts} /></div> : <>
-        <SlotHost slot={slots.clashes} />
-        <SlotHost slot={slots.model} />
-        <aside className={`pane right ${tab === "chat" ? "chatting" : ""}`}>
-          <div className="tabs" role="tablist">
-            <button role="tab" aria-selected={tab === "clash"} className={tab === "clash" ? "on" : ""} onClick={showClashTab}>
-              <LocateFixed size={14} aria-hidden /> Clash{clashBadge}</button>
-            <button role="tab" data-tour="tab-plan" aria-selected={tab === "plan"} className={tab === "plan" ? "on" : ""} onClick={showPlanTab}>
-              <Network size={14} aria-hidden /> Plan{planBadge}</button>
-            <button role="tab" data-tour="tab-chat" aria-selected={tab === "chat"} className={tab === "chat" ? "on" : ""} onClick={showChatTab}>
-              <MessageSquare size={14} aria-hidden /> Chat</button>
-          </div>
-          <SlotHost slot={slots.chat} />
-          <SlotHost slot={slots.plan} />
-          <SlotHost slot={slots.clash} />
-        </aside>
-        {(["left", "right"] as const).map((side) => (
-          <div key={side} className={`resizer ${side} ${resizing === side ? "on" : ""}`} role="separator" aria-orientation="vertical"
-            aria-label={`Resize the ${side} panel`} aria-valuenow={widths[side]} aria-valuemin={PANE[side][0]} aria-valuemax={PANE[side][1]}
-            tabIndex={0} title="Drag to resize · double-click to reset"
-            onPointerDown={(e) => {
-              e.preventDefault();
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              setResizing(side);
-            }}
-            onPointerMove={(e) => {
-              if (resizing !== side) return;
-              const w = side === "left" ? e.clientX : window.innerWidth - e.clientX;
-              setWidths((ws) => ({ ...ws, [side]: clampPane(side, w, ws[side === "left" ? "right" : "left"]) }));
-            }}
-            onPointerUp={() => { setResizing(null); remember(side, widths[side]); }}
-            onDoubleClick={() => { setWidths((ws) => ({ ...ws, [side]: PANE[side][2] })); remember(side, PANE[side][2]); }}
-            onKeyDown={(e) => {
-              const step = e.key === "ArrowLeft" ? -20 : e.key === "ArrowRight" ? 20 : 0;
-              if (!step) return;
-              e.preventDefault();
-              const w = clampPane(side, widths[side] + (side === "left" ? step : -step), widths[side === "left" ? "right" : "left"]);
-              setWidths((ws) => ({ ...ws, [side]: w })); remember(side, w);
-            }} />
-        ))}
-        {!compact && <SlotHost slot={slots.activity} />}
-      </>}
-      {inSlot(slots.chat, <div className="chat-slot" hidden={!docked && tab !== "chat"}>
-          {context && <button className="context-chat-link btn" onClick={() => { clearManual(); setTab("plan"); setPlanKind("context"); setViewContext(true); setViewPlan(false); }}>
-            <Network size={14} aria-hidden /> {contextWorking ? "Wider fix: inspecting and checking…" : context.accepted ? "Wider fix accepted" : `Review wider fix · ${context.result?.proposals.length ?? 0} alternatives`}</button>}
-          <ChatPanel key={`${sceneId}:${chatReport}`} voiceModel={labels.voice} owner={chatOwner.current} ready={!!(sceneId || report) && !busy}
-            onEvent={(e) => { if (sceneEpoch.current === renderedSceneEpoch && workspaceEpoch.current === renderedWorkspaceEpoch) onChatEvent(e); }} ask={chatAsk}
-            context={() => ({ scene_id: sceneId, report_id: report?.id ?? null, clash_id: clash?.id ?? null, fixed: resolved, filters: sharedFilters, filter_view: filterView, check: viewCheck,
-              selected: editPick.current ?? (selected ? { element: selected.globalId, face: null } : null) })} />
-        </div>)}
-      {inSlot(slots.plan, <div className="plan-slot" hidden={!docked && tab !== "plan"}>
-        {(docked || tab === "plan") && <>
-          {context && (plan || planRun) && <div className="seg plan-switch" role="group" aria-label="Plan type">
-            <button className={planKind === "context" ? "on" : ""} onClick={() => { clearManual(); setPlanKind("context"); setViewContext(true); setViewPlan(false); }}>Wider fix</button>
-            <button className={planKind === "batch" ? "on" : ""} onClick={() => { clearManual(); setPlanKind("batch"); setViewContext(false); setViewPlan(true); }}>Clash plan</button>
-          </div>}
-          {planKind === "context" && context ? <ContextPlan exportLabel={stepFiles.length ? "Export STEP + IFC" : "Export IFC"} run={context} names={contextNames} chosen={contextChosen} acknowledged={acknowledged} busy={!!busy} now={now}
-            onChoose={(id) => { clearManual(); setContextChosen(id); setAcknowledged([]); setViewContext(true); setViewPlan(false); }}
-            onAcknowledge={(id, checked) => setAcknowledged((ids) => checked ? [...new Set([...ids, id])] : ids.filter((x) => x !== id))}
-            onAccept={acceptContext} onRegenerate={() => { if (context.objective) void exploreContext(context.objective); }}
-            onDiscard={() => { directContext.current?.retire(); ++contextRequest.current; clearManual(); setContext(null); setContextChosen(null); setAcknowledged([]); setViewContext(false); setPlanKind("batch"); }} /> :
-          <PlanPanel run={planRun} plan={plan} now={now} busy={!!busy} onAccept={acceptPlan} error={planError}
-            onEscalate={canEscalate ? escalateItem : undefined} wonder={wonder} stale={planStale}
-            built={(it) => it.option ? builtRuns[builtKey([it.element_a, it.element_b], it.option)] : undefined}
-            onBuild={builtOn ? (it) => { if (it.option && canBuild(it.option)) void drawBuilt(builtKey([it.element_a, it.element_b], it.option),
-              builtPasses(builtFix(it.option, false), [it.element_a, it.element_b]), it.option.kind); } : undefined}
-            onDiscard={() => { setPlan(null); setPlanRun(null); }} onFocus={focusItem}
-            onAsDesigned={(ids, note) => { review(ids, "by_design", note); setPlan(null); setPlanRun(null); setViewPlan(false); setTab("clash"); }} />}
-        </>}
-      </div>)}
-      {inSlot(slots.clash, <div className="tab-body" hidden={!docked && tab !== "clash"}>
-          {clash && report
-            ? (<><ClashHeader clash={shownClash ?? clash} triage={shownTriage[clash.id]} status={statusOf(clash, { fixes, reviewed, resolvedIds })}
-              onFocus={() => goToClash(clash, matches?.[clash.id], true)}
-              onPrev={listPrev ? () => selectClash(listPrev) : undefined} onNext={listNext ? () => selectClash(listNext) : undefined} />
-              <ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
-              origin={report.origin} capturing={capturing === clash.id} />
-              {evidence[clash.id]?.status === "recommended" && evidence[clash.id].kind === "penetration" &&
-                <div className="recommended">
-                  <h3>Opening requested</h3>
-                  <p><b>{evidence[clash.id].title}</b> · <span className="mono">{evidence[clash.id].edit}</span></p>
-                  <p className="hint">The provision for void is in the model; the opening is not cut yet: {evidence[clash.id].blocked_by}.
-                    This clash stays open until it is.</p>
+            {docked ? <div className="dock-area"><DockHost slots={slots} sizes={widths} tabs={dockTabs} onReady={(d) => { dock.current = d; }}
+              onGone={(d) => { if (dock.current === d) dock.current = null; }} onShown={setTabState} onTab={showPanel}
+              onWindows={setPopouts} /></div> : <>
+              <SlotHost slot={slots.clashes} />
+              <SlotHost slot={slots.model} />
+              <aside className={`pane right ${tab === "chat" ? "chatting" : ""}`}>
+                <div className="tabs" role="tablist">
+                  <button role="tab" aria-selected={tab === "clash"} className={tab === "clash" ? "on" : ""} onClick={showClashTab}>
+                    <LocateFixed size={14} aria-hidden /> Clash{clashBadge}</button>
+                  <button role="tab" data-tour="tab-plan" aria-selected={tab === "plan"} className={tab === "plan" ? "on" : ""} onClick={showPlanTab}>
+                    <Network size={14} aria-hidden /> Plan{planBadge}</button>
+                  <button role="tab" data-tour="tab-chat" aria-selected={tab === "chat"} className={tab === "chat" ? "on" : ""} onClick={showChatTab}>
+                    <MessageSquare size={14} aria-hidden /> Chat</button>
+                </div>
+                <SlotHost slot={slots.chat} />
+                <SlotHost slot={slots.plan} />
+                <SlotHost slot={slots.clash} />
+              </aside>
+              {(["left", "right"] as const).map((side) => (
+                <div key={side} className={`resizer ${side} ${resizing === side ? "on" : ""}`} role="separator" aria-orientation="vertical"
+                  aria-label={`Resize the ${side} panel`} aria-valuenow={widths[side]} aria-valuemin={PANE[side][0]} aria-valuemax={PANE[side][1]}
+                  tabIndex={0} title="Drag to resize · double-click to reset"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                    setResizing(side);
+                  }}
+                  onPointerMove={(e) => {
+                    if (resizing !== side) return;
+                    // From the workspace's own edges: the sidebar sits to its left.
+                  const box = (e.currentTarget.parentElement ?? e.currentTarget).getBoundingClientRect();
+                  const w = side === "left" ? e.clientX - box.left : box.right - e.clientX;
+                    setWidths((ws) => ({ ...ws, [side]: clampPane(side, w, ws[side === "left" ? "right" : "left"]) }));
+                  }}
+                  onPointerUp={() => { setResizing(null); remember(side, widths[side]); }}
+                  onDoubleClick={() => { setWidths((ws) => ({ ...ws, [side]: PANE[side][2] })); remember(side, PANE[side][2]); }}
+                  onKeyDown={(e) => {
+                    const step = e.key === "ArrowLeft" ? -20 : e.key === "ArrowRight" ? 20 : 0;
+                    if (!step) return;
+                    e.preventDefault();
+                    const w = clampPane(side, widths[side] + (side === "left" ? step : -step), widths[side === "left" ? "right" : "left"]);
+                    setWidths((ws) => ({ ...ws, [side]: w })); remember(side, w);
+                  }} />
+              ))}
+              {!compact && <SlotHost slot={slots.activity} />}
+            </>}
+            {inSlot(slots.chat, <div className="chat-slot" hidden={!docked && tab !== "chat"}>
+                {context && <button className="context-chat-link btn" onClick={() => { clearManual(); setTab("plan"); setPlanKind("context"); setViewContext(true); setViewPlan(false); }}>
+                  <Network size={14} aria-hidden /> {contextWorking ? "Wider fix: inspecting and checking…" : context.accepted ? "Wider fix accepted" : `Review wider fix · ${context.result?.proposals.length ?? 0} alternatives`}</button>}
+                <ChatPanel key={`${sceneId}:${chatReport}`} voiceModel={labels.voice} owner={chatOwner.current} ready={!!(sceneId || report) && !busy}
+                  onEvent={(e) => { if (sceneEpoch.current === renderedSceneEpoch && workspaceEpoch.current === renderedWorkspaceEpoch) onChatEvent(e); }} ask={chatAsk}
+                  context={() => ({ scene_id: sceneId, report_id: report?.id ?? null, clash_id: clash?.id ?? null, fixed: resolved, filters: sharedFilters, filter_view: filterView, check: viewCheck,
+                    selected: editPick.current ?? (selected ? { element: selected.globalId, face: null } : null) })} />
+              </div>)}
+            {inSlot(slots.plan, <div className="plan-slot" hidden={!docked && tab !== "plan"}>
+              {(docked || tab === "plan") && <>
+                {context && (plan || planRun) && <div className="seg plan-switch" role="group" aria-label="Plan type">
+                  <button className={planKind === "context" ? "on" : ""} onClick={() => { clearManual(); setPlanKind("context"); setViewContext(true); setViewPlan(false); }}>Wider fix</button>
+                  <button className={planKind === "batch" ? "on" : ""} onClick={() => { clearManual(); setPlanKind("batch"); setViewContext(false); setViewPlan(true); }}>Clash plan</button>
                 </div>}
-              {builtOn && evidence[clash.id]?.status === "accepted" && builtFixes.current[clash.id] && (() => {
-                const f = builtFixes.current[clash.id], run = builtRuns[f.key];
-                return <div className="built-kept">
-                  <h3>As it could look built</h3>
-                  {run ? <BuiltView run={run} onRetry={() => redrawKept(clash.id)} reopen={builtReopen} />
-                    : <button className="btn small" disabled={!!busy} onClick={() => redrawKept(clash.id)}
-                      data-tip={`${labels.image} draws Iris's view of the kept fix as a presentation render, checked against the model. About a minute.`}>
-                      <Building2 size={13} aria-hidden /> Show it built</button>}
-                </div>;
-              })()}
-              {(evidence[clash.id] || triage[clash.id]?.verdict === "real_clash" || (signoffs[clash.id]?.length ?? 0) > 0) &&
-                <ReviewBlock clash={clash} teams={modelTeams} signoffs={signoffs[clash.id] ?? []}
-                  onAdd={(so) => addSignoff(clash.id, so)} onRemove={(i) => removeSignoff(clash.id, i)} />}
-              </>)
-            : (a || b) ? (
-              <dl className="kv pair">
-                <dt><i className="sw red" />A</dt><dd className="mono">{a ?? "—"}</dd>
-                <dt><i className="sw green" />B</dt><dd className="mono">{b ?? "—"}</dd>
-              </dl>
-            ) : <p className="hint">{coarse ? "Pick a clash from the list, or tap an element in the model and set it as A, then B."
-              : "Pick a clash from the list, or double-click two elements in the model."}</p>}
-          {hideFix && clash && (
-            <div className="noclash-card" role="status">
-              <b><CircleCheck size={15} aria-hidden /> {notAClash!.title}</b>
-              <p>{notAClash!.why}</p>
-              {reviewed[clash.id]
-                ? <p className="hint">Marked {reviewed[clash.id].kind === "by_design" ? "as by design" : "for the model's author"}.</p>
-                : <button className="btn primary" onClick={() => review([clash.id], "by_design", notAClash!.why)}>
-                  <CircleCheck size={15} aria-hidden /> Mark as not a clash</button>}
-              <button className="link" data-tour="fix-anyway" onClick={() => setFixAnyway(true)}>Propose a fix anyway</button>
-            </div>
-          )}
-          <div className="actions">
-            {!hideFix && <button className="btn primary big" data-tour="propose" disabled={!a || !b || !sceneId || !!busy || proposing || (!!running && running.id !== clash?.id)} onClick={propose}>
-              {proposing ? <><i className="spinner" aria-hidden /> Working…</>
-                : running && running.id !== clash?.id ? <><i className="spinner" aria-hidden /> {`Waiting for #${running.number}`}</>
-                : <><Sparkles size={16} aria-hidden /> Propose fixes</>}</button>}
-            <button className="btn" disabled={!a || !b || a === b || !sceneId || !!busy || contextWorking || proposing || planning}
-              onClick={() => void exploreContext()}><Network size={15} aria-hidden /> Explore wider fix</button>
-            <button className="btn" disabled={!a && !b} onClick={focusNow}><LocateFixed size={15} aria-hidden /> Go to the clash</button>
-          </div>
-
-          {(proposal?.understanding || proposing) && <>
-            <h2>Understanding</h2>
-            {(proposal?.understanding || !thoughts.length) &&
-              <p className="understanding">{proposal?.understanding || `${progress?.model ?? labels.proposal} is reading the clash…`}</p>}
-          </>}
-          <Thinking notes={thoughts} live={proposing} thinking={proposing && progress?.phase === "thinking"}
-            model={progress?.model ?? proposal?.model ?? labels.proposal} />
-          {proposing && progress?.checking && <ProposalCard item={{ title: progress.checking.title, kind: progress.checking.kind, model: progress.model }}
-            state="ai_proposed" names={{}} />}
-          {proposal && !proposing && <h2 ref={optionsHead}>Verified options</h2>}
-          {proposal && !proposing && (proposal.options.length > 0 || proposal.recommendation) && (
-            <label className="field reviewer-field">Your name, recorded with each decision
-              <input value={reviewer} maxLength={120} placeholder="Reviewer (no sign-in: a name you type)" autoComplete="name"
-                onChange={(e) => setReviewer(e.target.value)} /></label>)}
-          {proposal && !proposing && proposal.recommendation && <Recommended rec={proposal.recommendation} advice={proposal.advice} model={proposal.model || labels.proposal} requirements={proposal.requirements ?? null}
-            onRequirements={() => setReqOpen(true)}
-            card={<ProposalCard item={proposal.recommendation} state="unverified" names={namesFor([proposal.recommendation.element])} busy={!!busy}
-              onReject={(why) => void recordDecision(proposal.recommendation!, "rejected", why)} onAnother={() => requestAnother(proposal.recommendation!)}
-              decided={lastDecision(clashRefFor(clash?.id)?.key, proposal.recommendation.title, "rejected")} />} />}
-          {proposal && !proposing && !proposal.options.length && !proposal.recommendation && <NoFix proposal={proposal} onRetry={propose}
-            onEscalate={canEscalate && !proposal.escalated ? () => void escalate() : undefined} wonder={wonder}
-            onFlag={clash ? () => review([clash.id], "author", "No verified fix: needs the model's author") : undefined} />}
-          {clash && proposal && !proposing && proposal.options.length > 0 && proposal.options.every((o) => o.cleanup) && (
-            <div className="cleanup-note">
-              <b>Model cleanup, not a coordination clash</b>
-              <p>Both elements are in the same model, and they overlap where one frames into the other. That is often how
-                they are built (a beam cast into its footing, a transom into its mullion). Tidy the joint if the model goes
-                to fabrication or quantities; otherwise mark it as not a clash.</p>
-              {proposal.advice && <p className="why">{proposal.model || labels.proposal}: {proposal.advice}</p>}
-              {reviewed[clash.id]
-                ? <span className="chip ok"><CircleCheck size={12} aria-hidden /> marked {reviewed[clash.id].kind === "by_design" ? "by design" : "for the author"}</span>
-                : <button className="btn small" onClick={() => review([clash.id], "by_design", "A joint inside one model: built as modelled")}>
-                  <CircleCheck size={13} aria-hidden /> Mark as not a clash</button>}
+                {planKind === "context" && context ? <ContextPlan exportLabel={stepFiles.length ? "Export STEP + IFC" : "Export IFC"} run={context} names={contextNames} chosen={contextChosen} acknowledged={acknowledged} busy={!!busy} now={now}
+                  onChoose={(id) => { clearManual(); setContextChosen(id); setAcknowledged([]); setViewContext(true); setViewPlan(false); }}
+                  onAcknowledge={(id, checked) => setAcknowledged((ids) => checked ? [...new Set([...ids, id])] : ids.filter((x) => x !== id))}
+                  onAccept={acceptContext} onRegenerate={() => { if (context.objective) void exploreContext(context.objective); }}
+                  onDiscard={() => { directContext.current?.retire(); ++contextRequest.current; clearManual(); setContext(null); setContextChosen(null); setAcknowledged([]); setViewContext(false); setPlanKind("batch"); }} /> :
+                <PlanPanel run={planRun} plan={plan} now={now} busy={!!busy} onAccept={acceptPlan} error={planError}
+                  onEscalate={canEscalate ? escalateItem : undefined} wonder={wonder} stale={planStale}
+                  built={(it) => it.option ? builtRuns[builtKey([it.element_a, it.element_b], it.option)] : undefined}
+                  onBuild={builtOn ? (it) => { if (it.option && canBuild(it.option)) void drawBuilt(builtKey([it.element_a, it.element_b], it.option),
+                    builtPasses(builtFix(it.option, false), [it.element_a, it.element_b]), it.option.kind); } : undefined}
+                  onDiscard={() => { setPlan(null); setPlanRun(null); }} onFocus={focusItem}
+                  onAsDesigned={(ids, note) => { review(ids, "by_design", note); setPlan(null); setPlanRun(null); setViewPlan(false); setTab("clash"); }} />}
+              </>}
             </div>)}
-          {proposal?.options.map((o, i) => {
-            const rej = rejected[optionKey(o)];
-            const key = clashRefFor(clash?.id)?.key;
-            const chips = <span className="chips">
-              {o.cleanup && <span className="chip" title="Tidies a joint inside one model; optional">model cleanup</span>}
-              {o.review && <span className="chip warn" data-tip={reviewText(o.review)}>{o.review} review</span>}
-              {proposal!.escalated && <span className={`chip model ${o.model === wonder ? "wonder" : ""}`}
-                data-tip={o.model === wonder ? `Found on the second try, by ${wonder}` : "Found on the first try"}>{o.model || labels.proposal}</span>}
-            </span>;
-            if (rej) {   // set aside: who decided, when and why; Undo puts it back with the others (the record stays)
-              const d = lastDecision(key, o.title, "rejected");
-              const w = d ? decisionWords(d) : null;
-              return (
-                <div key={i} className="card rejected" data-option={i}>
-                  <span className="opt-head">
-                    <span className="opt-rank">{i + 1}</span><span className="opt-kind">{kindLabel(o.kind)} · rejected</span>
-                    <button type="button" className="btn small ghost undo" onClick={() => unreject(o)} data-tip="Put it back with the other options">
-                      <RotateCcw size={13} aria-hidden /> Undo</button></span>
-                  <b className="opt-title">{o.title}</b>
-                  <span className="hint">{w ? `${w.verb} by ${w.who} · ${w.when}` : "Rejected"}{rej.why ? ` · Why: ${rej.why}` : ""}</span>
-                </div>);
-            }
-            return (
-              <div key={i} className={`card pcard-slot ${chosen === i ? "pick" : ""}`} data-option={i}>
-                <span className="opt-head">
-                  <span className="opt-rank">{i + 1}</span>{chips}
-                  <button type="button" className={`btn small ghost pcard-show ${chosen === i ? "on" : ""}`} aria-pressed={chosen === i}
-                    onClick={() => { clearManual(); setChosen(chosen === i ? null : i); }}
-                    data-tip={chosen === i ? "Shown in the model: click to hide it" : "Show this fix in the model"}>{chosen === i ? "Shown in 3D" : "Show in 3D"}</button>
-                </span>
-                <ProposalCard item={o} state={stateOf(o)} names={namesFor([...o.moved])}
-                  requiredClearanceMm={Math.round((proposal!.clearance_m ?? 0.025) * 1000)} busy={!!busy}
-                  acceptTour={chosen === i ? "accept" : undefined} onAccept={() => accept(o)} onReject={(why) => rejectOption(o, i, why)}
-                  onModify={sceneId && clash ? () => modifyOption(o) : undefined} onAnother={() => requestAnother(o)}
-                  onShowBeforeAfter={() => { clearManual(); setChosen(i); setCompare("both"); }} />
-                <ProofStrip o={o} rank={i} options={proposal!.options} before={measure && measure !== "busy" ? measure.distance_m : null} need={proposal!.clearance_m} />
-                {chosen === i && canBuild(o) && a && b && (() => {
-                  const run = builtRuns[builtKey([a, b], o)];
-                  return run ? <BuiltView run={run} onRetry={() => showBuilt(o)} reopen={builtReopen} />
-                    : <button className="btn small" data-tour="show-built" disabled={!!busy} onClick={() => showBuilt(o)}
-                      data-tip={`${labels.image} draws Iris's view of this fix as a presentation render, checked against the model before you see it. About a minute.`}>
-                      <Building2 size={13} aria-hidden /> Show it built</button>;
+            {inSlot(slots.clash, <div className="tab-body" hidden={!docked && tab !== "clash"}>
+                {clash && report
+                  ? (<><ClashHeader clash={shownClash ?? clash} triage={shownTriage[clash.id]} status={statusOf(clash, { fixes, reviewed, resolvedIds })}
+                    onFocus={() => goToClash(clash, matches?.[clash.id], true)}
+                    onPrev={listPrev ? () => selectClash(listPrev) : undefined} onNext={listNext ? () => selectClash(listNext) : undefined} />
+                    {fixes[clash.id] ? (
+                      <div className="fixed-calm" role="status">
+                        <span className="fixed-calm-head"><CircleCheck size={16} aria-hidden /> <b>Fixed</b><span className="why">{fixes[clash.id]}</span></span>
+                        <span className="fixed-calm-actions">
+                          {nextClash && <button type="button" className="btn small" onClick={() => { setTab("clash"); selectClash(nextClash); }}>
+                            Next clash <ArrowRight size={13} aria-hidden /></button>}
+                          <button type="button" className="btn small ghost" disabled={!a && !b} onClick={focusNow}><LocateFixed size={14} aria-hidden /> Go to the clash</button>
+                        </span>
+                      </div>
+                    ) : clashActions}
+                    <ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
+                    origin={report.origin} capturing={capturing === clash.id} />
+                    {evidence[clash.id]?.status === "recommended" && evidence[clash.id].kind === "penetration" &&
+                      <div className="recommended">
+                        <h3>Opening requested</h3>
+                        <p><b>{evidence[clash.id].title}</b> · <span className="mono">{evidence[clash.id].edit}</span></p>
+                        <p className="hint">The provision for void is in the model; the opening is not cut yet: {evidence[clash.id].blocked_by}.
+                          This clash stays open until it is.</p>
+                      </div>}
+                    {builtOn && evidence[clash.id]?.status === "accepted" && builtFixes.current[clash.id] && (() => {
+                      const f = builtFixes.current[clash.id], run = builtRuns[f.key];
+                      return <div className="built-kept">
+                        <h3>As it could look built</h3>
+                        {run ? <BuiltView run={run} onRetry={() => redrawKept(clash.id)} reopen={builtReopen} />
+                          : <button className="btn small" disabled={!!busy} onClick={() => redrawKept(clash.id)}
+                            data-tip={`${labels.image} draws Iris's view of the kept fix as a presentation render, checked against the model. About a minute.`}>
+                            <Building2 size={13} aria-hidden /> Show it built</button>}
+                      </div>;
+                    })()}
+                    {(evidence[clash.id] || triage[clash.id]?.verdict === "real_clash" || (signoffs[clash.id]?.length ?? 0) > 0) &&
+                      <ReviewBlock clash={clash} teams={modelTeams} signoffs={signoffs[clash.id] ?? []}
+                        onAdd={(so) => addSignoff(clash.id, so)} onRemove={(i) => removeSignoff(clash.id, i)} />}
+                    </>)
+                  : (a || b) ? (<>
+                    <dl className="kv pair">
+                      <dt><i className="sw red" />A</dt><dd className="mono">{a ?? "—"}</dd>
+                      <dt><i className="sw green" />B</dt><dd className="mono">{b ?? "—"}</dd>
+                    </dl>
+                    {clashActions}
+                  </>) : <p className="hint">{coarse ? "Pick a clash from the list, or tap an element in the model and set it as A, then B."
+                    : "Pick a clash from the list, or double-click two elements in the model."}</p>}
+                {hideFix && clash && (
+                  <div className="noclash-card" role="status">
+                    <b><CircleCheck size={15} aria-hidden /> {notAClash!.title}</b>
+                    <p>{notAClash!.why}</p>
+                    {reviewed[clash.id]
+                      ? <p className="hint">Marked {reviewed[clash.id].kind === "by_design" ? "as by design" : "for the model's author"}.</p>
+                      : <button className="btn primary" onClick={() => review([clash.id], "by_design", notAClash!.why)}>
+                        <CircleCheck size={15} aria-hidden /> Mark as not a clash</button>}
+                    <button className="link" data-tour="fix-anyway" onClick={() => setFixAnyway(true)}>Propose a fix anyway</button>
+                  </div>
+                )}
+
+                {(proposal?.understanding || proposing) && <>
+                  <h2>Understanding</h2>
+                  {(proposal?.understanding || !thoughts.length) &&
+                    <p className="understanding">{proposal?.understanding || `${progress?.model ?? labels.proposal} is reading the clash…`}</p>}
+                </>}
+                <Thinking notes={thoughts} live={proposing} thinking={proposing && progress?.phase === "thinking"}
+                  model={progress?.model ?? proposal?.model ?? labels.proposal} />
+                {proposing && progress?.checking && <ProposalCard item={{ title: progress.checking.title, kind: progress.checking.kind, model: progress.model }}
+                  state="ai_proposed" names={{}} />}
+                {proposal && !proposing && <h2 ref={optionsHead}>Verified options</h2>}
+                {proposal && !proposing && (proposal.options.length > 0 || proposal.recommendation) && askName && (
+                  <label className="field reviewer-field">Your name, recorded with each decision
+                    <input value={reviewer} maxLength={120} placeholder="Reviewer (no sign-in: a name you type)" autoComplete="name"
+                      onChange={(e) => setReviewer(e.target.value)} /></label>)}
+                {proposal && !proposing && proposal.recommendation && <Recommended rec={proposal.recommendation} advice={proposal.advice} model={proposal.model || labels.proposal} requirements={proposal.requirements ?? null}
+                  onRequirements={() => setReqOpen(true)}
+                  card={<ProposalCard item={proposal.recommendation} state="unverified" names={namesFor([proposal.recommendation.element])} busy={!!busy}
+                    onReject={(why) => void recordDecision(proposal.recommendation!, "rejected", why)} onAnother={() => requestAnother(proposal.recommendation!)}
+                    decided={lastDecision(clashRefFor(clash?.id)?.key, proposal.recommendation.title, "rejected")} />} />}
+                {proposal && !proposing && !proposal.options.length && !proposal.recommendation && <NoFix proposal={proposal} onRetry={propose}
+                  onEscalate={canEscalate && !proposal.escalated ? () => void escalate() : undefined} wonder={wonder}
+                  onFlag={clash ? () => review([clash.id], "author", "No verified fix: needs the model's author") : undefined} />}
+                {clash && proposal && !proposing && proposal.options.length > 0 && proposal.options.every((o) => o.cleanup) && (
+                  <div className="cleanup-note">
+                    <b>Model cleanup, not a coordination clash</b>
+                    <p>Both elements are in the same model, and they overlap where one frames into the other. That is often how
+                      they are built (a beam cast into its footing, a transom into its mullion). Tidy the joint if the model goes
+                      to fabrication or quantities; otherwise mark it as not a clash.</p>
+                    {proposal.advice && <p className="why">{proposal.model || labels.proposal}: {proposal.advice}</p>}
+                    {reviewed[clash.id]
+                      ? <span className="chip ok"><CircleCheck size={12} aria-hidden /> marked {reviewed[clash.id].kind === "by_design" ? "by design" : "for the author"}</span>
+                      : <button className="btn small" onClick={() => review([clash.id], "by_design", "A joint inside one model: built as modelled")}>
+                        <CircleCheck size={13} aria-hidden /> Mark as not a clash</button>}
+                  </div>)}
+                {proposal?.options.map((o, i) => {
+                  const rej = rejected[optionKey(o)];
+                  const key = clashRefFor(clash?.id)?.key;
+                  const chips = <span className="chips">
+                    {o.cleanup && <span className="chip" title="Tidies a joint inside one model; optional">model cleanup</span>}
+                    {o.review && <span className="chip warn" data-tip={reviewText(o.review)}>{o.review} review</span>}
+                    {proposal!.escalated && <span className={`chip model ${o.model === wonder ? "wonder" : ""}`}
+                      data-tip={o.model === wonder ? `Found on the second try, by ${wonder}` : "Found on the first try"}>{o.model || labels.proposal}</span>}
+                  </span>;
+                  if (rej) {   // set aside: who decided, when and why; Undo puts it back with the others (the record stays)
+                    const d = lastDecision(key, o.title, "rejected");
+                    const w = d ? decisionWords(d) : null;
+                    return (
+                      <div key={i} className="card rejected" data-option={i}>
+                        <span className="opt-head">
+                          <span className="opt-rank">{i + 1}</span><span className="opt-kind">{kindLabel(o.kind)} · rejected</span>
+                          <button type="button" className="btn small ghost undo" onClick={() => unreject(o)} data-tip="Put it back with the other options">
+                            <RotateCcw size={13} aria-hidden /> Undo</button></span>
+                        <b className="opt-title">{o.title}</b>
+                        <span className="hint">{w ? `${w.verb} by ${w.who} · ${w.when}` : "Rejected"}{rej.why ? ` · Why: ${rej.why}` : ""}</span>
+                      </div>);
+                  }
+                  return (
+                    <div key={i} className={`card pcard-slot ${chosen === i ? "pick" : ""}`} data-option={i}>
+                      <span className="opt-head">
+                        <span className="opt-rank">{i + 1}</span>{chips}
+                        <button type="button" className={`btn small ghost pcard-show ${chosen === i ? "on" : ""}`} aria-pressed={chosen === i}
+                          onClick={() => { clearManual(); setChosen(chosen === i ? null : i); }}
+                          data-tip={chosen === i ? "Shown in the model: click to hide it" : "Show this fix in the model"}>{chosen === i ? "Shown in 3D" : "Show in 3D"}</button>
+                      </span>
+                      <ProposalCard item={o} state={stateOf(o)} names={namesFor([...o.moved])}
+                        requiredClearanceMm={Math.round((proposal!.clearance_m ?? 0.025) * 1000)} busy={!!busy}
+                        acceptTour={chosen === i ? "accept" : undefined} onAccept={() => accept(o)} onReject={(why) => rejectOption(o, i, why)}
+                        onModify={sceneId && clash ? () => modifyOption(o) : undefined} onAnother={() => requestAnother(o)}
+                        onShowBeforeAfter={() => { clearManual(); setChosen(i); setCompare("both"); }} />
+                      <ProofStrip o={o} rank={i} options={proposal!.options} before={measure && measure !== "busy" ? measure.distance_m : null} need={proposal!.clearance_m} />
+                      {chosen === i && canBuild(o) && a && b && (() => {
+                        const run = builtRuns[builtKey([a, b], o)];
+                        return run ? <BuiltView run={run} onRetry={() => showBuilt(o)} reopen={builtReopen} />
+                          : <button className="btn small" data-tour="show-built" disabled={!!busy} onClick={() => showBuilt(o)}
+                            data-tip={`${labels.image} draws Iris's view of this fix as a presentation render, checked against the model before you see it. About a minute.`}>
+                            <Building2 size={13} aria-hidden /> Show it built</button>;
+                      })()}
+                      {chosen === i && o.kind === "penetration" && o.edit && isAiReading(o.edit.reading_source) && sceneId && (
+                        hasPenetration(reqSaved?.enabled ? reqSaved.doc : null, o.edit.host_group, o.edit.host_kind)
+                          ? <span className="chip ok"><Check size={11} aria-hidden /> in the requirements</span>
+                          : <button className="btn small" onClick={() => void addPenRule(o)}
+                            data-tip="Make this reading a rule for the host's group in the coordination requirements"><ClipboardPlus size={13} aria-hidden /> Add to requirements</button>)}
+                    </div>);
+                })}
+                {proposal && !proposing && proposal.attempts.some((t) => !t.passed) && (
+                  <details className="tried">
+                    <summary>What was tried · {proposal.attempts.filter((t) => !t.passed).length} refused by the geometry check</summary>
+                    {proposal.attempts.filter((t) => !t.passed).map((t, k) => (
+                      <ProposalCard key={k} item={t} state={stateOf(t)} names={namesFor(t.hit_ids ?? [])} />))}
+                  </details>)}
+                {proposal && !proposing && !hideFix && proposal.options.some((o) => rejected[optionKey(o)]) && (() => {
+                  const all = proposal.options.every((o) => rejected[optionKey(o)]);
+                  return <div className={`rejected-note${all ? " all" : ""}`}>
+                    <span>{all ? "You rejected every option." : `${proposal.options.filter((o) => rejected[optionKey(o)]).length} rejected.`}
+                      {" "}A new proposal tells {proposal.model || labels.proposal} what you rejected and why, so it looks for something else.</span>
+                    <button type="button" className="btn small" disabled={!!busy} onClick={() => void propose()}><RotateCcw size={13} aria-hidden /> Propose again</button>
+                  </div>;
                 })()}
-                {chosen === i && o.kind === "penetration" && o.edit && isAiReading(o.edit.reading_source) && sceneId && (
-                  hasPenetration(reqSaved?.enabled ? reqSaved.doc : null, o.edit.host_group, o.edit.host_kind)
-                    ? <span className="chip ok"><Check size={11} aria-hidden /> in the requirements</span>
-                    : <button className="btn small" onClick={() => void addPenRule(o)}
-                      data-tip="Make this reading a rule for the host's group in the coordination requirements"><ClipboardPlus size={13} aria-hidden /> Add to requirements</button>)}
-              </div>);
-          })}
-          {proposal && !proposing && proposal.attempts.some((t) => !t.passed) && (
-            <details className="tried">
-              <summary>What was tried · {proposal.attempts.filter((t) => !t.passed).length} refused by the geometry check</summary>
-              {proposal.attempts.filter((t) => !t.passed).map((t, k) => (
-                <ProposalCard key={k} item={t} state={stateOf(t)} names={namesFor(t.hit_ids ?? [])} />))}
-            </details>)}
-          {proposal && !proposing && !hideFix && proposal.options.some((o) => rejected[optionKey(o)]) && (() => {
-            const all = proposal.options.every((o) => rejected[optionKey(o)]);
-            return <div className={`rejected-note${all ? " all" : ""}`}>
-              <span>{all ? "You rejected every option." : `${proposal.options.filter((o) => rejected[optionKey(o)]).length} rejected.`}
-                {" "}A new proposal tells {proposal.model || labels.proposal} what you rejected and why, so it looks for something else.</span>
-              <button type="button" className="btn small" disabled={!!busy} onClick={() => void propose()}><RotateCcw size={13} aria-hidden /> Propose again</button>
-            </div>;
-          })()}
 
-          {proposal && !proposing && proposal.options.length > 0 && canEscalate && !proposal.escalated && !hideFix && (
-            <button className="better-fix" data-tour="better-fix" disabled={!!busy} onClick={() => void escalate()}
-              data-tip="It starts from everything this try learned: each idea, why it failed and what it hit.">
-              <span className="bf-icon" aria-hidden><Sparkles size={15} /></span>
-              <span className="bf-text"><b>Look for a better fix</b>
-                <span>{wonder} takes a second, longer look · about a minute · these options stay</span></span>
-              <ChevronRight size={16} className="bf-go" aria-hidden /></button>)}
-          {proposal?.escalated && !proposing && proposal.usage && ownerSettings && (
-            <p className="hint mono">{wonder}: {proposal.usage.calls} call{proposal.usage.calls === 1 ? "" : "s"},
-              {" "}{Math.round(proposal.usage.input_tokens / 1000)}k in, {Math.round(proposal.usage.output_tokens / 1000)}k out
-              {" "}({Math.round(proposal.usage.reasoning_tokens / 1000)}k reasoning) · ${proposal.usage.usd.toFixed(2)}</p>)}
-          {compact && (proposing || (proposal?.attempts.length ?? 0) > 0) && <details className="activity-fold">
-            <summary>Agent activity · {proposal?.attempts.length ?? 0} checked</summary>
-            <Activity attempts={proposal?.attempts ?? []} progress={progress} now={now} />
-          </details>}
-          {!hideFix && <details className="try">
-            <summary><Move size={14} aria-hidden /> Try a move yourself</summary>
-            <label className="field">Move A vertically (m)
-              <input id="manual-dz" type="number" step="0.05" value={manualDz} onChange={(e) => setManualDz(Number(e.target.value))} />
-            </label>
-            <button className="btn" disabled={!a || !sceneId || !!busy} onClick={checkManual}>Check this move</button>
-            {manual && <p className={manual.passed ? "ok" : "bad"}>{manual.passed ? `Clear · nearest ${mm(manual.min_clearance_m)}` : manual.reason ? (manual.joints?.refused_at ? `Not tried: ${manual.reason}` : manual.reason) : manual.hits.map((h) => `${h.kind} with ${h.other_class} ${mm(h.distance_m)}`).join("; ")}</p>}
-          </details>}
-          {checked.size === 0 && report && matches && !proposal && !hideFix && (
-            <p className="hint tipline"><Wand2 size={13} aria-hidden /> Tick several clashes in the list to fix them together.</p>
-          )}
-        </div>)}
-      {docked && inSlot(slots.filters, <div className="filters-slot">
-        <FiltersPanel index={prepared} loading={!!sceneId && !facetIndex && !facetsError} error={facetIndex ? null : facetsError} onRetry={() => setFacetsTry((n) => n + 1)} state={filterState} onState={setFilterState}
-          draft={filterDraft} onDraft={setFilterDraft} onZoom={(ids) => { const v = viewer.current; v?.frameEverywhere(ids.filter((g) => v.isShown(g))); }} check={filterCheck}
-          drawingsWhole={drawingsShow === "whole"} onDrawingsWhole={shownLayout === "single" ? undefined : (whole) => setDrawingsShow(whole ? "whole" : "filtered")} />
-      </div>)}
-      {docked && inSlot(slots.edits, <EditPanel journal={journal} busy={!!busy} csvUrl={sceneId ? api.journalCsvUrl(sceneId) : null}
-        clashLabel={clashTag} onUndo={() => void stepEdit("undo")} onRedo={() => void stepEdit("redo")} onUndoTo={(e) => void undoTo(e)}
-        onShow={(e) => { const v = viewer.current; v?.frameEverywhere([...e.elements, ...e.created].filter((g) => v.isShown(g))); }} />)}
-      {docked && inSlot(slots.properties, <div className="props in-panel">
-        {selected ? elementCard(false, false) : <p className="hint">Click any element in the model to see its properties.</p>}
-      </div>)}
-      {!compact && inSlot(slots.activity, <footer className={`dock${workings.on && workings.view === "work" ? " working" : ""}`}>
-        <Activity attempts={proposal?.attempts ?? []} progress={progress} now={now} workings={workings.on} view={workings.view}
-          onView={setActivityView} onHide={() => setWorkingsOn(false)} onTurnOn={workings.on ? undefined : () => setWorkingsOn(true)}
-          inView={pilotStatus?.step ?? null} onPeek={peekTrial} />
-      </footer>)}
-      {layout === "tablet" && listOpen && !landing && <div className="drawer-scrim" aria-hidden onClick={() => setListOpen(false)} />}
-      {layout === "phone" && !landing && !starting && (
-        <SheetBar snap={snap} onSnap={setSnap}>
-          <div className={`sheet-peek ${peekLine.live ? "live" : ""} ${peekLine.action || peekLine.live ? "" : "quiet"}`} role="status">
-            <button type="button" className="sheet-peek-text" onClick={raise}>
-              {peekLine.live && <i className="spinner" aria-hidden />}<span>{peekLine.text}</span></button>
-            {peekLine.action && <button type="button" className="btn primary" data-tour={peekLine.action.tour}
-              disabled={peekLine.action.disabled} onClick={peekLine.action.run}>{peekLine.action.label}</button>}
-          </div>
-          <div className="sheet-tabs" role="tablist" aria-label="Panels">
-            <button role="tab" aria-selected={listOpen} className={listOpen ? "on" : ""} data-tour="sheet-list"
-              onClick={() => { setListOpen(true); raise(); }}>
-              <List size={17} aria-hidden /><span>Clashes</span>{report ? <span className="badge-n">{report.clashes.length}</span> : null}</button>
-            <button role="tab" aria-selected={!listOpen && tab === "clash"} className={!listOpen && tab === "clash" ? "on" : ""} data-tour="sheet-fix"
-              onClick={() => { showClashTab(); raise(); }}>
-              <LocateFixed size={17} aria-hidden /><span>Fix</span>{clashBadge}</button>
-            <button role="tab" aria-selected={!listOpen && tab === "plan"} className={!listOpen && tab === "plan" ? "on" : ""} data-tour="tab-plan"
-              onClick={() => { showPlanTab(); raise(); }}>
-              <Network size={17} aria-hidden /><span>Plan</span>{planBadge}</button>
-            <button role="tab" aria-selected={!listOpen && tab === "chat"} className={!listOpen && tab === "chat" ? "on" : ""} data-tour="tab-chat"
-              onClick={() => { showChatTab(); raise(); }}>
-              <MessageSquare size={17} aria-hidden /><span>Chat</span></button>
-          </div>
-        </SheetBar>
-      )}
-      {menuOpen && <MenuSheet title="Iris" onClose={() => setMenuOpen(false)}>
-        <section className="menu-section"><h3><FolderOpen size={15} aria-hidden /> Projects</h3>
-          <a className="pop-item" data-menu="projects" {...linkTo(PROJECTS_PATH, () => { setMenuOpen(false); goProjects(); })}>
-            <FolderOpen size={16} aria-hidden /> All projects</a>
-          {projectHere && <a className="pop-item" {...linkTo(projectPath(projectHere.id), () => { setMenuOpen(false); goStep("overview"); })}>
-            <ChevronRight size={16} aria-hidden /> {projectHere.name || "Untitled project"}: overview</a>}
-          <p className="hint">A project keeps its models, decisions and reports together, to close and pick up again.</p>
-        </section>
-        {/* docs/ui-design.md §10.4: what each step does is on that step; the rest is here, folded on a desktop. */}
-        <details className="menu-more" open={compact || touring || undefined}>
-        <summary className="menu-more-sum">More: models, coordinate, this session, layout, help</summary>
-        <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
-          title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
-          {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>
-        <section className="menu-section"><h3><Radar size={15} aria-hidden /> Coordinate</h3>{coordinateMenu(() => setMenuOpen(false))}</section>
-        {!landing && <section className="menu-section"><h3>This session</h3>
-          {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { setMenuOpen(false); setReqOpen(true); }}>
-            <ClipboardCheck size={16} aria-hidden /> Requirements{reqLabel ? <span className="chip accent">{reqLabel}</span> : <span className="why">optional</span>}</button>}
-          {report && <button className="pop-item" data-tour="report" onClick={() => { setMenuOpen(false); setDocOpen(true); setDocReady(false); }}>
-            <FileText size={16} aria-hidden /> Report: PDF and BCF</button>}
-          {sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={() => setMenuOpen(false)}>
-            <Download size={16} aria-hidden /> {stepFiles.length ? "Export STEP + IFC" : "Export IFC"}</a>}
-          <button className="pop-item" onClick={() => { setMenuOpen(false); setAgentOpen(true); }}>
-            {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
-        </section>}
-        {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(() => setMenuOpen(false))}</section>}
-        </details>
-      </MenuSheet>}
+                {proposal && !proposing && proposal.options.length > 0 && canEscalate && !proposal.escalated && !hideFix && (
+                  <button className="better-fix" data-tour="better-fix" disabled={!!busy} onClick={() => void escalate()}
+                    data-tip="It starts from everything this try learned: each idea, why it failed and what it hit.">
+                    <span className="bf-icon" aria-hidden><Sparkles size={15} /></span>
+                    <span className="bf-text"><b>Look for a better fix</b>
+                      <span>{wonder} takes a second, longer look · about a minute · these options stay</span></span>
+                    <ChevronRight size={16} className="bf-go" aria-hidden /></button>)}
+                {proposal?.escalated && !proposing && proposal.usage && ownerSettings && (
+                  <p className="hint mono">{wonder}: {proposal.usage.calls} call{proposal.usage.calls === 1 ? "" : "s"},
+                    {" "}{Math.round(proposal.usage.input_tokens / 1000)}k in, {Math.round(proposal.usage.output_tokens / 1000)}k out
+                    {" "}({Math.round(proposal.usage.reasoning_tokens / 1000)}k reasoning) · ${proposal.usage.usd.toFixed(2)}</p>)}
+                {compact && (proposing || (proposal?.attempts.length ?? 0) > 0) && <details className="activity-fold">
+                  <summary>Agent activity · {proposal?.attempts.length ?? 0} checked</summary>
+                  <Activity attempts={proposal?.attempts ?? []} progress={progress} now={now} />
+                </details>}
+                {!hideFix && <details className="try">
+                  <summary><Move size={14} aria-hidden /> Try a move yourself</summary>
+                  <label className="field">Move A vertically (m)
+                    <input id="manual-dz" type="number" step="0.05" value={manualDz} onChange={(e) => setManualDz(Number(e.target.value))} />
+                  </label>
+                  <button className="btn" disabled={!a || !sceneId || !!busy} onClick={checkManual}>Check this move</button>
+                  {manual && <p className={manual.passed ? "ok" : "bad"}>{manual.passed ? `Clear · nearest ${mm(manual.min_clearance_m)}` : manual.reason ? (manual.joints?.refused_at ? `Not tried: ${manual.reason}` : manual.reason) : manual.hits.map((h) => `${h.kind} with ${h.other_class} ${mm(h.distance_m)}`).join("; ")}</p>}
+                </details>}
+                {checked.size === 0 && report && matches && !proposal && !hideFix && (
+                  <p className="hint tipline"><Wand2 size={13} aria-hidden /> Tick several clashes in the list to fix them together.</p>
+                )}
+              </div>)}
+            {docked && inSlot(slots.filters, <div className="filters-slot">
+              <FiltersPanel index={prepared} loading={!!sceneId && !facetIndex && !facetsError} error={facetIndex ? null : facetsError} onRetry={() => setFacetsTry((n) => n + 1)} state={filterState} onState={setFilterState}
+                draft={filterDraft} onDraft={setFilterDraft} onZoom={(ids) => { const v = viewer.current; v?.frameEverywhere(ids.filter((g) => v.isShown(g))); }} check={filterCheck}
+                drawingsWhole={drawingsShow === "whole"} onDrawingsWhole={shownLayout === "single" ? undefined : (whole) => setDrawingsShow(whole ? "whole" : "filtered")} />
+            </div>)}
+            {docked && inSlot(slots.edits, <EditPanel journal={journal} busy={!!busy} csvUrl={sceneId ? api.journalCsvUrl(sceneId) : null}
+              clashLabel={clashTag} onUndo={() => void stepEdit("undo")} onRedo={() => void stepEdit("redo")} onUndoTo={(e) => void undoTo(e)}
+              onShow={(e) => { const v = viewer.current; v?.frameEverywhere([...e.elements, ...e.created].filter((g) => v.isShown(g))); }} />)}
+            {docked && inSlot(slots.properties, <div className="props in-panel">
+              {selected ? elementCard(false, false) : <p className="hint">Click any element in the model to see its properties.</p>}
+            </div>)}
+            {!compact && inSlot(slots.activity, <footer className={`dock${workings.on && workings.view === "work" ? " working" : ""}`}>
+              <Activity attempts={proposal?.attempts ?? []} progress={progress} now={now} workings={workings.on} view={workings.view}
+                onView={setActivityView} onHide={() => setWorkingsOn(false)} onTurnOn={workings.on ? undefined : () => setWorkingsOn(true)}
+                inView={pilotStatus?.step ?? null} onPeek={peekTrial} />
+            </footer>)}
+            {layout === "tablet" && listOpen && !landing && <div className="drawer-scrim" aria-hidden onClick={() => setListOpen(false)} />}
+            {layout === "phone" && !landing && !starting && (
+              <SheetBar snap={snap} onSnap={setSnap}>
+                <div className={`sheet-peek ${peekLine.live ? "live" : ""} ${peekLine.action || peekLine.live ? "" : "quiet"}`} role="status">
+                  <button type="button" className="sheet-peek-text" onClick={raise}>
+                    {peekLine.live && <i className="spinner" aria-hidden />}<span>{peekLine.text}</span></button>
+                  {peekLine.action && <button type="button" className="btn primary" data-tour={peekLine.action.tour}
+                    disabled={peekLine.action.disabled} onClick={peekLine.action.run}>{peekLine.action.label}</button>}
+                </div>
+                <div className="sheet-tabs" role="tablist" aria-label="Panels">
+                  <button role="tab" aria-selected={listOpen} className={listOpen ? "on" : ""} data-tour="sheet-list"
+                    onClick={() => { setListOpen(true); raise(); }}>
+                    <List size={17} aria-hidden /><span>Clashes</span>{report ? <span className="badge-n">{report.clashes.length}</span> : null}</button>
+                  <button role="tab" aria-selected={!listOpen && tab === "clash"} className={!listOpen && tab === "clash" ? "on" : ""} data-tour="sheet-fix"
+                    onClick={() => { showClashTab(); raise(); }}>
+                    <LocateFixed size={17} aria-hidden /><span>Fix</span>{clashBadge}</button>
+                  <button role="tab" aria-selected={!listOpen && tab === "plan"} className={!listOpen && tab === "plan" ? "on" : ""} data-tour="tab-plan"
+                    onClick={() => { showPlanTab(); raise(); }}>
+                    <Network size={17} aria-hidden /><span>Plan</span>{planBadge}</button>
+                  <button role="tab" aria-selected={!listOpen && tab === "chat"} className={!listOpen && tab === "chat" ? "on" : ""} data-tour="tab-chat"
+                    onClick={() => { showChatTab(); raise(); }}>
+                    <MessageSquare size={17} aria-hidden /><span>Chat</span></button>
+                </div>
+              </SheetBar>
+            )}
+            {/* Settings (the sidebar's): what the old menu held, in the order of the work: models, coordinate, this
+                session's outputs and requirements, the agent, the panels (docs/architecture/12-web-app.md, "The app shell"). */}
+            {menuOpen && <MenuSheet title="Settings" onClose={() => setMenuOpen(false)}>
+              <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
+                title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
+                {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>
+              <section className="menu-section"><h3><Radar size={15} aria-hidden /> Coordinate</h3>{coordinateMenu(() => setMenuOpen(false))}</section>
+              {!landing && <section className="menu-section"><h3>This session</h3>
+                {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { setMenuOpen(false); setReqOpen(true); }}>
+                  <ClipboardCheck size={16} aria-hidden /> Requirements{reqLabel ? <span className="chip accent">{reqLabel}</span> : <span className="why">optional</span>}</button>}
+                {report && <button className="pop-item" data-tour="report" onClick={() => { setMenuOpen(false); setDocOpen(true); setDocReady(false); }}>
+                  <FileText size={16} aria-hidden /> Report: PDF and BCF</button>}
+                {sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={() => setMenuOpen(false)}>
+                  <Download size={16} aria-hidden /> {stepFiles.length ? "Export STEP + IFC" : "Export IFC"}</a>}
+                <button className="pop-item" onClick={() => { setMenuOpen(false); setAgentOpen(true); }}>
+                  {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
+              </section>}
+              {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(() => setMenuOpen(false))}</section>}
+            </MenuSheet>}
+            {helpOpen && <MenuSheet title="Help" onClose={() => setHelpOpen(false)}>
+              <section className="menu-section"><h3>How Iris works</h3>
+                <p className="hint">AI proposes. Geometry proves. The engineer decides.</p>
+                <ol className="help-flow">{PROJECT_FLOW.map((f, i) => (
+                  <li key={f.name}><span className="help-n mono">{i + 1}</span><span><b>{f.name}</b> <span className="why">{f.text}</span></span></li>))}</ol>
+              </section>
+              {(sampleSet.length > 0 || sampleDrawings) && <section className="menu-section"><h3>Try it</h3>
+                {sampleSet.length > 0 && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { setHelpOpen(false); void trySample(); }}>
+                  <Building2 size={16} aria-hidden /> Try the sample building</button>}
+                {sampleDrawings && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { setHelpOpen(false); void trySampleDrawings(); }}>
+                  <FileText size={16} aria-hidden /> Try the sample drawings</button>}
+              </section>}
+              <section className="menu-section"><h3>Good to know</h3>
+                <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet. The name under the
+                  sidebar is recorded with each decision you make.</p>
+                <p className="hint">Press <kbd>/</kbd> to search, <kbd>Esc</kbd> to leave a clash.</p>
+              </section>
+            </MenuSheet>}
 
-      {(coverLoading || dockCover) && (
-        <div className={`load-cover ${dockCover === "out" ? "out" : ""}`}>
-          <Notch status={notchStatus} onLogo={() => goRoute(null)} />
-          {coverCard && <LoadCard load={coverCard} now={now} onCancel={coverLoading ? cancelOpen : undefined} />}
-        </div>)}
-      <Tooltips />
-      {popouts.map((w, i) => <Tooltips key={i} doc={w.document} />)}
-      {projectPage}
-      {removing && (
-        <div className="about-dialog" role="dialog" aria-modal="true" aria-label="Remove a model" onClick={() => setRemoving(null)}>
-          <div className="report-dialog remove-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="row"><h2><Trash2 size={18} aria-hidden /> Remove a model</h2>
-              <button className="ibtn" aria-label="Close" onClick={() => setRemoving(null)}><X size={16} aria-hidden /></button></div>
-            <p>{removing.text}</p>
-            <p className="hint">Edits in the other models stay, fixes made for its clashes too. Nothing is checked again.</p>
-            <div className="actions">
-              {removing.edits > 0 && sceneId && <a className="btn" href={api.exportUrl(sceneId)}><Download size={15} aria-hidden /> Export first</a>}
-              <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
-              <button className="btn primary" data-remove-model onClick={() => void removeModel()}><Trash2 size={15} aria-hidden /> Remove</button>
-            </div>
+            {(coverLoading || dockCover) && (
+              <div className={`load-cover ${dockCover === "out" ? "out" : ""}`}>
+                {coverCard && <LoadCard load={coverCard} now={now} onCancel={coverLoading ? cancelOpen : undefined} />}
+              </div>)}
+            <Tooltips />
+            {popouts.map((w, i) => <Tooltips key={i} doc={w.document} />)}
+            {homePage}
+            {projectPage}
+            {removing && (
+              <div className="about-dialog" role="dialog" aria-modal="true" aria-label="Remove a model" onClick={() => setRemoving(null)}>
+                <div className="report-dialog remove-dialog" onClick={(e) => e.stopPropagation()}>
+                  <div className="row"><h2><Trash2 size={18} aria-hidden /> Remove a model</h2>
+                    <button className="ibtn" aria-label="Close" onClick={() => setRemoving(null)}><X size={16} aria-hidden /></button></div>
+                  <p>{removing.text}</p>
+                  <p className="hint">Edits in the other models stay, fixes made for its clashes too. Nothing is checked again.</p>
+                  <div className="actions">
+                    {removing.edits > 0 && sceneId && <a className="btn" href={api.exportUrl(sceneId)}><Download size={15} aria-hidden /> Export first</a>}
+                    <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
+                    <button className="btn primary" data-remove-model onClick={() => void removeModel()}><Trash2 size={15} aria-hidden /> Remove</button>
+                  </div>
+                </div>
+              </div>)}
+            {agentOpen && <AgentDialog link={agentLink} log={agentLog} now={now} creating={agentBusy} error={agentError}
+              canCreate={!!sceneId} onCreate={() => void connectAgent()} onRevoke={() => void disconnectAgent()} onClose={() => setAgentOpen(false)} />}
+            {touring && <Tour key={tourWhich} which={tourWhich} state={tourState} actions={tourActions} onClose={() => setTouring(false)} />}
+            {reqOpen && <RequirementsDialog sceneId={sceneId} initial={reqSaved?.doc ?? null} enabled={!!reqSaved?.enabled}
+              audit={triageAudit} canDetectAgain={!!sceneId} onApply={applyRequirements} onClose={() => setReqOpen(false)} />}
+            {docOpen && report && <ReportDialog report={report} sceneId={sceneId} triage={shownTriage} triageDone={!!triageRun?.done}
+              check={report.origin === "iris" ? checks.find((c) => c.key === viewCheck) ?? null : null}
+              prepare={builtOn ? prepareReport : undefined}
+              teams={modelTeams} onTeams={setModelTeams} evidence={evidence} signoffs={signoffs} reviewed={reviewed}
+              triageRunning={!!triageRun && !triageRun.done} onRunTriage={() => runTriage(false)} onClose={() => setDocOpen(false)} onReady={() => setDocReady(true)}
+              projectId={projectOpen ? pid : null} projectName={projectHere?.name ?? null}
+              onBuilt={projectOpen && projectHere ? (doc) => {
+                const id = projectHere.id;
+                addReport(id, { doc_id: doc.url, name: doc.name, kind: /\.pdf$/i.test(doc.name) || !doc.bcf ? "pdf" : "bcf" })
+                  .then((next) => setProject((was) => (was?.id === next.id ? next : was)))
+                  .catch((e: unknown) => setError(`The report was built, but not kept with the project: ${(e as Error).message}`));
+              } : undefined} />}
+            {lightbox && report && lightbox.clash.images[lightbox.index] &&
+              <Lightbox reportId={report.id} clash={lightbox.clash} index={lightbox.index} onClose={() => setLightbox(null)}
+                onMove={(index) => setLightbox((l) => l && { ...l, index })} />}
           </div>
-        </div>)}
-      {agentOpen && <AgentDialog link={agentLink} log={agentLog} now={now} creating={agentBusy} error={agentError}
-        canCreate={!!sceneId} onCreate={() => void connectAgent()} onRevoke={() => void disconnectAgent()} onClose={() => setAgentOpen(false)} />}
-      {touring && <Tour key={tourWhich} which={tourWhich} state={tourState} actions={tourActions} onClose={() => setTouring(false)} />}
-      {reqOpen && <RequirementsDialog sceneId={sceneId} initial={reqSaved?.doc ?? null} enabled={!!reqSaved?.enabled}
-        audit={triageAudit} canDetectAgain={!!sceneId} onApply={applyRequirements} onClose={() => setReqOpen(false)} />}
-      {docOpen && report && <ReportDialog report={report} sceneId={sceneId} triage={shownTriage} triageDone={!!triageRun?.done}
-        check={report.origin === "iris" ? checks.find((c) => c.key === viewCheck) ?? null : null}
-        prepare={builtOn ? prepareReport : undefined}
-        teams={modelTeams} onTeams={setModelTeams} evidence={evidence} signoffs={signoffs} reviewed={reviewed}
-        triageRunning={!!triageRun && !triageRun.done} onRunTriage={() => runTriage(false)} onClose={() => setDocOpen(false)} onReady={() => setDocReady(true)}
-        projectId={projectOpen ? pid : null} projectName={projectHere?.name ?? null}
-        onBuilt={projectOpen && projectHere ? (doc) => {
-          const id = projectHere.id;
-          addReport(id, { doc_id: doc.url, name: doc.name, kind: /\.pdf$/i.test(doc.name) || !doc.bcf ? "pdf" : "bcf" })
-            .then((next) => setProject((was) => (was?.id === next.id ? next : was)))
-            .catch((e: unknown) => setError(`The report was built, but not kept with the project: ${(e as Error).message}`));
-        } : undefined} />}
-      {lightbox && report && lightbox.clash.images[lightbox.index] &&
-        <Lightbox reportId={report.id} clash={lightbox.clash} index={lightbox.index} onClose={() => setLightbox(null)}
-          onMove={(index) => setLightbox((l) => l && { ...l, index })} />}
+        </div>
+      </div>
+      {newOpen && <NewProjectDialog onCreate={(n) => void newProject(n)} onClose={() => setNewOpen(false)} error={projectsError ?? undefined} />}
     </div>
   );
 }

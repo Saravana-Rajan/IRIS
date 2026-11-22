@@ -1,0 +1,79 @@
+/* How the workspace and the pages sit in the app shell (App.tsx; the sidebar, top bar and search are AppShell.tsx's,
+   styled in appShell.css). The shell is a full-height row: the sidebar, then the main column (the top bar over the
+   body). The body holds the workspace (`.app`, the 3D view and its panels, always mounted so the models stay drawn)
+   and, over it, the page shown: Home (`.home-shell`) or a project's page (`.proj-shell`). Light only. */
+
+.shell { --shell-top-h: 56px; height: 100%; display: flex; min-width: 0; background: var(--bg); }
+.shell.compact { --shell-top-h: calc(52px + env(safe-area-inset-top)); }
+.shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.shell-body { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; }
+
+/* The workspace fills the body; it no longer has a header of its own (the top bar is the shell's) */
+.shell-body > .app { position: absolute; inset: 0; height: auto; }
+.shell .shell-body > .app.phone, .shell .shell-body > .app.tablet { height: auto; --head-h: 0px; }
+.shell .app.phone.snap-full { --sheet-h: calc(100dvh - var(--shell-top-h) - 8px); }
+.shell .app.tablet .pane.left { top: var(--shell-top-h); }
+
+/* A page over the workspace: Home, the projects, a project's Overview, Drawings, Reports and Activity */
+.shell .proj-shell { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); }
+.shell .proj-shell > .proj-page, .shell .proj-shell > .start, .shell .proj-shell > :not(.proj-shell-alert) { flex: 1 1 auto; min-height: 0; }
+.proj-shell-alert { flex: none; display: flex; align-items: center; gap: 8px; margin: 12px 24px 0; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--red, #e0473f) 30%, transparent); background: var(--fail-soft, #fdeeed); color: var(--fail, #b3261e);
+  font-size: 13px; cursor: pointer; }
+.proj-shell-alert > span { flex: 1; min-width: 0; }
+.proj-shell-alert svg { flex: none; }
+
+/* The workspace's actions at the right of the top bar */
+.work-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.work-actions .btn.small { height: 34px; }
+.work-actions .btn.primary { height: 36px; }
+.work-actions .export-n { display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; padding: 1px 6px 1px 4px; border-radius: 999px;
+  background: rgba(255, 255, 255, .18); font-size: 11.5px; font-weight: 600; }
+.work-actions .agent-pill .lbl, .work-actions .req-pill-label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-actions .btn.on { background: var(--accent-soft, #f6f0fe); border-color: var(--accent, #b07af2); }
+@media (max-width: 1360px) { .work-actions .agent-pill .lbl, .work-actions .req-pill-label { display: none; } }
+@media (max-width: 1200px) { .work-actions .export-label { display: none; } }
+
+/* The workspace's one status line, in its header */
+.status-line { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 32px; padding: 0 12px; border-radius: 999px;
+  font-size: 13px; color: var(--ink); background: var(--panel, #f2f2f2); white-space: nowrap; }
+.status-line > svg, .status-line > .spinner, .status-line > .btn, .status-line > .ibtn { flex: none; }
+.status-line b { font-weight: 600; }
+.status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.status-line .btn.small { height: 26px; padding: 0 10px; font-size: 12px; }
+.status-line .ibtn { width: 24px; height: 24px; }
+.status-error { background: var(--fail-soft, #fdeeed); color: var(--fail, #b3261e); }
+.status-error .status-text { color: var(--fail, #b3261e); }
+.status-gone { background: var(--warn-soft, #fff6e5); }
+.status-work, .status-pilot { background: var(--surface, #fff); box-shadow: inset 0 0 0 1px var(--line, #e6e6e6); }
+.status-work.ai-shimmer, .status-pilot.ai-shimmer { box-shadow: none; border: 1px solid transparent;
+  background: linear-gradient(var(--surface, #fff), var(--surface, #fff)) padding-box, var(--holo) border-box; }
+.status-idle { background: transparent; color: var(--muted); padding: 0 4px; }
+.status-idle .ok { color: var(--green, #2fb153); }
+
+/* The floating cards the header now carries: the classic card and measuring start at the top of the view */
+.shell .app.notched .props { top: 12px; }
+.shell .app.notched .measure-panel { top: 60px; }
+.shell .app.notched .overlay.gone { top: 12px; }
+
+/* A fixed clash: calm, not a big Propose fixes */
+.fixed-calm { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--green, #2fb153) 35%, transparent); background: var(--ok-soft, #eaf7ee); }
+.fixed-calm-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; color: var(--ok, #1d7f47); }
+.fixed-calm-head svg { align-self: center; flex: none; }
+.fixed-calm-head .why { color: var(--muted); font-size: 12.5px; }
+.fixed-calm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Help */
+.help-flow { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.help-flow li { display: flex; gap: 10px; align-items: baseline; font-size: 13px; line-height: 1.45; }
+.help-n { flex: none; width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center; font-size: 11.5px;
+  background: var(--accent-soft, #f6f0fe); color: var(--accent-ink, #7340c4); }
+kbd { font-family: var(--mono); font-size: 11.5px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line); background: var(--raised, #fafafa); }
+
+/* Empty states in the workspace's left pane */
+.empty-state.empty-left { margin: auto 16px; }
+
+@media (max-width: 760px) {
+  .proj-shell-alert { margin: 10px 16px 0; }
+}
