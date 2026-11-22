@@ -546,6 +546,10 @@ async function send(url: string, init: RequestInit = {}): Promise<Response> {
   if (detail !== "requirements_unknown" || !(await reRegister())) return r;
   return apiFetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), "X-Iris-Requirements": requirementsId! } });
 }
+/** A JSON request read outside `api` (reviewQueue.prepareFixes' stream): the same headers (owner settings, the
+ *  requirements in use) and the same requirements retry and gone handling as every call here. */
+export const apiSend = (url: string, init: RequestInit = {}) =>
+  send(url, { ...init, headers: { ...jsonHeaders(), ...(init.headers as Record<string, string> | undefined) } });
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await send(`/api${path}`, { headers: jsonHeaders(), ...init });

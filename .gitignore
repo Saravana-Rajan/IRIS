@@ -10,6 +10,7 @@ samples/*
 !samples/PC-03-Palletising-Cell-RevA.step
 !samples/PC-03-Palletising-Cell-RevB.step
 !samples/drawings/
+!samples/prepared/
 *.spike.ifc
 node_modules/
 web/dist/
