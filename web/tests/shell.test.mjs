@@ -1,0 +1,101 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { appHost, find, hasText } from "./app-host.mjs";
+
+/** The app shell wired into the actual App (docs/architecture/12-web-app.md, "The app shell"): the sidebar's pages and
+ * their addresses, the collapse to the rail (kept apart for the 3D workspace and the other pages), Home over an open
+ * session, the top bar's primary action per page, and Settings and Help from the sidebar. */
+
+const sidebar = (host) => host.component("Sidebar");
+const topBar = (host) => host.component("TopBar");
+/** The top bar's primary action (after the owner's settings). */
+const primary = (host) => [topBar(host).props.actions.props.children].flat()[1];
+
+test("the sidebar's pages: Home over the open session, the projects, back to the workspace, each at its address", async () => {
+  const host = await appHost({ path: "/workspace" });
+  await host.settle();
+  assert.equal(sidebar(host).props.active, "workspace", "models open, no project: the workspace is the page");
+  assert.deepEqual(sidebar(host).props.workspace, { label: "Workspace" }, "a session outside a project has its own item");
+  assert.equal(sidebar(host).props.hrefOf("home"), "/home");
+  assert.equal(sidebar(host).props.hrefOf("projects"), "/projects");
+  assert.equal(host.component("StartScreen"), undefined);
+  assert.equal(primary(host).props.className, "work-actions", "the workspace's actions: Export and the rest");
+
+  sidebar(host).props.onNav("home"); host.render();
+  assert.equal(host.location.pathname, "/home");
+  assert.equal(sidebar(host).props.active, "home");
+  assert.ok(host.component("StartScreen"), "Home is shown over the open session");
+  assert.equal(host.state.sceneId, "scene", "the session stays open behind it");
+  assert.equal(primary(host).props["data-shell"], "new-project");
+  await host.settle();
+  assert.ok(host.projects.calls.some((c) => c[0] === "list"), "Home lists the recent projects");
+
+  sidebar(host).props.onNav("projects"); host.render();
+  assert.equal(host.location.pathname, "/projects");
+  assert.equal(sidebar(host).props.active, "projects");
+  assert.ok(host.component("ProjectsHome"));
+  assert.equal(host.component("StartScreen"), undefined);
+
+  sidebar(host).props.onNav("workspace"); host.render();
+  assert.equal(host.location.pathname, "/workspace");
+  assert.equal(sidebar(host).props.active, "workspace");
+  assert.equal(host.component("ProjectsHome"), undefined);
+  assert.equal(host.component("StartScreen"), undefined);
+  host.unmount();
+});
+
+test("the collapse: the 3D workspace starts on the rail, the other pages expanded, each remembered on its own", async () => {
+  const host = await appHost({ path: "/workspace" });
+  await host.settle();
+  assert.equal(sidebar(host).props.rail, true, "the workspace needs the width");
+  assert.equal(topBar(host).props.rail, true);
+  topBar(host).props.onToggle(); host.render();
+  assert.equal(sidebar(host).props.rail, false, "expanded by hand");
+
+  sidebar(host).props.onNav("projects"); host.render();
+  assert.equal(sidebar(host).props.rail, false, "a page starts expanded");
+  topBar(host).props.onToggle(); host.render();
+  assert.equal(sidebar(host).props.rail, true, "collapsed on the pages");
+
+  sidebar(host).props.onNav("workspace"); host.render();
+  assert.equal(sidebar(host).props.rail, false, "the workspace keeps its own choice");
+  host.unmount();
+});
+
+test("the project group: the open project's steps with their counts, and the step marked on its page", async () => {
+  const files = [{ name: "a.ifc", kind: "IFC", size: 1, sha256: "0" }, { name: "b.ifc", kind: "IFC", size: 1, sha256: "1" }];
+  const reports = [{ doc_id: "d1", name: "Report.pdf", at: 1700000000, kind: "pdf" }];
+  const host = await appHost({ path: "/projects/p9/reports",
+    projects: { getProject: async (id) => ({ ...(await import("./app-host.mjs")).projectOf({ id, name: "Tower B", files, reports,
+      counts: { clashes: 12, open: 7, resolved: 5, reviewed: 0 } }) }) } });
+  await host.settle();
+  const side = sidebar(host);
+  assert.equal(side.props.active, "reports");
+  assert.equal(side.props.project.name, "Tower B");
+  assert.deepEqual(side.props.project.counts, { models: 2, clash: 7, reports: 1 }, "models, the open clashes last known, reports");
+  assert.equal(side.props.hrefOf("clash"), "/projects/p9/clashes");
+  assert.equal(side.props.hrefOf("overview"), "/projects/p9");
+  assert.equal(primary(host).props["data-shell"], "open-workspace", "a project's page leads to its workspace");
+
+  side.props.onNav("overview"); host.render();
+  assert.equal(host.location.pathname, "/projects/p9");
+  assert.equal(sidebar(host).props.active, "overview");
+  assert.equal(host.component("ProjectOverview").props.step, "overview");
+
+  sidebar(host).props.onNav("home"); host.render();
+  assert.equal(sidebar(host).props.project.id, "p9", "the project's group stays in the sidebar on Home");
+  host.unmount();
+});
+
+test("Settings and Help open from the sidebar; the ☰ Menu button is gone", async () => {
+  const host = await appHost();
+  assert.equal(host.find((n) => n.props?.["data-tour"] === "menu"), undefined, "no menu button");
+  const settings = host.menu();
+  assert.ok(settings && hasText(settings, "Coordinate"), "Settings holds what the menu held");
+  settings.props.onClose(); host.render();
+  sidebar(host).props.onHelp(); host.render();
+  const help = host.find((n) => n.type?.name === "MenuSheet" && n.props.title === "Help");
+  assert.ok(help && hasText(help, "How Iris works"));
+  assert.ok(find(help, (n) => n.type === "ol" && n.props.className === "help-flow"), "the eight steps");
+  host.unmount();
+});

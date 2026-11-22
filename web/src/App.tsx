@@ -4285,7 +4285,7 @@ export function App() {
   // ------------------------------------------------------------------ the app shell (AppShell.tsx)
   /** The open session (models or a clash report) outside the project shown in the sidebar. */
   const sessionOpen = !!(sceneId || report);
-  const sessionName = sceneFiles.length ? projectName(sceneFiles) : report ? "Clash report" : "Workspace";
+  const sessionName = sceneFiles.length ? projectName(sceneFiles) : report && !sceneId ? "Clash report" : "Workspace";
   /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
   const onPage = !!homePage || !!projectPage;
   const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
@@ -4295,7 +4295,7 @@ export function App() {
     ...(((project.id === pid ? liveCounts : null) ?? project.counts)?.open ? { clash: ((project.id === pid ? liveCounts : null) ?? project.counts)!.open } : {}),
     ...(project.reports.length ? { reports: project.reports.length } : {}),
   } } : null;
-  const navWorkspace = (sessionOpen && !projectOpen) || (blank && !pid) ? { label: sessionName } : null;
+  const navWorkspace = (sessionOpen && !projectOpen) || (blank && !pid) ? { label: "Workspace" } : null;
   const navHref = (id: NavId): string | undefined => (id === "home" ? "/home" : id === "projects" ? PROJECTS_PATH
     : id === "workspace" ? "/workspace" : navProject ? projectPath(navProject.id, id) : undefined);
   const nav = (id: NavId) => {
