@@ -4407,7 +4407,7 @@ export function App() {
         onHelp={() => { setDrawerOpen(false); setHelpOpen(true); }} onSettings={() => { setDrawerOpen(false); setMenuOpen(true); }} />
       <div className="shell-main">
         <TopBar rail={rail} onToggle={toggleRail} compact={compact} onMenu={() => setDrawerOpen(true)}
-          search={layout !== "phone" ? <SearchBox search={searchHits} placeholder="Search projects, clashes, elements" /> : undefined}
+          search={layout !== "phone" ? <SearchBox search={searchHits} placeholder={onPage ? "Search projects, clashes, elements" : "Search clashes, elements"} /> : undefined}
           actions={topActions}>{workHeader || null}</TopBar>
         <div className="shell-body">
           <div className={`app ${compact ? "" : "notched"} ${docked ? "docked" : ""} ${resizing ? "resizing" : ""} ${landing ? "landing" : ""} ${starting ? "starting" : ""} ${compact ? `${layout} snap-${snap}` : ""} ${compact && listOpen ? "list-open" : ""}`}
