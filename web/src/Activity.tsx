@@ -45,6 +45,19 @@ export function statusLine(p: Progress | null, now: number, attempts: Attempt[])
   return `Done in ${total} s: ${ok} of ${attempts.length} ideas passed the geometry check`;
 }
 
+/** The Activity bar's one calm line while it is collapsed to its strip (App passes it as the Activity tab's adornment;
+ * workspace.css shows it on the strip only): a small spinner while a proposal runs, then where it is. Nothing before the
+ * first run. */
+export function ActivityLine({ attempts, progress, now }: { attempts: Attempt[]; progress: Progress | null; now: number }) {
+  if (!progress && !attempts.length) return null;
+  const running = !!progress && progress.phase !== "done";
+  return (
+    <span className={`activity-line${running ? " live" : ""}`} role="status">
+      {running && <i className="spinner" aria-hidden />}<span className="activity-line-text">{statusLine(progress, now, attempts)}</span>
+    </span>
+  );
+}
+
 /** The Activity panel's two views: the table of ideas tried (Steps) and the run drawn as it happens (Workings). */
 export type ActivityView = "steps" | "work";
 

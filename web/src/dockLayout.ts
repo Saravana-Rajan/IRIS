@@ -29,8 +29,14 @@ export const PANE = { left: [240, 640, 310], right: [300, 720, 380] } as const;
 export const EDGE_GROUP: Record<Edge, string> = { left: "edge-left", right: "edge-right", bottom: "edge-bottom" };
 export const EDGE_SIZE: Record<Edge, readonly [number, number, number]> = { ...PANE, bottom: [80, 480, 120] };
 
-/** Where the layout is kept in this browser, and the switch back to the classic layout. */
-export const LAYOUT_KEY = "iris.dock.v1";
+/** Where the layout is kept in this browser, and the switch back to the classic layout. Version 2 (Nov 22): Activity
+ *  starts collapsed to its strip, so a layout kept before (`iris.dock.v1`, Activity open) gives way to the new default
+ *  once. */
+export const LAYOUT_KEY = "iris.dock.v2";
+export const LAYOUT_VERSION = 2;
+/** The side bars the default layout starts collapsed to their strip: Activity's, along the bottom (a slim "Activity"
+ *  bar the user opens; a run shows a one-line status, never the bar by itself). */
+export const DEFAULT_COLLAPSED: readonly Edge[] = ["bottom"];
 export const CLASSIC_KEY = "iris.dock.classic";
 /** Where Properties lives: floating over the model (the default) or docked in the right side bar, as last put there. */
 export const PROPS_KEY = "iris.dock.properties";
@@ -107,12 +113,12 @@ export function withoutPopouts(layout: SavedLayout): SavedLayout {
 export function readLayout(storage: Pick<Storage, "getItem"> | null): SavedLayout | null {
   try {
     const saved = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? "null") as { v?: number; layout?: unknown } | null;
-    return saved?.v === 1 && validLayout(saved.layout) ? saved.layout : null;
+    return saved?.v === LAYOUT_VERSION && validLayout(saved.layout) ? saved.layout : null;
   } catch { return null; }
 }
 
 export function writeLayout(storage: Pick<Storage, "setItem"> | null, layout: SavedLayout) {
-  try { storage?.setItem(LAYOUT_KEY, JSON.stringify({ v: 1, layout: withoutPopouts(layout) })); } catch { /* private window: kept for this visit */ }
+  try { storage?.setItem(LAYOUT_KEY, JSON.stringify({ v: LAYOUT_VERSION, layout: withoutPopouts(layout) })); } catch { /* private window: kept for this visit */ }
 }
 
 /** Where a panel is now. */

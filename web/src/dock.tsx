@@ -4,10 +4,11 @@ import { DockviewReact, type DockviewApi, type DockviewGroupPanelApi, type Dockv
   type IDockviewHeaderActionsProps, type IDockviewPanel, type IDockviewPanelHeaderProps, type IDockviewPanelProps,
   type SerializedDockview } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
+import "./workspace.css";   // the workspace's own look (toolbar, clash list and panel, Activity); App always loads this module
 import { Activity as Pulse, AppWindow, Box, Info, List, ListFilter, LocateFixed, MessageSquare, Network, PanelBottomClose, PanelBottomOpen,
   PanelLeftClose, PanelRight, PanelRightClose, PictureInPicture2, Undo2, X, type LucideIcon } from "lucide-react";
 import { LogIcon } from "./editIcons";
-import { EDGE_GROUP, EDGE_SIZE, PANELS, PANEL_IDS, PROPS_KEY, homeOf as defaultHome, readPropsHome, isPanel, readLayout, showSteps, titleOf, writeLayout,
+import { DEFAULT_COLLAPSED, EDGE_GROUP, EDGE_SIZE, PANELS, PANEL_IDS, PROPS_KEY, homeOf as defaultHome, readPropsHome, isPanel, readLayout, showSteps, titleOf, writeLayout,
   type Edge, type PanelId, type PropsHome, type SavedLayout, type Where } from "./dockLayout";
 
 /*
@@ -167,7 +168,7 @@ function Tab({ api, containerApi }: IDockviewPanelHeaderProps) {
     ctx.onTab(id);
   };
   return (
-    <div className={`dock-tab ${short ? "short" : ""}`} data-tour={TOUR_TAG[id]} data-panel-tab={id} onClick={click}
+    <div className={`dock-tab ${short ? "short" : ""} ${strip ? "strip" : ""}`} data-tour={TOUR_TAG[id]} data-panel-tab={id} onClick={click}
       aria-label={short ? title : undefined} data-tip={short ? title : undefined} data-tip-side={short ? "bottom" : undefined}>
       <Icon size={14} aria-hidden />{!short && <span className="dock-tab-title">{title}</span>}{ctx.tabs[id]}
     </div>
@@ -313,7 +314,8 @@ function fitEdges(api: DockviewApi) {
 }
 
 /** The default layout: the classic one, as panels. The model in the middle (no tab, nothing docks into it, it never
- *  floats); the clash list on the left; Clash, Plan and Chat as tabs on the right; Activity along the bottom. */
+ *  floats); the clash list on the left; Clash, Plan and Chat as tabs on the right; Activity along the bottom, collapsed
+ *  to its slim strip (`DEFAULT_COLLAPSED`): its tab opens it, and a run never does by itself. */
 function build(api: DockviewApi, sizes: { left: number; right: number }) {
   const model = api.addPanel({ id: "model", component: "panel", title: "Model" });
   model.group.locked = "no-drop-target";
@@ -327,6 +329,10 @@ function build(api: DockviewApi, sizes: { left: number; right: number }) {
   }
   api.getPanel("clash")?.api.setActive();
   model.api.setActive();
+  for (const edge of DEFAULT_COLLAPSED) {
+    const bar = api.getEdgeGroup(edge);
+    if (bar && !bar.isCollapsed()) collapseEdge(bar, edge);
+  }
 }
 
 /** A side bar's tabs run along the top while it is open, as the classic panes' did (and down its outer edge while it

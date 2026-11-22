@@ -95,12 +95,40 @@ test("the layout is kept per browser, versioned, and a bad one reads as none", (
   dock.writeLayout(storage, layout({ right: ["clash", "plan"], popout: ["chat"] }));
   const read = dock.readLayout(storage);
   assert.deepEqual(read.edgeGroups.right.group.views, ["clash", "plan", "chat"]);
-  store.set(dock.LAYOUT_KEY, JSON.stringify({ v: 2, layout: layout() }));
+  store.set(dock.LAYOUT_KEY, JSON.stringify({ v: 1, layout: layout() }));
   assert.equal(dock.readLayout(storage), null, "another version");
   store.set(dock.LAYOUT_KEY, "{not json");
   assert.equal(dock.readLayout(storage), null);
   assert.equal(dock.readLayout(null), null);
   assert.doesNotThrow(() => dock.writeLayout({ setItem() { throw new Error("quota"); } }, layout()));
+});
+
+test("version 2: Activity starts collapsed, and a layout kept before (Activity open) gives way to the new default once", () => {
+  assert.equal(dock.LAYOUT_KEY, "iris.dock.v2");
+  assert.equal(dock.LAYOUT_VERSION, 2);
+  assert.deepEqual([...dock.DEFAULT_COLLAPSED], ["bottom"], "only Activity's bar: a slim strip the user opens");
+  assert.equal(dock.homeOf("activity"), "bottom", "the bar collapsed is Activity's");
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  store.set("iris.dock.v1", JSON.stringify({ v: 1, layout: layout() }));
+  assert.equal(dock.readLayout(storage), null, "the old key is not read: the default (Activity collapsed) is built");
+  dock.writeLayout(storage, layout());
+  const kept = JSON.parse(store.get("iris.dock.v2"));
+  assert.equal(kept.v, 2, "written as version 2, under the new key");
+  assert.ok(dock.validLayout(kept.layout));
+  assert.ok(dock.readLayout(storage), "and read back from there");
+  assert.equal(JSON.parse(store.get("iris.dock.v1")).v, 1, "the old entry is left as it was");
+});
+
+test("the default layout collapses the bottom bar to its strip, Reset uses the same build, and the tour still opens every bar", async () => {
+  const source = await readFile(new URL("../src/dock.tsx", import.meta.url), "utf8");
+  const build = source.slice(source.indexOf("function build("), source.indexOf("function wireEdges("));
+  assert.match(build, /for \(const edge of DEFAULT_COLLAPSED\)[\s\S]*collapseEdge\(bar, edge\)/, "build() collapses the default's bars");
+  const reset = source.slice(source.indexOf("reset() {"), source.indexOf("gather() {"));
+  assert.match(reset, /build\(api, /, "Reset the layout: the same default");
+  const gather = source.slice(source.indexOf("gather() {"), source.indexOf("isOpen:"));
+  assert.match(gather, /g\?\.isCollapsed\(\)\) g\.expand\(\)/, "the tour reads the main page: every bar open");
+  assert.match(source, /className=\{`dock-tab \$\{short \? "short" : ""\} \$\{strip \? "strip" : ""\}`\}/, "a tab on a collapsed strip says so (its status line shows there only)");
 });
 
 test("showing a panel: reopen, open its bar, bring its window forward, or bring it home for the tour", () => {
@@ -131,4 +159,30 @@ test("Properties floats unless it was last docked on the right", () => {
   assert.equal(dock.readPropsHome(store("left")), "float", "only the right bar is offered");
   assert.equal(dock.readPropsHome({ getItem: () => { throw new Error("blocked"); } }), "float");
   assert.equal(dock.readPropsHome(null), "float");
+});
+
+// ---------------------------------------------------------------- the collapsed Activity bar's one line
+
+const url = (js) => `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
+const stub = (names) => url(names.map((n) => `export function ${n}(){return null;}`).join("\n"));
+const activity = await import(await compiled("../src/Activity.tsx", { "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
+  "lucide-react": stub(["Eye", "EyeOff", "ListChecks", "Workflow"]), "./fixKinds": await compiled("../src/fixKinds.ts"),
+  "./Workings": stub(["Workings"]), "./aiNames": await compiled("../src/aiNames.ts") }));
+const text = (n) => typeof n === "string" || typeof n === "number" ? String(n) : Array.isArray(n) ? n.map(text).join("")
+  : n && typeof n === "object" ? text(n.props?.children) : "";
+
+test("the collapsed Activity bar reads as one calm status line: nothing before a run, a spinner only while it runs", () => {
+  const { ActivityLine, statusLine } = activity;
+  assert.equal(ActivityLine({ attempts: [], progress: null, now: 0 }), null, "no run yet: the strip just says Activity");
+  const progress = { started: 0, round: 1, phase: "thinking", thinkingSince: 0, modelSeconds: [], ideas: 0, checking: null, model: "Pro" };
+  const live = ActivityLine({ attempts: [], progress, now: 12000 });
+  assert.equal(live.type, "span");
+  assert.equal(live.props.role, "status");
+  assert.ok(live.props.className.split(" ").includes("activity-line") && live.props.className.includes("live"));
+  assert.equal(text(live), statusLine(progress, 12000, []), "the same words as the open bar's head");
+  assert.ok([live.props.children].flat().some((c) => c?.props?.className === "spinner"), "a small spinner while it runs");
+  const done = ActivityLine({ attempts: [{ passed: true }, { passed: false }], progress: { ...progress, phase: "done" }, now: 30000 });
+  assert.ok(!done.props.className.includes("live"));
+  assert.ok(![done.props.children].flat().some((c) => c?.props?.className === "spinner"), "done: no spinner");
+  assert.equal(text(done), "Done in 30 s: 1 of 2 ideas passed the geometry check");
 });
