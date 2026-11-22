@@ -1,20 +1,14 @@
 # 04 · Server code map
 
-> **Covers:** `server/iris/*.py` (48 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
+> **Covers:** `server/iris/*.py` (50 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
 > `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings, the
-> sample drawings and saved readings; `origins.py`, `owner.py`, `voice_live.py` and `app.py`'s middleware and imports;
-> re-branded on 2026-11-11) · **Deeper design:** the feature docs linked
-> from each module below ([detection](../detection.md), [drawings](../drawings.md), [edits](../edits.md),
+> sample drawings and saved readings, saved checks with `scene.py`'s and `detect.py`'s imports; `origins.py`,
+> `owner.py`, `voice_live.py` and `app.py`'s middleware and imports; review queue 2026-11-22: `prepare.py`, `plans.py`,
+> `app.py`'s imports, the module and test counts; re-branded on 2026-11-11) · **Deeper design:** the feature docs
+> linked from each module below ([detection](../detection.md), [drawings](../drawings.md), [edits](../edits.md),
 > [engineer-workflow](../engineer-workflow.md), [escalation](../escalation.md), [mcp](../mcp.md),
-> [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md),
-> [voice](../voice.md))
-> **Covers:** `server/iris/*.py` (49 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings, saved checks
-> with `scene.py`'s and `detect.py`'s imports; `origins.py`, `owner.py`, `voice_live.py` and `app.py`'s middleware and
-> imports; re-branded on 2026-11-11) · **Deeper design:** the feature docs linked
-> from each module below ([detection](../detection.md), [edits](../edits.md), [engineer-workflow](../engineer-workflow.md),
-> [escalation](../escalation.md), [mcp](../mcp.md), [requirements](../requirements.md),
-> [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [voice](../voice.md))
+> [requirements](../requirements.md), [review-queue](../review-queue.md), [show-it-built](../show-it-built.md),
+> [step](../step.md), [uploads](../uploads.md), [voice](../voice.md))
 
 The server is one Python package, `iris` (the internal name, kept on purpose; the product is Iris). It is a
 FastAPI app and an MCP server over one shared `Workspace`, which holds the open models and clash reports in memory
@@ -34,7 +28,7 @@ imports made inside functions, which are drawn dotted below).
 | Layer | Modules | What the layer does |
 |---|---|---|
 | Entry points | `app.py`, `mcp_server.py`, `voice_live.py`, `agents.py` | HTTP routes and NDJSON streams, the MCP server, the live voice relay, pairing links for MCP agents |
-| Workflows over the Workspace | `plans.py`, `chat.py`, `context_planner.py`, `projects.py` | Several clashes at once, root causes and patterns; the chat's tool loop; the bounded wider-fix search; projects kept on disk across restarts |
+| Workflows over the Workspace | `plans.py`, `prepare.py`, `chat.py`, `context_planner.py`, `projects.py` | Several clashes at once, root causes and patterns; the review queue's prepared fixes (one card per clash pair, saved replies replayed through the check); the chat's tool loop; the bounded wider-fix search; projects kept on disk across restarts |
 | Operations | `service.py`, `checks.py` | `Workspace`: scenes, reports, detection (each scene's kept checks in a `checks.Register`), every check and keep of a fix, export. Shared by the API and MCP |
 | Per-clash fix agent | `agent.py`, `escalation.py`, `hosts.py` | Propose → verify → retry → rank for one clash; the second try on the escalation model; which hosts may take an opening |
 | Report jobs | `triage.py`, `titles.py`, `built.py` | Bulk verdicts, model-written titles, Show it built pictures: work over a whole report or one picture, no scene edits |
@@ -47,7 +41,7 @@ imports made inside functions, which are drawn dotted below).
 ```mermaid
 flowchart TB
     entry["Entry points: app, mcp_server, voice_live, agents"]
-    flows["Workflows: plans, chat, context_planner, projects"]
+    flows["Workflows: plans, prepare, chat, context_planner, projects"]
     ops["Operations: service (Workspace)"]
     fixer["Fix agent: agent, escalation, hosts"]
     jobs["Report jobs: triage, titles, built"]
@@ -140,6 +134,7 @@ Three edges go "up" and are worth knowing before you add an import:
 | `origins.py` | Policy | The other origins whose pages may call the API from a browser (`IRIS_ALLOWED_ORIGINS`): `allowed`, `allows`; read by the CORS middleware, the owner cookie and the voice socket's Origin check |
 | `owner.py` | Policy | The owner token, signed cookie (`set_cookie`, `clear_cookie`), owner settings in context variables, `spawn` / `submit` that carry them |
 | `plans.py` | Workflows | Fix together, root causes, patterns; the plan check; `KEEP` and `apply` for every kept fix |
+| `prepare.py` | Workflows | The review queue's prepared fixes ([docs/review-queue.md](../review-queue.md)): Fix together's loop on each clash pair, one card each, never merged (`run`, `deepest`, `pairs`); saved sets of the model's replies replayed through the same check (`saved_key`, `load_saved`, `Recorder`, `ReplayModel`, `generate`); `ScriptedModel`, a free offline stand-in |
 | `projects.py` | Workflows | Projects kept on disk across restarts ([docs/engineer-workflow.md](../engineer-workflow.md)): a name, the original models, saved states (each model as it is now, the edit log, decisions, clash memory), clash reviews and reports, one folder each under `IRIS_PROJECTS_DIR`; opening one makes an ordinary scene with its clash numbers and titles seeded |
 | `reports.py` | Inputs | Navisworks XML reports: `Report`, `ReportClash`, `ReportElement`, numbering, image sets |
 | `requirements.py` | Policy | The `iris-requirements/1` file: parse, ids, registry, what it compiles into, policies, prompt lines |
@@ -164,6 +159,7 @@ flowchart LR
     agentsPy["agents.py"]
     chatPy["chat.py"]
     plansPy["plans.py"]
+    prepPy["prepare.py"]
     ctxPy["context_planner.py"]
     projPy["projects.py"]
     servicePy["service.py"]
@@ -175,6 +171,7 @@ flowchart LR
     appPy --> agentsPy
     appPy --> chatPy
     appPy --> plansPy
+    appPy --> prepPy
     appPy --> ctxPy
     appPy --> projPy
     appPy --> servicePy
@@ -204,6 +201,11 @@ flowchart LR
     plansPy -->|"agent"| fixer
     plansPy -->|"edits, verify"| geo
     plansPy -->|"owner, requirements"| policy
+    prepPy --> plansPy
+    prepPy --> servicePy
+    prepPy -->|"agent"| fixer
+    prepPy -->|"requirements"| policy
+    prepPy --> client
     ctxPy -->|"context_eval, edits, verify"| geo
     projPy --> servicePy
     projPy -->|"detect, step"| geo
@@ -233,12 +235,13 @@ naming the service, `/docs` and `/api/health`.
   `UPLOADS`; `_receive_models` / `_unpack` (gzipped uploads); `_optional` (a module this build may not have: the
   drawing reader and comparison), `_drawing` (a drawing by id, 404 when no open scene holds it), `_drawing_out` (a
   drawing as the page gets it, with `saved_reading` from `drawing_reader.saved_info`, or None) and `_samples_lock`
-  (one attach of a demo's sample drawings at a time, `POST /api/scenes/{scene_id}/drawings/samples`).
+  (one attach of a demo's sample drawings at a time, `POST /api/scenes/{scene_id}/drawings/samples`); `PrepareRequest`
+  and `prepare_stream` (the review queue's stream, `prepare.py`).
 - **Imports:** `agents.py`, `built.py`, `chat.py`, `checks.py`, `context_planner.py`, `demos.py`, `detect.py`,
   `document.py`, `domains.py`, `drawings.py` (and, when present, `drawing_reader.py` and `drawing_compare.py`, through
   `_optional`), `edits.py`, `escalation.py`, `faces.py`, `journal.py`, `limits.py`, `manual.py`, `mcp_server.py`,
-  `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `projects.py`, `property_edits.py`, `requirements.py`,
-  `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
+  `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `prepare.py`, `projects.py`, `property_edits.py`,
+  `requirements.py`, `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
   **Imported by:** `mcp_server.py` (lazily, for the stdio entry point).
 - **Rules:** `.env` is already loaded when it runs (the package's `__init__.py`), and its caps and sizes are read with
   `limits.env_int` / `env_float`; it calls `origins.allowed()` once at import, so a malformed `IRIS_ALLOWED_ORIGINS`
@@ -307,18 +310,54 @@ Fix together (`build_batch`), root causes (`root_causes`, `build_root_cause`), p
 `triage_patterns`), and the one place every kept fix goes through (`apply`). Deeper design:
 [docs/edits.md](../edits.md); workflow detail in [09](09-agent-workflows.md).
 
-- **Main symbols:** `Item`, `Plan`, `verify_together`, `pairs_for`, `merge_shared`, `failure_summary`,
+- **Main symbols:** `Item`, `Plan`, `verify_together`, `pairs_for` (`merge=False` keeps one item per pair instead of
+  joining pairs that share an element which can move, `merge_shared`: the review queue's cards), `merge_shared`,
+  `failure_summary`, `_resolve_items` (the fix agent on every item at once; keyword overrides `model`, the proposal
+  model, `ws.model` when None; `hosts_model`, `ws.hosts_model` by default through the `_WS_HOSTS` sentinel, None for no
+  host reading: walls and slabs only; `label`, the model's name on every option, from its id when empty),
   `build_batch`, `root_causes`, `build_root_cause`, `apply`, `patterns`, `triage_patterns`; registries `IN_TRIAL`,
-  `EXTRA_FILES`, `KEEPS_CONTACTS`, `KEEP`; `MAX_ITEMS` (8).
-- **Imports:** `agent.py`, `domains.py`, `edits.py`, `owner.py`, `requirements.py`, `service.py`, `verify.py`.
-  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`.
-- **Rules:** item agents run four at a time (`ThreadPoolExecutor(max_workers=4)` with `owner.submit`), each with
+  `EXTRA_FILES`, `KEEPS_CONTACTS`, `KEEP`; `MAX_ITEMS` (8, `IRIS_PLAN_MAX_ITEMS`), `PLAN_WORKERS` (4),
+  `PLAN_ROUNDS` (2).
+- **Imports:** `agent.py`, `connections.py`, `consistency.py`, `domains.py`, `edits.py`, `limits.py`, `owner.py`,
+  `parametric.py`, `requirements.py`, `service.py`, `verify.py`.
+  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`, `prepare.py`.
+- **Rules:** item agents run `PLAN_WORKERS` (4) at a time (`ThreadPoolExecutor` with `owner.submit`), each with
   `lock=ws.lock`, so model calls overlap and geometry trials take turns; `verify_together` holds `ws.lock` and makes
   every fix in one `edits.trial_files`, then undoes them; `apply` refuses a kind not in `KEEP`; one failing item never
   sinks the plan; the entry `apply` keeps carries `check = {verified, min_clearance_m, checked_against}`
   (`checked_against`: the largest count among the fixes kept); an "as designed" root-cause plan edits nothing, so its
   check is `{passed: false, geometry: false, items: {}, conflicts: []}` and it is never shown or reported as
   geometry-validated.
+
+### `prepare.py`: prepared fixes for the review queue
+
+After a coordination check, the fix agent runs ahead of review on the clashes that need a fix, one card per clash
+pair, streamed by `POST /api/scenes/{scene_id}/prepare/stream` ([10](10-http-api-and-streams.md)). Each pair goes
+through Fix together's loop (`plans._resolve_items`: propose, check, retry with the reason, rank), never merged with
+another and never told about the others. Nothing is kept here: Accept goes through `plans.apply`, which tries the
+option again. Deeper design: [docs/review-queue.md](../review-queue.md); the workflow in
+[09](09-agent-workflows.md).
+
+- **Main symbols:** picking: `deepest` (the deepest open hard clashes, across models before within one, at most
+  `MAX_ITEMS` pairs), `pairs` (`plans.pairs_for(..., merge=False)`, at most `limit`), `live_count` (the pairs a saved
+  set does not hold: one proposal each); the run: `run` (saved pairs first, replayed with no host reading, then the
+  rest live; emits `prepare_start`, the loop's `item` events, a `prepared` event per pair as it finishes, `done`),
+  `MISS` (the why of a question the saved set does not hold); models: `Recorder` (wraps a model, records each reply by
+  `question_hash`), `ReplayModel` (answers only the exact question a reply was recorded for, else raises `ReplayMiss`),
+  `ScriptedModel` (free, offline, deterministic moves and offsets of the service side), `label_of`; saved sets:
+  `saved_dir` (`IRIS_PREPARED_DIR`, else `samples/prepared/`), `saved_key`, `file_sha256`, `Saved` (`info`),
+  `load_saved`, `generate` (writes a set atomically, 0644); `VERSION`, `FORMAT`, `LABEL`.
+- **Imports:** `agent.py`, `domains.py`, `model_client.py`, `plans.py`, `requirements.py`, `service.py`
+  (`Workspace`). **Imported by:** `app.py`; outside the package, `evals/prepare_saved.py` (the generator of
+  `samples/prepared/Northbank.json`).
+- **Rules:** a saved set holds the model's replies only, never the geometry's results: every replayed reply goes back
+  through `agent.resolve`, so each option is tried and checked on the server like a live one; a reply is used only for
+  the question it answered (sha256 of the system prompt and the question text; images are not part of it); a question
+  the set does not hold fails that pair with `MISS`, never asked live behind the reviewer's back; the set is used only
+  when its key equals the scene's (`VERSION`, the files the scene was opened from by name and sha256 through
+  `Workspace.original_paths`, revision 0, no requirements in force, the default clearance, `plans.PLAN_ROUNDS`,
+  `agent.OPTIONS`, the proposal model id and thinking level, the domain prompt's sha256); `ScriptedModel` is used only
+  when passed in explicitly, never chosen by the environment.
 
 ### `chat.py`: chat through tools
 
@@ -406,7 +445,7 @@ plus the STEP export helpers.
   `SCENE_BUDGET_MB`, `LAST_KEPT` (200), `SAMPLE_EXCLUDE`, `HOSTS_TIMEOUT_S`.
 - **Imports:** `agent.py`, `detect.py`, `domains.py`, `edits.py`, `escalation.py`, `facets.py`, `hosts.py`, `limits.py`,
   `model_client.py`, `reports.py`, `requirements.py`, `scene.py`, `settings.py`, `spend.py`, `step.py`, `verify.py`.
-  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`, `plans.py`, `projects.py`.
+  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`, `plans.py`, `prepare.py`, `projects.py`.
 - **Rules:** `Workspace.lock` (an RLock) is held by everything that touches a scene's geometry; every kept edit calls
   `IfcScene.mark_edited` and `IfcScene.bump`; trials never do; a second try's brief (`last_try`) is read only while
   the scene revision and requirements id it was made under still hold; `escalate` holds its cost estimate
@@ -471,7 +510,7 @@ loop in [09](09-agent-workflows.md); fix kinds in [07](07-fixes-and-edits.md).
   `check_combined`, `step_candidate`, `COMBINED_KINDS`, `COMBINED_MAX`; `stays`, `STAYS`, `is_service`,
   `penetration_pairs`, `penetration_sides`, `may_cut`, `move_words`, `plain_needs`, `PACKS`, `to_json`.
 - **Imports:** `connections.py`, `domains.py`, `edits.py`, `hosts.py`, `model_client.py`, `requirements.py`, `scene.py`,
-  `verify.py`. **Imported by:** `escalation.py`, `plans.py`, `service.py`.
+  `verify.py`. **Imported by:** `escalation.py`, `plans.py`, `prepare.py`, `service.py`.
 - **Rules:** a kind not in `TRIES` is a failed attempt ("unknown kind"), never tried as a move; requirements refuse a
   candidate before it is tried (`_refused`); each trial and each description runs under the caller's `lock`; every
   trial is undone; a round with a plain geometry fix (tier below 1) ends the search; options rank by tier, then
@@ -820,7 +859,8 @@ lines, fix policies). Deeper design: [docs/requirements.md](../requirements.md);
   `STRICTNESS`; `FORMAT`, `HEADER`, `MAX_BYTES`, `REGISTRY_MAX` (500).
 - **Imports:** `domains.py` at load; lazily `detect.py`, `document.py`, `triage.py`. **Imported by:** `agent.py`,
   `demos.py` (lazily), `detect.py`, `edits.py`, `escalation.py`, `verify.py`,
-  `app.py`, `context_eval.py`, `document.py`, `hosts.py`, `mcp_server.py`, `plans.py`, `service.py`, `triage.py`.
+  `app.py`, `context_eval.py`, `document.py`, `hosts.py`, `mcp_server.py`, `plans.py`, `prepare.py`, `service.py`,
+  `triage.py`.
 - **Rules:** no requirements (no header) is today's behaviour exactly; ids are content-addressed; level and
   strictness only turn into numbers through `LEVELS` and `STRICTNESS`; the request's file lives in a context variable
   that `owner.spawn` and `owner.submit` carry into workers.
@@ -846,7 +886,7 @@ Iris works on buildings and on machine cells. A scene whose every model was open
   `prompt(name, domain, **fields)`, `ROLES`, `MEETINGS`, `EXAMPLES`, `STAYS`, `VOICE`, `NAMES`, `DOMAINS`,
   `CONSTRUCTION`, `MACHINES`, `PACKS`.
 - **Imports:** nothing from the package. **Imported by:** `app.py`, `chat.py`, `context_planner.py`, `document.py`,
-  `plans.py`, `requirements.py`, `scene.py`, `service.py`, `titles.py`, `triage.py`.
+  `plans.py`, `prepare.py`, `requirements.py`, `scene.py`, `service.py`, `titles.py`, `triage.py`.
 - **Rules:** one helper decides the domain; callers never test for STEP themselves. `fill` is plain replacement (the
   prompts' JSON keeps its braces); an empty field drops its " ({name})" (`tests/test_domains.py`).
 
@@ -935,7 +975,7 @@ A client for Gemini on Vertex AI (Pro, Flash, the escalation model, the image mo
   `model_id(role)`, `DEFAULT_MODELS`, `DEFAULT_THINKING`, `thinking_level`, `FIXED_EFFORT`, `image_part`, `load_env`,
   `configured`, `generate_image`, `transcribe`, `pcm_to_wav`, `triage_model`, `triage_model_info`, `escalation_model`, `escalation_info`.
 - **Imported by:** the package's `__init__.py` (`load_env`), `agent.py`, `app.py`, `built.py`, `chat.py`,
-  `document.py`, `service.py`, `titles.py`, `triage.py`, `voice_live.py`.
+  `document.py`, `prepare.py`, `service.py`, `titles.py`, `triage.py`, `voice_live.py`.
 - **Rules:** thinking level is the owner's, else everyone's, else the model's own, except for fixed roles; a call
   whose schema is refused drops to plain JSON mode (`strict`); every priced call is charged through `on_cost`.
 
@@ -972,7 +1012,7 @@ and tests), `uvicorn[standard]` (which brings `websockets`, used by `voice_live.
 local MCP server as `python -m iris.mcp_server`. Pytest runs from `server/` with `pythonpath = ["."]` and
 `testpaths = ["tests"]`.
 
-**`server/tests/`** has 71 test files plus `conftest.py`, which gives every test its own settings store (so no test
+**`server/tests/`** has 73 test files plus `conftest.py`, which gives every test its own settings store (so no test
 reads the developer's `server/.iris-settings.json`). Most build their models with `fixtures.py`.
 `test_docs_map.py` reads this doc and fails when a module in `server/iris/` is not named here. Run them with
 `cd server && uv run pytest -q`; the suites, evals and the delivery checklist are in
@@ -1018,5 +1058,7 @@ reads the developer's `server/.iris-settings.json`). Most build their models wit
 - A module's main public symbols change: a new class, a renamed entry point, a new registry entry (`agent.TRIES`,
   `plans.KEEP`, `plans.IN_TRIAL`).
 - A layering rule changes: who holds `Workspace.lock`, how fixes are kept, which modules call Gemini.
+- A workflow changes how it drives Fix together's loop (`plans._resolve_items`' overrides, `pairs_for`'s `merge`), or
+  what a saved set of the review queue holds or is keyed on (`prepare.saved_key`, `prepare.VERSION`).
 - A prompt is added to or removed from `domain_packs/`, a dependency changes in `server/pyproject.toml`, or the test
   layout in `server/tests/` changes.

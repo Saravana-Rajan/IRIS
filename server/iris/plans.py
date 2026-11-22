@@ -248,8 +248,11 @@ def _label(ws: Workspace, scene_id: str, a: str, b: str) -> str:
     return f"{ea.ifc_class} '{ea.name}' x {eb.ifc_class} '{eb.name}'"
 
 
-def pairs_for(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str]) -> tuple[list[Item], list[str]]:
-    """Report clashes → distinct element pairs that can be fixed here, and why the others cannot."""
+def pairs_for(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str],
+              merge: bool = True) -> tuple[list[Item], list[str]]:
+    """Report clashes → distinct element pairs that can be fixed here, and why the others cannot. `merge`: pairs that
+    share an element which can move become one item (`merge_shared`); False keeps one item per pair (the review queue's
+    cards, prepare.py)."""
     matches = ws.match(report_id, scene_id)
     physical = ws.scene(scene_id).bounds().keys()
     items: dict[str, Item] = {}
@@ -269,7 +272,7 @@ def pairs_for(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str]
             items[key].clash_ids.append(cid)
             continue
         items[key] = Item(key, m["a"], m["b"], _label(ws, scene_id, m["a"], m["b"]), [cid], True, c.distance_m)
-    return merge_shared(ws, scene_id, list(items.values())), skipped
+    return (merge_shared(ws, scene_id, list(items.values())) if merge else list(items.values())), skipped
 
 
 def merge_shared(ws: Workspace, scene_id: str, items: list[Item]) -> list[Item]:
@@ -347,9 +350,17 @@ def failure_summary(scene, result) -> str:
     return "\n".join(lines) or "No idea passed the geometry check."
 
 
+_WS_HOSTS = object()   # `_resolve_items`' default: the Workspace's host reader
+
+
 def _resolve_items(ws: Workspace, scene_id: str, report_id: str | None, items: list[Item], notes: str,
-                   emit: Callable[[dict], None], prefer: dict[str, str] | None = None) -> None:
-    """Run the fix agent on every item at once (their model calls overlap; geometry trials take turns)."""
+                   emit: Callable[[dict], None], prefer: dict[str, str] | None = None, *,
+                   model=None, hosts_model=_WS_HOSTS, label: str = "") -> None:
+    """Run the fix agent on every item at once (their model calls overlap; geometry trials take turns).
+
+    `model`: the proposal model (None: `ws.model`); `hosts_model`: what reads hosts (by default `ws.hosts_model`;
+    None: no reading, walls and slabs only); `label`: the model's name on every option (empty: from its id). The
+    review queue replays saved replies through the same loop this way (prepare.py)."""
     def one(it: Item) -> None:
         emit({"type": "item", "key": it.key, "status": "thinking"})
         try:
@@ -369,10 +380,11 @@ def _resolve_items(ws: Workspace, scene_id: str, report_id: str | None, items: l
                     emit({"type": "item", "key": it.key, "status": "checking", "attempt": e["title"], "passed": e["passed"],
                           **{k: e[k] for k in ("seconds", "checked", "reason") if e.get(k) not in (None, "")}})
             stamp = ws._stamp(scene_id)
-            result = agent.resolve(ws.scene(scene_id), clash, ws.model, pack=domains.of(ws, scene_id),
-                                   on_event=progress, lock=ws.lock, max_rounds=PLAN_ROUNDS,
-                                   hosts_model=ws.hosts_model,
-                                   **ws.fix_settings(scene_id, it.element_a, it.element_b))
+            result = agent.resolve(ws.scene(scene_id), clash, ws.model if model is None else model,
+                                   pack=domains.of(ws, scene_id), on_event=progress, lock=ws.lock,
+                                   max_rounds=PLAN_ROUNDS,
+                                   hosts_model=ws.hosts_model if hosts_model is _WS_HOSTS else hosts_model,
+                                   label=label, **ws.fix_settings(scene_id, it.element_a, it.element_b))
             # What a second try on this pair reads (a second try on a failed item: docs/escalation.md).
             ws._remember(scene_id, it.element_a, it.element_b, asdict(result), stamp)
             it.understanding = result.understanding

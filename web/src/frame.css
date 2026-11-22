@@ -34,6 +34,19 @@
 @media (max-width: 1360px) { .work-actions .agent-pill .lbl, .work-actions .req-pill-label { display: none; } }
 @media (max-width: 1200px) { .work-actions .export-label { display: none; } }
 
+/* Review fixes (ReviewQueue.tsx's entry) as Clash review's primary action in the header: the button, its one line
+   beside it (what is ready or preparing) and an error, all on one row */
+.work-actions .rq-entry { flex-direction: row-reverse; align-items: center; gap: 10px; margin: 0; padding: 0; border: 0; background: none;
+  box-shadow: none; min-width: 0; }
+.work-actions .rq-entry .rq-btn.rq-primary { width: auto; height: 36px; white-space: nowrap; }
+.work-actions .rq-entry-line { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.work-actions .rq-entry-error { margin: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.work-actions .rq-entry-again { white-space: nowrap; font-size: 12px; }
+@media (max-width: 1500px) { .work-actions .rq-entry-line { display: none; } }
+
+/* The review queue over the workspace only: the sidebar and the top bar stay */
+.shell .rq { position: absolute; z-index: 45; }
+
 /* The workspace's one status line, in its header */
 .status-line { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 32px; padding: 0 12px; border-radius: 999px;
   font-size: 13px; color: var(--ink); background: var(--panel, #f2f2f2); white-space: nowrap; }

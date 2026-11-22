@@ -5,7 +5,7 @@
 > `deploy/deploy.sh`, `firebase.json`, `.github/workflows/deploy.yml`, `web/src/api.ts`, `web/src/App.tsx` (as the
 > caller), `server/pyproject.toml`, `web/package.json` ·
 > **Checked against code:** re-branded on 2026-11-11; hosting, the middleware stack, the request lifecycle and
-> IfcOpenShell's threads re-checked on 2026-11-22 ·
+> IfcOpenShell's threads re-checked on 2026-11-22; threads and streams: review queue 2026-11-22 ·
 > **Deeper design:** none of its own; the docs in the last table link to the feature designs in `docs/*.md`.
 
 Iris is one web app: a React page with a three.js viewer, and one Python process that holds the open models, checks
@@ -92,7 +92,7 @@ summaries are streamed when `GEMINI_INCLUDE_THOUGHTS` is on.
 | Viewer | `web/src/viewer/` (`Viewer.ts`, `ifcLoader.ts`, `patch.ts`) | web-ifc parsing, one `THREE.BatchedMesh` per file (plus a `glass` batch), previews, captures, accept-in-place patches | [13](13-3d-viewer.md) |
 | HTTP layer | `server/iris/app.py`, `server/iris/origins.py` | routes, the `_CrossOrigin` and `_OwnerContext` middleware, the `_McpGate` route, caps (`ProposeLimit` instances), streams (`_ndjson`, `_RequestEvents`), shared job tables (triage, titles, documents), static files on one origin | [10](10-http-api-and-streams.md) |
 | Operations | `server/iris/service.py` (`Workspace`) | open and evict scenes and reports, check and keep every fix kind, propose and escalate, detect, match and measure, export, patches; shared by the API, the chat and the MCP server | [04](04-server-code-map.md), [05](05-domain-model-and-state.md) |
-| AI workflows | `agent.py`, `plans.py`, `triage.py`, `titles.py`, `chat.py`, `escalation.py`, `built.py`, `document.py`, `context_planner.py`, `context_eval.py`, `hosts.py` | the propose, verify, retry and rank loop; plans and root causes; bulk triage; titles; the chat's tool loop; second tries; built views; reports; the wider-fix search | [09](09-agent-workflows.md) |
+| AI workflows | `agent.py`, `plans.py`, `prepare.py`, `triage.py`, `titles.py`, `chat.py`, `escalation.py`, `built.py`, `document.py`, `context_planner.py`, `context_eval.py`, `hosts.py` | the propose, verify, retry and rank loop; plans and root causes; the review queue's prepared fixes; bulk triage; titles; the chat's tool loop; second tries; built views; reports; the wider-fix search | [09](09-agent-workflows.md) |
 | Rules and money | `requirements.py`, `settings.py`, `owner.py`, `spend.py`, `limits.py` | coordination requirements, settings for everyone, the owner, the day's escalation budget, demo caps | [15](15-requirements-settings-and-config.md), [16](16-security-caps-and-cost.md) |
 | Model plumbing | `model_client.py` | one Gemini client (`GeminiModel`) for every role, usage and cost, thinking level per role | [08](08-ai-models-prompts-and-spend.md) |
 | Geometry | `scene.py` (`IfcScene`), `verify.py`, `detect.py`, `edits.py` | the federated scene, the neighbourhood check, detection, every model edit | [06](06-geometry-and-detection.md), [07](07-fixes-and-edits.md) |
@@ -115,7 +115,7 @@ flowchart TB
   tools["mcp_server tools"]
   chat["chat.Chat._run: the tool layer"]
   ws["service.Workspace"]
-  flows["agent, plans, triage, titles, escalation, built, document, context_planner"]
+  flows["agent, plans, prepare, triage, titles, escalation, built, document, context_planner"]
   rules["requirements, hosts, settings, owner, spend, limits"]
   client["model_client.GeminiModel"]
   geo["scene, verify, detect, edits, step, reports"]
@@ -167,8 +167,8 @@ begins with no open models.
 | Thread | Created by | Runs |
 |---|---|---|
 | The asyncio event loop | uvicorn | `async def` routes: model and report uploads (`_receive_models`, `upload_report`), requirements register and preview, `transcribe_voice`, `save_view`, link events and captures; the voice relay (`voice_live.relay`, pure I/O); `_RequestEvents.stream`, which polls its queue every 50 ms |
-| anyio worker threads (one `CapacityLimiter(40)` at anyio 4.15.1) | Starlette and FastAPI | every plain `def` route; every `next()` of a stream whose body is a sync generator (`propose/stream`, `detect/stream`, `plan/stream`, `document/stream`, `triage/stream`, `titles/stream`, `upload/stream`), so such a stream holds a worker thread while it waits for its next event; `run_in_threadpool` work (`_unpack`, `transcribe`, preview counts); MCP tool calls (the MCP SDK runs sync tools with `anyio.to_thread.run_sync`) |
-| Daemon workers | `owner.spawn` | the work behind each streamed request (propose, detect, plan, document, chat, built, context, upload stream), each `triage.Job` and `titles.Job` run, MCP jobs (`agents.Link.start` with `hooks.spawn`) |
+| anyio worker threads (one `CapacityLimiter(40)` at anyio 4.15.1) | Starlette and FastAPI | every plain `def` route; every `next()` of a stream whose body is a sync generator (`propose/stream`, `detect/stream`, `plan/stream`, `prepare/stream`, `document/stream`, `triage/stream`, `titles/stream`, `upload/stream`), so such a stream holds a worker thread while it waits for its next event; `run_in_threadpool` work (`_unpack`, `transcribe`, preview counts); MCP tool calls (the MCP SDK runs sync tools with `anyio.to_thread.run_sync`) |
+| Daemon workers | `owner.spawn` | the work behind each streamed request (propose, detect, plan, prepare, document, chat, built, context, upload stream), each `triage.Job` and `titles.Job` run, MCP jobs (`agents.Link.start` with `hooks.spawn`) |
 | Pools inside a workflow | `ThreadPoolExecutor`, each task through `owner.submit` | see the next table |
 | IfcOpenShell's own threads | `ifcopenshell.geom.iterator` | element boxes at open and detection's triangle tree (`scene.THREADS`, the CPUs from `sched_getaffinity`) |
 
@@ -176,7 +176,7 @@ begins with no open models.
 |---|---|---|
 | `triage.triage_report` | `IRIS_TRIAGE_WORKERS` (24) | one strict-JSON call per clash or group of alike clashes; a stop shuts the pool without waiting for calls under way |
 | `titles.title_report` | `titles.WORKERS` (8) | one call per 40 clashes (`titles.BATCH`) |
-| `plans._resolve_items` | 4 | one `agent.resolve` per plan item |
+| `plans._resolve_items` | 4 | one `agent.resolve` per plan item, or per prepared fix (`prepare.run`: the saved pairs, then the live ones) |
 | `document.explain` | 6 | Gemini Pro's explanation of each report page |
 | `built._make` | `PICTURES × judges`: 4, or 6 with Gemini Pro's three judges | two restyles, then the judges of each picture |
 
@@ -207,7 +207,7 @@ Variants:
 - **`_RequestEvents`** (Show it built, the wider-fix search, chat) keeps at most 64 events, drops progress first when the
   reader is slow, and sets `cancel` when the client goes away (the chat's turn and the wider-fix search stop on it; a
   built view's drawing runs on).
-- **The plain queues** (propose, detect, plan, document, upload) do not notice a disconnect: their worker runs to the
+- **The plain queues** (propose, detect, plan, prepare, document, upload) do not notice a disconnect: their worker runs to the
   end.
 
 **Context carried into threads.** `owner.spawn` and `owner.submit` run the function inside

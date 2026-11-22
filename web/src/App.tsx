@@ -60,6 +60,7 @@ import { CoordinationOverview } from "./CoordinationOverview";
 import { ClashHeader } from "./ClashHeader";
 import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, undoableFix, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
+import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
@@ -343,6 +344,9 @@ export function App() {
     setReviewerState(name);
     try { if (name.trim()) localStorage.setItem("iris.reviewer", name.trim()); else localStorage.removeItem("iris.reviewer"); } catch { /* private window */ }
   };
+  // The review queue (docs/review-queue.md): prepared fixes, one clash per screen, over the workspace.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => { setReviewOpen(false); }, [sceneId, report?.id]);
   // "Modify" on a proposal opened the Edit tool for this clash: a hand edit kept for it records a "modified" decision.
   const modifying = useRef<{ item: ProposalItem; clash: { id: string; key: string; number?: number | null }; scene: string } | null>(null);
   const pid = route?.view === "project" ? route.pid : null;
@@ -3912,6 +3916,12 @@ export function App() {
   // requirements in use, a connected agent, Save and Report, and Export, the workspace's primary action, which counts
   // the fixes kept. The owner's settings are mounted on every page (they apply on load) and show only to the owner.
   const ownerPop = <span className="owner-pop"><OwnerSettingsMenu onChange={setOwnerSettingsState} onEveryone={() => setModelsAsked((n) => n + 1)} note={ownerNote} /></span>;
+  /** Review fixes (docs/review-queue.md): the one entry point, Clash review's primary action in the workspace's header. */
+  const reviewEntry = sceneId && report && <ReviewFixesEntry sceneId={sceneId} reportId={report.id} reportTitle={report.title}
+    clashes={report.clashes} triage={listTriage} ticked={checked} fixed={[...Object.keys(fixes), ...Object.keys(reviewed)]}
+    onOpen={() => setReviewOpen(true)} />;
+  /** Review fixes leads on Clash review (and on a session outside a project); Export is its secondary there. */
+  const reviewLeads = !!sceneId && !!report && !compact && (!pid || projStep === "clash");
   const workActions = (
     <div className="work-actions" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
       {reqLabel && !landing && !compact && <button className="btn small req-pill" onClick={() => setReqOpen(true)} data-tip-side="bottom"
@@ -3927,7 +3937,8 @@ export function App() {
         tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"} />}
       {report && layout !== "phone" && <button type="button" className="btn small" data-tour="report" onClick={() => { setDocOpen(true); setDocReady(false); }}>
         <FileText size={14} aria-hidden /> Report</button>}
-      {exportable && <a className="btn primary export" data-tour="export" href={api.exportUrl(sceneId!)} data-tip-side="bottom" aria-label={`${exportLabel}${keptNote}`}
+      {reviewLeads && reviewEntry}
+      {exportable && <a className={`btn ${reviewLeads ? "" : "primary "}export`} data-tour="export" href={api.exportUrl(sceneId!)} data-tip-side="bottom" aria-label={`${exportLabel}${keptNote}`}
         data-tip={`${stepFiles.length ? "Download the changed models: the STEP with its fixes, and the IFC" : "Download the changed IFC files"}${keptNote}`}>
         <Download size={15} aria-hidden /><span className="export-label">{compact ? "Export" : exportLabel}</span>
         {fixedCount > 0 && <span className="export-n"><Check size={11} strokeWidth={3} aria-hidden />{fixedCount}</span>}</a>}
@@ -4938,6 +4949,29 @@ export function App() {
             {lightbox && report && lightbox.clash.images[lightbox.index] &&
               <Lightbox reportId={report.id} clash={lightbox.clash} index={lightbox.index} onClose={() => setLightbox(null)}
                 onMove={(index) => setLightbox((l) => l && { ...l, index })} />}
+            {/* The review queue (docs/review-queue.md): two panes over the workspace, the 3D view moved into its right one. */}
+            {reviewOpen && sceneId && report && <ReviewQueue sceneId={sceneId} reportId={report.id} reportTitle={report.title} clashes={report.clashes}
+              viewer={viewer.current} reviewer={reviewer} onReviewer={setReviewer} onDecisions={(d) => noteDecisions(d, true)}
+              onClose={() => setReviewOpen(false)}
+              onKept={async (kept, { option: o, pair }) => {
+                // As accept() after its keep: the queue made the keep request (the server tried the fix again first).
+                const sid = sceneId, epoch = sceneEpoch.current;
+                const live = () => sceneEpoch.current === epoch;
+                const groups = kept.groups ?? (kept.pieces?.length ? [kept.pieces] : []);
+                if (kept.decisions?.length) noteDecisions(kept.decisions);
+                staleContext();
+                viewer.current?.preview([]);
+                await applyToViewer(sid, kept, groups, live);
+                if (!live()) return;
+                setEdits((e) => {
+                  const next = { ...e };
+                  for (const ps of groups) if (ps.length) { const [first, ...added] = ps; next[first] = [...(next[first] ?? []), ...added]; }
+                  return next;
+                });
+                if (kept.cut !== false) markFixed([[pair[0] ?? null, pair[1] ?? null]], [o.title]);
+                if (a && b && samePair(a, b, pair[0] ?? "", pair[1] ?? "")) resetWork();
+                setRemeasure((n) => n + 1);
+              }} />}
           </div>
         </div>
       </div>

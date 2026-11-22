@@ -3,9 +3,9 @@
 > **Covers:** `server/tests/`, `server/iris/fixtures.py`, `web/tests/`, `evals/`, `spikes/`, `web/spikes/`,
 > `web/scripts/capture-demos.cjs`, `evals/big_models_browser.cjs`, `assets/brand/iris/` checks,
 > `.github/workflows/ci.yml` and `deploy.yml`'s smoke test · **Checked against code:** re-branded 2026-11-11; CI,
-> `test_origins.py`, the voice relay's origin test, the 2D drawing test files and `evals/save_drawing_readings.py`
-> checked 2026-11-22 ·
-> `test_origins.py`, the voice relay's origin test and `test_saved_checks.py` checked 2026-11-22 ·
+> `test_origins.py`, the voice relay's origin test, the 2D drawing test files, `evals/save_drawing_readings.py` and
+> `test_saved_checks.py` checked 2026-11-22; review queue 2026-11-22 (`test_prepare.py`, `evals/prepare_saved.py`,
+> `viewer-mount.test.mjs`, the server count) ·
 > **Deeper detail:** [evals/README.md](../../evals/README.md) (the eval log)
 
 Iris's promise is that no fix reaches a person unverified, so the project checks itself at five levels: fast server
@@ -34,7 +34,7 @@ change.
 
 ```bash
 cd server
-uv run pytest -q                         # the whole suite (541 tests collected at 104fda9)
+uv run pytest -q                         # the whole suite (1,367 tests collected at d91f0e8)
 uv run pytest -q tests/test_route.py     # one file
 uv run pytest -q -k penetration          # by name
 ```
@@ -53,7 +53,8 @@ uv run pytest -q -k penetration          # by name
   `test_supports.py` assemble their own scenes with `fixtures._box`). No test needs the demo models: API tests point a
   `Workspace(samples=tmp_path)` at a temporary folder holding the fixtures they wrote.
 - Measured counts over time are in [22 · Build log](22-build-log.md): 66 server tests on Oct 27, 540 on Oct 30
-  (CLAUDE.md's "latest validation"). 541 are collected at `104fda9`.
+  (CLAUDE.md's "latest validation"). 541 were collected at `104fda9`; 1,367 at `d91f0e8` (1,155 without
+  `tests/bench`, the VisionBench tests CI runs as their own job).
 
 ### `conftest.py`
 
@@ -87,8 +88,8 @@ gives an element a rectangular extrusion and is reused by tests that build their
 ### Every test file
 
 Counts are tests collected at `104fda9` (parametrised cases counted separately), except `test_origins.py`, the
-voice relay's origin test and the 2D drawing files, counted on 2026-11-22.
-voice relay's origin test, `test_detect.py` and `test_saved_checks.py`, counted on 2026-11-22.
+voice relay's origin test, the 2D drawing files, `test_detect.py`, `test_saved_checks.py` and `test_prepare.py`, counted
+on 2026-11-22.
 
 **Geometry, the check and detection** ([06](06-geometry-and-detection.md))
 
@@ -136,6 +137,7 @@ voice relay's origin test, `test_detect.py` and `test_saved_checks.py`, counted 
 |---|---|---|
 | `test_agent.py` | 6 | `agent.resolve` with `ScriptedModel`: a failed attempt is fed back and only verified options survive, the loaded model is unchanged, a `.env` fills missing settings only, ranking, trials before checks, reasoning summaries only when watched |
 | `test_plans.py` | 8 | `plans.py`: batches dedupe pairs and are checked as a whole, `verify_together` finds colliding fixes, a combined fix in a plan, root causes and plan endpoints, patterns, root-cause charging, a moved hub against every partner, `merge_shared` |
+| `test_prepare.py` | 10 | The review queue's prepared fixes (`prepare.py`, [docs/review-queue.md](../review-queue.md)), scripted models only: `POST /api/scenes/{scene_id}/prepare/stream` streams a verified fix per pair (`prepare_start`, `item`, `prepared`, `done`, `Content-Encoding: identity`), keeps nothing and charges one proposal (the next is 429); one card per pair where Fix together merges, and two pairs on an allowance of one refused whole before the stream; a model with no fix that passes gives a `failed` card with why; `prepare.deepest` skips the fixed, 422 "Nothing to prepare." and 404s; a saved set (`prepare.generate`, no `.tmp` left) replayed through the check at no cost, its options checked again and labelled with the saved model; a tampered saved reply checked and not shown; a question the set does not hold fails that item with `prepare.MISS`; the key misses on any difference (proposal model, thinking level, `VERSION`, requirements in force, a kept edit, other bytes; the same bytes elsewhere hit); a scripted set labelled scripted and used only where that model is configured; `evals/prepare_saved.py` offline unless told to call Gemini |
 | `test_escalation.py` | 30 | `escalation.py`, `spend.py` and the combined kind (`agent._try_combined`): the brief and its budget, the second try's options with the first's, the setting and caps (both or neither), token usage and the day's budget, stale first tries, structure never moved, the apply endpoint returns every run |
 | `test_triage.py` | 10 | `triage.py`: sure rules cost no call, JSON-mode fallback, the fast model only when switched on, the shared and replayed stream, rule verdicts say why, settled facts correct answers, reasoning streams, late subscribers, alike clashes read once |
 | `test_titles.py` | 5 | `titles.py`: batches, facts, finding a clash by number, titles survive Detect again, the shared titles stream |
@@ -288,6 +290,8 @@ flowchart LR
 | `drawing.test.mjs` | 4 | `compiled` (real three.js) | `viewer/drawing.ts`: what a plan, a section (far clip, crop, flip) and an elevation keep; the section's far clip from the pair; framing, panning and zooming about the pointer |
 | `links.test.mjs` | 4 | `compiled` | `links.ts`: direct links by kind (rests on read the other way as supports), an element lit once in its first kind, Shift walking the run to equipment, a whole assembly |
 | `viewer-orbit.test.mjs` | 6 | `compiled` | `Viewer.orbitAround`: orbiting round a pivot (the selection, the clash) keeps it at the same place on screen and as far away, with no roll; a sideways drag keeps the camera's height; a long drag down stops short of straight down. `Viewer.press`: with a clash in focus and nothing selected the drag orbits round the clash, a flight under way stops; with none, it turns about what is under the pointer. `Viewer.orbit`: the pilot's turn glides sideways to the clash keeping angle and distance, and a flight under way (the golden path's to its clash) counts from where it lands |
+| `review-queue.test.mjs` | 20 | `compiled` (React, icons, `api.ts` and `fetch` stubbed) | The review queue ([docs/review-queue.md](../review-queue.md)): `reviewQueueModel.ts`'s pick rule (ticked, then triage's real clashes by severity and depth, then the server's deepest), progress and review words, auto-advance and wrap, the keys (A, R, arrows; never while typing or with a modifier), the prepare store from the stream's events and the saved label, NDJSON split across chunks, a refusal as `ApiError`; `ReviewFixesEntry`'s three states; `ReviewQueue`: Accept sends reviewer, `clash_key`, number, `clash_id` and the option's `pair` to `fix/apply` and moves on, Reject needs a reason and sends it to `/decisions`, Before / After / Both and moving only call the viewer (nothing applied without Accept), a 409 shows the server's words and is not accepted, a failed clash says why, Request another sends notes and replaces the clash's fix, closing gives the viewer back with the camera as it was and holds the pair after the page's own effects; in App the entry, opening, `onKept` marking the clash fixed and Close |
+| `viewer-mount.test.mjs` | 5 | `viewerModule` | `Viewer.mountIn`: moves the viewer's own elements to another place in order, leaving the page's children of the stage; `mountIn(null)` puts each back in its place (one made while away at the end); one the viewer took out while away does not come back; the same place twice, or null at home, does nothing; a pointer over the new place draws, its listeners added once |
 | `viewer-empty-stage.test.mjs` | 2 | `compiled` | `Viewer.drawFrame` in the four-view layout: with nothing open, one empty 3D view over the whole stage and the layout kept; with models, each view in its own pane |
 | `dock-cover.test.mjs` | 2 | `appHost` (desktop) | Opening the first models from the start page: the loading screen is a cover with the load card (none under it), held after the models open while the model is not in its dock panel, fading after three frames there and then gone; no cover for models opened again over open ones or on a phone |
 | `corner.test.mjs` | 3 | `appHost` | The workspace's actions at the right of the top bar (once the corner over the model): a kept fix counts on Export (its name says how many were kept), not in a chip of its own; the owner's settings go on their button's tip, not in a chip; Settings shows only the sections that apply (with nothing open, no session or layout section) |
@@ -322,7 +326,8 @@ Northbank IFCs from `samples/` (see [19](19-demo-data.md)) and the palletising c
 `by_design`, imported from `<cell>/Code`.
 
 **Results on Gemini:** every eval that calls a model (`answer_key.py`, `navisworks_triage.py`, `not_a_clash.py`,
-`penetration_hosts.py`, `step_cell.py`, `escalation.py`) is still to be re-measured on Gemini. Results recorded on the
+`penetration_hosts.py`, `step_cell.py`, `escalation.py`) is still to be re-measured on Gemini, and `prepare_saved.py`
+has not yet run on Gemini (only on its scripted stand-in). Results recorded on the
 earlier model provider are not quoted here and are not comparable with Gemini runs. The evals that call no model
 (detection, properties, big models) are model-independent, and their recorded results stand.
 
@@ -344,6 +349,7 @@ Where results go:
 | `step_cell.py` | The cell from STEP end to end: conversion and classes, detection, C1 (Fix together), C2 (+150 mm and export), C3 (trim), C6 (route), C7 (wall opening), C8 (gland hole), export back to STEP, Rev B | `$DEMO_MODELS/palletising-cell` STEP files | `--cell ... --out ...`, `--no-classes`, `--requirements demo|<file>` | `README.md` in the run folder | Not yet measured on Gemini (it names parts and proposes fixes with the model) |
 | `escalation.py` | E0: does the escalation model fix what Gemini Pro cannot, and is it the model or the brief? Three arms on the unfixed cases (Pro again, Pro + brief, escalation model + brief), with their cost | Cell Rev A (from STEP) and Northbank IFC | `--cell ... --northbank ... --out ...`, `--reuse`, `--workers` | `results.json`, `summary.md`, `sweep.json`, rows in `results.csv` | Not yet measured on Gemini |
 | `properties_complete.py` | Whether the Properties panel shows every value the model gives: an independent count from the raw relationships (sets on the object and its type, IFC4 sets of sets, complex parts, predefined sets) against `properties.Reader.read`, per object; and that the hidden note never shows | `$DEMO_MODELS/northbank/IFC` or `samples/` (all six Northbank files), or any IFC paths | no arguments, or paths | console | Oct 31: complete; 5,666 objects, 16,303 values, 2.2 s for all six files |
+| `prepare_saved.py` | Makes the review queue's saved AI proposals for Northbank ([19](19-demo-data.md#saved-ai-proposals-for-the-sample-samplesprepared)): Iris's detection with the default tests, the answer key's three girder pairs plus `prepare.deepest`, each pair prepared through the queue's own run with every reply recorded (`prepare.generate`, no host reading). `--dry-run` counts the calls and prices them with no model call | Northbank's demo files from `samples/` (`demos.DEMOS`, as the card opens them) | `--model scripted\|gemini` (default gemini), `--yes` (required to call Gemini), `--dry-run`, `--out`, `--samples`, `--deepest N` (default `plans.MAX_ITEMS`), `--output-tokens` (assumed per call for the estimate, default 2,000). Gemini only with `--model gemini --yes`, after the owner approves the spend; every other mode runs offline | `samples/prepared/Northbank.json` (`--model scripted`: a temp folder), written atomically | Nov 22, scripted only (free): 464 clashes, 8 pairs, 6 ready / 2 failed, 13 replies, ~55 s; dry run: 16 calls at most, about $0.31 on gemini-3.8-flash at thinking low. Not yet run on Gemini |
 | `big_models.py` | How big a model the server takes: `make --mb N --out F` writes a synthetic IFC4 of a realistic mix; `server F` times open, boxes and detection with peak RSS | none (generated) | see the script's docstring | numbers in `evals/README.md` | Oct 29: 150 MB 5/37/5 s, 1.4 GB; 500 MB 17/174/18 s, 2.8 GB |
 | `big_models_browser.cjs` | The browser half: uploads a file through **Use your own models** and times each stage the page shows, then the JS heap | a file from `big_models.py make`; server with the web built | `node ../evals/big_models_browser.cjs http://localhost:8000 /tmp/big-150.ifc` | console | Oct 29: 150 MB 123 s end to end, 500 MB 484 s |
 | `make_drawings.py` | Not a measure: draws the 2D drawing reader's sample sheets from the model (M-201 and its mismatch issue) with their truth files, no AI ([19](19-demo-data.md)) | `samples/` Northbank Structure, MEP and Grids | `--out`, `--samples`, `--scale`, `--preview <png>` | `samples/drawings/*.pdf`, `*.truth.json` | Deterministic: the same models give the same bytes |
@@ -352,8 +358,10 @@ Where results go:
 Notes:
 - Paid: `answer_key.py`, `navisworks_triage.py`, `not_a_clash.py`, `penetration_hosts.py`, `step_cell.py` (class
   names and proposals), `escalation.py` (the escalation model bills every token) and `save_drawing_readings.py`
-  (the fast model, within its own `--max-usd`). The detection evals, `big_models` and `make_drawings.py` call no
-  model.
+  (the fast model, within its own `--max-usd`). `prepare_saved.py` is paid only with `--model gemini --yes` (the
+  proposal model, up to `PLAN_ROUNDS` calls per pair), and only with the owner's approval:
+  `uv run --directory server python ../evals/prepare_saved.py --model gemini --yes` from the repo root. The detection
+  evals, `big_models` and `make_drawings.py` call no model.
 - `detection_navisworks.py` calls `detect.run(scene)` with the default tests. Its recorded run (633 clashes) predates
   Site's tests being off by default; a rerun now checks Structure, MEP and Architecture (464 clashes).
 - `detection_cell.py`'s docstring still says five planted problems and 13 pairs; it reads the answer key from the
@@ -513,6 +521,7 @@ flowchart TD
 | Triage or its prompt, trims at joints | `navisworks_triage.py` (or **Triage all** on Northbank in the app), `not_a_clash.py` |
 | Hosts and openings | `penetration_hosts.py`, `step_cell.py` (C7, C8) |
 | Escalation | `escalation.py` (billed), sparingly |
+| The review queue's prepared fixes (`prepare.py`, its route), or what the fix agent asks once a saved set ships in `samples/prepared/` | `test_prepare.py`; `prepare_saved.py --dry-run`, then a remade set only with the owner's approval (a question the set does not hold fails its card with `prepare.MISS`); bump `prepare.VERSION` when what a prepared fix is made of changes |
 | Scene loading, boxes, uploads | `big_models.py`, `big_models_browser.cjs`; Northbank's boxes and its 464 clashes unchanged |
 | What detection measures or how boxes are made, the sample models' bytes, the IfcOpenShell version | Bump `detect.VERSION` or `saved_checks.BOXES_VERSION` (for a code change), then `uv run python -m iris.saved_checks --docker` from `server/` (this machine's entry, then linux/x86_64's in Docker; geometry only, no AI) and commit `samples/saved-checks/`; `test_saved_checks.py` fails until then |
 | A stream or a route behind Cloud Run | The `Accept-Encoding` curl check, on the live URL after deploy |
@@ -544,7 +553,8 @@ checked 2026-10-30 against `0390a12` plus this slice. Details: [brand asset desi
 - A new builder in `iris/fixtures.py`, or a builder changes its case.
 - The web test harness changes: `compiled`, `appHost`, the stub lists, or a narrower harness's stubs.
 - An eval script is added or changes its data, arguments or output file; a new append-only CSV; a new kind of run
-  folder.
+  folder; a generator of committed data (`prepare_saved.py`, `make_drawings.py`) changes what it writes or what it
+  costs.
 - A new recorded result worth quoting (the "Latest recorded result" column), or the answer-key procedure changes.
 - A new committed browser script, or the delivery checklist in `AGENTS.md` or `CLAUDE.md` changes.
 - `.github/workflows/ci.yml` changes (a job, a trigger, a system library), or `deploy.yml`'s smoke test does.

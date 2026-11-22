@@ -12,6 +12,7 @@ samples/*
 !samples/drawings/
 # What the samples measure, so their first check builds no geometry (server/iris/saved_checks.py).
 !samples/saved-checks/
+!samples/prepared/
 *.spike.ifc
 node_modules/
 web/dist/
