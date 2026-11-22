@@ -6,60 +6,223 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement as h } from "react";
 import { appHost, compiled, projectOf } from "./app-host.mjs";
 
-/** The first screen (StartScreen.tsx) and its ways in: "Try the sample drawings" opens the sample building as a project
- * on its Drawings step with the sample PDF sheets attached (POST .../drawings/samples), in the order sampleDrawings.ts
- * keeps; "See it work" (DemoClips.tsx) plays the two demo clips side by side. */
+/** Home (StartScreen.tsx) and its ways in: the greeting, the start tiles ("Try the sample drawings" opens the sample
+ * building as a project on its Drawings step with the sample PDF sheets attached, POST .../drawings/samples, in the order
+ * sampleDrawings.ts keeps), the recent projects, "See it work" (DemoClips.tsx, the two demo clips side by side) and
+ * Iris's eight steps. */
 
 const url = (js) => `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
 const react = { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
   "lucide-react": import.meta.resolve("lucide-react") };
-/** DemoClips.tsx with its stylesheet left out (Vite bundles it; Node cannot import CSS). */
-async function demoClipsUrl() {
-  const input = await readFile(new URL("../src/DemoClips.tsx", import.meta.url), "utf8");
-  assert.match(input, /^import "\.\/demoClips\.css";$/m, "the clips bring their own stylesheet");
-  let { outputText } = ts.transpileModule(input.replace(/^import "\.\/demoClips\.css";$/m, ""), { compilerOptions: {
+/** A .tsx/.ts module compiled for Node with its own stylesheet left out (Vite bundles it; Node cannot import CSS). */
+async function moduleUrl(path, css, deps = {}) {
+  const input = await readFile(new URL(path, import.meta.url), "utf8");
+  const line = new RegExp(`^import "\\./${css.replace(".", "\\.")}";$`, "m");
+  assert.match(input, line, `${path} brings its own stylesheet`);
+  let { outputText } = ts.transpileModule(input.replace(line, ""), { compilerOptions: {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX } });
-  for (const [name, target] of Object.entries(react)) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`);
+  for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`);
   return url(outputText);
 }
-const clipsUrl = await demoClipsUrl();
+const clipsUrl = await moduleUrl("../src/DemoClips.tsx", "demoClips.css");
 const clips = await import(clipsUrl);
-const start = await import(await compiled("../src/StartScreen.tsx", { ...react, "./DemoClips": clipsUrl,
-  "./About": url("export const projectName = (files) => files.join(' + ');"), "./Brand": url("export function Wordmark(){return null;}") }));
+const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css");
+const holo = await import(holoUrl);
+const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
+const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./DemoClips": clipsUrl, "./Holo": holoUrl,
+  "./About": url("export const projectName = (files) => files.join(' + ');"),
+  "./ProjectsHome": url(`export const PROJECT_FLOW = ${JSON.stringify(FLOW.map((name) => ({ name, text: `${name} text.` })))};`),
+  "./projectRoute": await compiled("../src/projectRoute.ts"),
+  "./projectsApi": await compiled("../src/projectsApi.ts", {
+    "./api": url("export class ApiError extends Error {}; export const apiFetch = async () => null; export const apiUrl = (p) => p;") }) }));
 const sd = await import(await compiled("../src/sampleDrawings.ts", {}));
 const noop = () => {};
-const markup = (props) => renderToStaticMarkup(h(start.StartScreen, { onProjects: noop, ...props }));
+/** 15:10 local time on 22 Nov 2026: an afternoon wherever the test runs. */
+const NOW = new Date(2026, 10, 22, 15, 10).getTime();
+const props = (p = {}) => ({ onProjects: noop, onNewProject: noop, now: NOW, ...p });
+const markup = (p) => renderToStaticMarkup(h(start.StartScreen, props(p)));
 const startButton = (html, which) => html.match(new RegExp(`<button[^>]*data-start="${which}"[^>]*>.*?</button>`))?.[0];
 const entity = (t) => t.replaceAll("'", "&#x27;");
+const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+/** The elements StartScreen returns (its own, not its children components'), to call their handlers without a DOM. */
+function elements(node, out = []) {
+  if (Array.isArray(node)) { for (const n of node) elements(n, out); return out; }
+  if (!node || typeof node !== "object" || !node.props) return out;
+  out.push(node);
+  elements(node.props.children, out);
+  return out;
+}
+const tree = (p) => elements(start.StartScreen(props(p)));
+const byStart = (p, which) => tree(p).find((e) => e.props["data-start"] === which);
+const plainClick = () => { const e = { button: 0, prevented: false, preventDefault() { e.prevented = true; } }; return e; };
+const P = (id, name, fields = {}) => projectOf({ id, name, updated: (NOW - 12 * 60000) / 1000, ...fields });
+const kinds = (n) => Array.from({ length: n }, (_, i) => ({ name: `m${i}.ifc`, kind: "IFC", size: 1, sha256: "0" }));
+
+test("the greeting: the time of day and the reviewer's name, or 'there' without one", () => {
+  const at = (h) => new Date(2026, 10, 22, h, 5).getTime();
+  assert.deepEqual([at(5), at(11), at(12), at(17), at(18), at(23), at(2)].map(start.greetingFor),
+    ["Good morning", "Good morning", "Good afternoon", "Good afternoon", "Good evening", "Good evening", "Good evening"]);
+  assert.match(markup({ name: "Priya", now: at(9) }), /<h1 class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/h1>/);
+  assert.match(markup({ name: "  " }), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/);
+  assert.match(markup({}), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/, "no name at all");
+});
+
+test("the hero: the principle, what Iris does, the ribbon; no brand header, and the page scrolls in its container", async () => {
+  const html = markup({});
+  assert.match(html, /^<div class="home">/);
+  assert.match(html, /<p class="home-tagline">.*AI proposes\. Geometry proves\. The engineer decides\..*?<\/p>/);
+  assert.match(text(html), /Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked, and report what was decided\./);
+  assert.match(html, /<div class="home-art"><div class="holo-ribbon"[^>]*aria-hidden="true"/, "the ribbon, decorative");
+  assert.doesNotMatch(html, /wordmark|by Techjays|start-brand/i, "the shell has the brand");
+  const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
+  assert.match(css, /\.home \{[^}]*height: 100%;[^}]*overflow: hidden auto;/, "scrolls inside the main panel, never sideways");
+  assert.doesNotMatch(css, /prefers-color-scheme|\bdark\b/i, "light only");
+});
+
+test("three start tiles: New project (dashed), the sample building, the sample drawings, each with a line", () => {
+  const html = markup({ onSample: noop, onSampleDrawings: noop });
+  const order = ["new-project", "sample", "sample-drawings"].map((k) => html.indexOf(`data-start="${k}"`));
+  assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), `in order: ${order}`);
+  const made = startButton(html, "new-project");
+  assert.match(made, /class="home-tile home-tile-new"/);
+  assert.match(made, /New project/);
+  assert.match(made, /<span class="home-tile-line">[^<]+<\/span>/);
+  assert.match(startButton(html, "sample"), /Try the sample building.*home-tile-line/);
+  assert.match(startButton(html, "sample-drawings"), /holo-edge.*Try the sample drawings.*home-tile-line/, "the AI one wears the holo edge");
+  assert.match(html, /<section class="home-tiles" aria-label="Start" style="--tiles:3">/);
+  assert.match(markup({}), /style="--tiles:1"/, "no samples listed: New project alone");
+  let made2 = 0;
+  byStart({ onNewProject: () => made2++ }, "new-project").props.onClick();
+  assert.equal(made2, 1, "the tile asks for a new project");
+});
 
 test("'Try the sample drawings' shows only when the page can open them, beside 'Try the sample building'", () => {
   const without = markup({ onSample: noop });
   assert.ok(startButton(without, "sample"), "the sample building");
-  assert.equal(startButton(without, "sample-drawings"), undefined, "no sample drawings listed: no button");
+  assert.equal(startButton(without, "sample-drawings"), undefined, "no sample drawings listed: no tile");
+  assert.match(without, /style="--tiles:2"/);
   const html = markup({ onSample: noop, onSampleDrawings: noop });
   const b = startButton(html, "sample-drawings");
-  assert.ok(b, "the button, by data-start");
+  assert.ok(b, "the tile, by data-start");
   assert.match(b, /Try the sample drawings/);
   assert.doesNotMatch(b, /disabled/);
   assert.ok(html.indexOf('data-start="sample"') < html.indexOf('data-start="sample-drawings"'), "after the sample building");
 });
 
-test("the entry opening spins; both sample buttons wait", () => {
-  for (const [busy, props] of [["sample", { sampleBusy: true }], ["drawings", { sampleDrawingsBusy: true }]]) {
-    const html = markup({ onSample: noop, onSampleDrawings: noop, ...props });
+test("the entry opening spins; both sample tiles wait", () => {
+  for (const [busy, p] of [["sample", { sampleBusy: true }], ["drawings", { sampleDrawingsBusy: true }]]) {
+    const html = markup({ onSample: noop, onSampleDrawings: noop, ...p });
     const sample = startButton(html, "sample"), drawings = startButton(html, "sample-drawings");
     assert.match(sample, /disabled/); assert.match(drawings, /disabled/);
-    assert.equal(/spinner/.test(busy === "sample" ? sample : drawings), true, `${busy}: its button spins`);
-    assert.equal(/spinner/.test(busy === "sample" ? drawings : sample), false, `${busy}: the other does not`);
+    assert.equal(/spinner/.test(busy === "sample" ? sample : drawings), true, `${busy}: its tile spins`);
+    assert.equal(/aria-busy="true"/.test(busy === "sample" ? sample : drawings), true, `${busy}: and says it is busy`);
+    assert.equal(/spinner|aria-busy/.test(busy === "sample" ? drawings : sample), false, `${busy}: the other does not`);
+    assert.doesNotMatch(startButton(html, "new-project"), /disabled/, "a new project is still there to make");
   }
   const idle = markup({ onSample: noop, onSampleDrawings: noop });
   assert.doesNotMatch(startButton(idle, "sample-drawings") + startButton(idle, "sample"), /disabled|spinner/);
 });
 
-test("the first screen shows the demo clips where the Northbank still was", () => {
+test("recent projects: up to four cards, newest first, each a link with its models, open clashes (never guessed) and when", () => {
+  const recent = [
+    P("p1", "Tower", { files: kinds(3), counts: { clashes: 464, open: 463, resolved: 1, reviewed: 0 } }),
+    P("p2", "Clinic", { files: kinds(1), counts: null }),
+    P("p3", "Depot", { files: kinds(2), counts: { clashes: 12, open: 0, resolved: 12, reviewed: 0 } }),
+    P("p4", "Empty", { files: [], counts: { clashes: 0, open: 0, resolved: 0, reviewed: 0 } }),
+    P("p5", "Fifth", {})];
+  const html = markup({ recent, projectHref: (pid) => `/projects/${pid}?x` });
+  const cards = html.match(/<a class="home-project"[^>]*>.*?<\/a>/g);
+  assert.equal(cards.length, 4, "the first four");
+  assert.deepEqual(cards.map((c) => c.match(/data-project="([^"]+)"/)[1]), ["p1", "p2", "p3", "p4"]);
+  assert.match(cards[0], /href="\/projects\/p1\?x"/);
+  assert.match(text(cards[0]), /Tower 3 models 463 open clashes Updated 12 min ago/);
+  assert.match(cards[0], /home-status open/);
+  assert.match(text(cards[1]), /Clinic 1 model Not checked/, "no counts known: not checked, no number");
+  assert.match(text(cards[2]), /Depot 2 models None open/);
+  assert.match(text(cards[3]), /Empty No models yet No clashes/);
+  assert.match(markup({ recent: [recent[0]] }), /href="\/projects\/p1"/, "the project's own address by default");
+  const opened = [];
+  const card = tree({ recent, onOpenProject: (pid) => opened.push(pid) }).find((e) => e.props["data-project"] === "p2");
+  const click = plainClick();
+  card.props.onClick(click);
+  assert.deepEqual(opened, ["p2"]);
+  assert.equal(click.prevented, true, "a plain click opens it here");
+  card.props.onClick({ ...plainClick(), metaKey: true });
+  assert.deepEqual(opened, ["p2"], "a new tab gets the address");
+});
+
+test("'All projects' is a link, its plain click handled by onProjects", () => {
+  const html = markup({ projectsHref: "/projects?all" });
+  assert.match(html, /<a class="home-link" data-start="projects" href="\/projects\?all">All projects<\/a>/);
+  let went = 0;
+  const link = byStart({ onProjects: () => went++ }, "projects");
+  const click = plainClick();
+  link.props.onClick(click);
+  assert.equal(went, 1); assert.equal(click.prevented, true);
+  link.props.onClick({ ...plainClick(), ctrlKey: true });
+  assert.equal(went, 1, "ctrl-click: a new tab");
+});
+
+test("no projects yet: one inline line and 'Create one'; while listing: light placeholders, not the empty line", () => {
+  let made = 0;
+  const html = markup({ recent: [] });
+  assert.match(text(html), /No projects yet\..*Create one/);
+  assert.doesNotMatch(html, /home-skeleton/);
+  const create = tree({ recent: [], onNewProject: () => made++ }).find((e) => e.props.className === "home-textbtn");
+  create.props.onClick();
+  assert.equal(made, 1, "'Create one' asks for a new project");
+  const loading = markup({ recentLoading: true });
+  assert.equal(loading.match(/home-skeleton/g).length, 3);
+  assert.doesNotMatch(loading, /No projects yet/);
+  assert.match(loading, /aria-busy="true"/);
+  assert.match(loading, /role="status">Loading your projects…</);
+  const listed = markup({ recentLoading: true, recent: [P("p1", "Tower")] });
+  assert.doesNotMatch(listed, /home-skeleton|Loading your projects/, "cards already there stay while the list refreshes");
+});
+
+test("Home shows the demo clips and then Iris's eight steps, in order, Propose with the AI's edge and Validate the check", () => {
   const html = markup({});
   assert.match(html, /<figure[^>]*data-start="see-it-work"/);
-  assert.doesNotMatch(html, /northbank\.webp|start-pic/, "the still it replaces is gone");
+  assert.doesNotMatch(html, /northbank\.webp|start-pic/, "the still they replaced is gone");
+  assert.ok(html.indexOf("Recent projects") < html.indexOf('data-start="see-it-work"'));
+  assert.ok(html.indexOf('data-start="see-it-work"') < html.indexOf("How Iris works"));
+  const steps = html.match(/<li class="home-step[^"]*" data-step="[^"]+">.*?<\/li>/g);
+  assert.deepEqual(steps.map((s) => s.match(/data-step="([^"]+)"/)[1]), FLOW);
+  steps.forEach((s, i) => assert.match(s, new RegExp(`home-step-n mono">${i + 1}<.*${FLOW[i]} text\\.`)));
+  assert.match(steps[4], /class="home-step holo-edge"/);
+  assert.match(steps[5], /home-step-ok/);
+  assert.equal(steps.filter((s) => /holo-edge|home-step-ok/.test(s)).length, 2);
+});
+
+test("the last session: Resume (primary) and Start fresh (ghost), with what was kept and when, in the server's seconds", () => {
+  let resumed = 0, fresh = 0;
+  const resume = { files: ["A-MEP.ifc", "A-Str.ifc"], clashes: 14, fixed: 2, agent: false, savedAt: (NOW - 12 * 60000) / 1000,
+    onResume: () => resumed++, onFresh: () => fresh++ };
+  const html = markup({ resume });
+  const card = html.match(/<div class="home-resume" role="region" aria-label="Your last session">.*?<\/div>/)?.[0];
+  assert.ok(card, "the card");
+  assert.match(text(card), /Resume A-MEP\.ifc \+ A-Str\.ifc · 2 fixes kept · 14 clashes · saved 12 min ago/);
+  assert.match(card, /<button type="button" class="btn primary small">Resume<\/button><button type="button" class="btn ghost small">Start fresh<\/button>/);
+  assert.match(text(markup({ resume: { ...resume, fixed: 1, clashes: null } })), /Resume .* · 1 fix kept · saved 12 min ago/);
+  assert.doesNotMatch(markup({}), /home-resume/, "none without a session");
+  const buttons = tree({ resume }).filter((e) => e.type === "button" && /btn/.test(e.props.className ?? ""));
+  buttons.find((b) => b.props.children === "Resume").props.onClick();
+  buttons.find((b) => b.props.children === "Start fresh").props.onClick();
+  assert.deepEqual([resumed, fresh], [1, 1]);
+});
+
+test("the ribbon: its size in pixels or any CSS length, fewer threads when small; still where there is no window", async () => {
+  const ribbon = (p) => renderToStaticMarkup(h(holo.HoloRibbon, p));
+  const big = ribbon({ size: 480 });
+  assert.match(big, /^<div class="holo-ribbon" style="--hr:480px" aria-hidden="true">/);
+  assert.equal(big.match(/style="--t:/g).length, 11);
+  assert.match(ribbon({ size: 120 }), /class="holo-ribbon holo-small"/);
+  assert.equal(ribbon({ size: 72 }).match(/style="--t:/g).length, 4);
+  assert.match(ribbon({ size: "clamp(220px, 42cqi, 500px)" }), /style="--hr:clamp\(220px, 42cqi, 500px\)"/);
+  assert.equal(holo.prefersReducedMotion(), true, "no window: still");
+  assert.equal(renderToStaticMarkup(h(holo.TextReveal, { text: "Good morning, Ana", once: "t" })), "<span class=\"\">Good morning, Ana</span>");
+  const css = await readFile(new URL("../src/holo.css", import.meta.url), "utf8");
+  assert.match(css, /prefers-reduced-motion: reduce\)[^}]*\.holo-glow, \.holo-sway, \.holo-fan[^}]*animation: none/, "still under reduced motion");
 });
 
 test("'See it work': the 3D check and the 2D reader side by side, each lazily, sized, captioned, its still under reduced motion", () => {
@@ -82,14 +245,16 @@ test("'See it work': the 3D check and the 2D reader side by side, each lazily, s
       assert.ok(img.includes(attr), `${c.id}: ${attr}`);
     assert.ok(c.alt.length > 60, `${c.id}: alt text that says what it shows`);
     assert.ok(item.includes(`<figcaption class="demo-clip-caption">${entity(c.caption)}</figcaption>`), `${c.id}: its caption`);
+    assert.ok(item.indexOf("</picture>") < item.indexOf(`>${c.label}<`), `${c.id}: label and caption under the clip`);
   }
   assert.ok(html.indexOf('data-clip="check"') < html.indexOf('data-clip="drawings"'), "3D first");
 });
 
-test("the clips' stylesheet is light, on the page's tokens: side by side, stacked when there is no room", async () => {
+test("the clips' stylesheet is light, on the page's tokens: white cards side by side, stacked when there is no room", async () => {
   const css = await readFile(new URL("../src/demoClips.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|prefers-color-scheme|\bdark\b/i, "colours only from tokens, no dark mode");
   assert.match(css, /\.demo-clips-row \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, \d+px\), 1fr\)\)/);
+  assert.match(css, /\.demo-clip \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 12px;[^}]*background: var\(--surface\)/);
 });
 
 // ------------------------------------------------------------------------------------------------- sampleDrawings.ts

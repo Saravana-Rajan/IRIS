@@ -2,17 +2,40 @@
    AI-made things wear. Light only, on index.css's tokens (`--holo`, `--accent`). Everything is still under
    prefers-reduced-motion. */
 
-/* The ribbon: a blurred glow behind an SVG torus that turns slowly */
-.holo-ribbon { position: relative; display: inline-block; flex: none; pointer-events: none; }
-.holo-glow { position: absolute; inset: 12%; border-radius: 50%; filter: blur(28px); opacity: .55;
-  background: conic-gradient(from 0deg, #8f9bff, #b07af2, #ff5cd6, #7dd3fc, #8f9bff); animation: holo-spin 24s linear infinite; }
-.holo-svg { position: relative; display: block; overflow: visible; }
-.holo-turn { transform-origin: 100px 100px; animation: holo-spin 28s linear infinite; }
-.holo-morph { transform-box: fill-box; transform-origin: center; animation: holo-morph 20s ease-in-out infinite alternate; }
+/* The ribbon (HoloRibbon): `--hr` is its size. A loop of fine iridescent threads that share one diameter, fanned apart
+   around it, so together they read as one ribbon twisted at two points; the loop turns slowly in its own plane (the twist
+   travels round), the whole sways in 3D, over a blurred conic glow, with a soft glassy spark. Every moving layer is a
+   transform on a layer painted once, so the compositor runs it. */
+.holo-ribbon { --hr: 320px; position: relative; display: inline-block; flex: none; width: var(--hr); height: var(--hr);
+  pointer-events: none; isolation: isolate; }
+.holo-glow { position: absolute; inset: 18%; border-radius: 50%; opacity: .42; filter: blur(calc(var(--hr) * .09));
+  background: conic-gradient(from 200deg, #8f9bff, #b07af2, #ff5cd6, #7dd3fc, #8f9bff);
+  animation: holo-spin 30s linear infinite; will-change: transform; }
+.holo-stage { position: absolute; inset: 0; perspective: calc(var(--hr) * 2.2); }
+.holo-sway { position: absolute; inset: 0; transform-style: preserve-3d; animation: holo-sway 26s ease-in-out infinite alternate; }
+.holo-fan { position: absolute; inset: 7%; transform-style: preserve-3d; transform: rotateZ(-28deg) rotateX(58deg) rotateZ(0deg);
+  animation: holo-turn 28s linear infinite; }
+/* One thread (`--t` from 0 to 1 across the ribbon): a thin ring of the holo colours with a white line along it */
+.holo-fan > span { position: absolute; inset: 0; border-radius: 50%; opacity: .7;
+  transform: rotateY(calc(var(--t) * 56deg - 28deg));
+  background: radial-gradient(closest-side, transparent 87%, rgba(255, 255, 255, .75) 92.5%, transparent 97%),
+    conic-gradient(from calc(var(--t) * 110deg), #8f9bff, #b07af2 22%, #ff5cd6 46%, #ffb3ec 58%, #7dd3fc 76%, #8f9bff);
+  -webkit-mask: radial-gradient(closest-side, transparent 85%, #000 89%, #000 96%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 85%, #000 89%, #000 96%, transparent 100%); }
+/* Small (empty states, loading cards): fewer, thicker threads */
+.holo-ribbon.holo-small .holo-fan > span { opacity: .8;
+  -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 84%, #000 95%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 78%, #000 84%, #000 95%, transparent 100%); }
+/* The glassy spark: a soft white highlight where the ribbon catches the light */
+.holo-spark { position: absolute; left: 21%; top: 31%; width: 28%; height: 7%; border-radius: 50%; transform: rotate(-28deg);
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0)); opacity: .8; }
 @keyframes holo-spin { to { transform: rotate(360deg); } }
-@keyframes holo-morph { 0% { transform: rotate(38deg) scale(1, 1); } 100% { transform: rotate(-12deg) scale(.86, 1.12); } }
+@keyframes holo-turn { to { transform: rotateZ(-28deg) rotateX(58deg) rotateZ(360deg); } }
+@keyframes holo-sway { 0% { transform: rotateX(6deg) rotateY(-10deg); } 50% { transform: rotateX(-4deg) rotateY(4deg); }
+  100% { transform: rotateX(-8deg) rotateY(12deg); } }
 
 /* Text reveal: each word from a lavender blur to ink */
+.text-reveal-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .text-reveal-word { display: inline-block; animation: text-reveal .7s cubic-bezier(.2, .7, .2, 1) both; }
 @keyframes text-reveal { from { opacity: 0; filter: blur(8px); color: var(--accent, #b07af2); transform: translateY(4px); }
   60% { color: var(--accent, #b07af2); } to { opacity: 1; filter: blur(0); transform: none; } }
@@ -43,6 +66,6 @@
 .empty-state-action { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 @media (prefers-reduced-motion: reduce) {
-  .holo-glow, .holo-turn, .holo-morph, .text-reveal-word, .ai-shimmer::after { animation: none !important; }
+  .holo-glow, .holo-sway, .holo-fan, .text-reveal-word, .ai-shimmer::after { animation: none !important; }
   .count-up { transition: none; }
 }

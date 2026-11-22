@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import "./holo.css";
 
 /**
@@ -27,63 +27,58 @@ export function useReducedMotion(): boolean {
 }
 
 /**
- * The holographic ribbon: an iridescent torus of layered, blurred gradients in the `--holo` colours, slowly turning
- * (a 24 s loop), with a glassy highlight. SVG and CSS only. Decorative (aria-hidden). `size` is its width in pixels.
+ * The holographic ribbon (lifemed-like): a loop of fine threads in the `--holo` colours that share one diameter and fan
+ * apart around it, so together they read as one iridescent ribbon twisted at two points. It turns slowly in its own
+ * plane (the twist travels round, a 28 s loop) and sways in 3D (26 s), over a blurred glow, with a glassy spark. CSS
+ * only: every moving layer is a transform the compositor animates, painted once. Still under reduced motion.
+ * Decorative (aria-hidden). `size` is its width and height: pixels, or any CSS length (e.g. "clamp(240px, 40cqi,
+ * 520px)", which keeps the full detail); under 160 px it draws fewer, thicker threads.
  */
-export function HoloRibbon({ size = 320, className = "" }: { size?: number; className?: string }) {
-  const id = useId().replace(/[^\w-]/g, "");
+export function HoloRibbon({ size = 320, className = "" }: { size?: number | string; className?: string }) {
+  const small = typeof size === "number" && size < 160;
+  const n = typeof size !== "number" || size >= 200 ? 11 : small ? (size < 100 ? 4 : 5) : 8;
   return (
-    <div className={`holo-ribbon ${className}`} style={{ width: size, height: size }} aria-hidden>
+    <div className={`holo-ribbon${small ? " holo-small" : ""} ${className}`.trim()}
+      style={{ "--hr": typeof size === "number" ? `${size}px` : size } as CSSProperties} aria-hidden>
       <div className="holo-glow" />
-      <svg className="holo-svg" viewBox="0 0 200 200" width={size} height={size}>
-        <defs>
-          <linearGradient id={`${id}-a`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#8f9bff" />
-            <stop offset=".4" stopColor="#b07af2" />
-            <stop offset=".75" stopColor="#ff5cd6" />
-            <stop offset="1" stopColor="#7dd3fc" />
-          </linearGradient>
-          <linearGradient id={`${id}-b`} x1="1" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#7dd3fc" />
-            <stop offset=".45" stopColor="#ff5cd6" />
-            <stop offset="1" stopColor="#8f9bff" />
-          </linearGradient>
-          <linearGradient id={`${id}-shine`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#fff" stopOpacity=".95" />
-            <stop offset="1" stopColor="#fff" stopOpacity="0" />
-          </linearGradient>
-          <filter id={`${id}-soft`} x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" /></filter>
-        </defs>
-        <g className="holo-turn">
-          <ellipse cx="100" cy="100" rx="70" ry="34" fill="none" stroke={`url(#${id}-a)`} strokeWidth="26" opacity=".9"
-            filter={`url(#${id}-soft)`} transform="rotate(-24 100 100)" />
-          <ellipse cx="100" cy="100" rx="62" ry="46" fill="none" stroke={`url(#${id}-b)`} strokeWidth="14" opacity=".7"
-            transform="rotate(38 100 100)" className="holo-morph" />
-          <ellipse cx="100" cy="100" rx="70" ry="34" fill="none" stroke={`url(#${id}-shine)`} strokeWidth="5" opacity=".75"
-            transform="rotate(-24 100 92)" />
-        </g>
-      </svg>
+      <div className="holo-stage">
+        <div className="holo-sway">
+          <div className="holo-fan">
+            {Array.from({ length: n }, (_, k) => <span key={k} style={{ "--t": +(k / (n - 1)).toFixed(3) } as CSSProperties} />)}
+          </div>
+        </div>
+      </div>
+      <div className="holo-spark" />
     </div>
   );
 }
 
+/** Texts already revealed in this page load (TextReveal's `once`): seen again, they are simply there. */
+const revealed = new Set<string>();
+
 /**
- * Words that fade in from a lavender blur to ink, one after another, once (the Home greeting and tagline). Under less
- * motion, or with no window, the text is simply there. The whole text stays one string for screen readers.
+ * Words that fade in from a lavender blur to ink, one after another (the Home greeting and tagline). Under less motion,
+ * or with no window, the text is simply there. Screen readers get the whole text once, as one string. With `once` (a key),
+ * it plays on the first view in a page load only: coming back to the page shows it at rest.
  */
-export function TextReveal({ text, className = "", delay = 0, step = 70 }: {
+export function TextReveal({ text, className = "", delay = 0, step = 70, once }: {
   text: string; className?: string;
   /** Milliseconds before the first word. */
   delay?: number;
   /** Milliseconds between words. */
   step?: number;
+  /** Play once per page load under this key. */
+  once?: string;
 }) {
-  const still = useReducedMotion();
+  const reduced = useReducedMotion();
+  const [seen] = useState(() => once !== undefined && revealed.has(once));
+  useEffect(() => { if (once !== undefined) revealed.add(once); }, [once]);
+  if (reduced || seen) return <span className={className}>{text}</span>;
   const words = text.split(/(\s+)/);
-  if (still) return <span className={className}>{text}</span>;
   let n = 0;
   return (
-    <span className={`text-reveal ${className}`} aria-label={text}>
+    <span className={`text-reveal ${className}`.trim()}>
+      <span className="text-reveal-sr">{text}</span>
       {words.map((w, i) => (/^\s+$/.test(w) ? w
         : <span key={i} className="text-reveal-word" aria-hidden style={{ animationDelay: `${delay + step * n++}ms` }}>{w}</span>))}
     </span>

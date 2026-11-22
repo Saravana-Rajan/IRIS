@@ -14,9 +14,10 @@ export const DEMO_CLIPS = [
 export type DemoClip = (typeof DEMO_CLIPS)[number];
 
 /**
- * "See it work": the two demo clips side by side, the 3D clash check and the 2D drawing reader, each with its label and
- * a one-line caption; stacked where there is no room for both (a phone, a narrow column); their stills under reduced
- * motion. Loaded lazily, sized so nothing shifts. Self-contained: no props, its own stylesheet; place it anywhere.
+ * "See it work": the two demo clips side by side, the 3D clash check and the 2D drawing reader, each a white card with
+ * its label and a one-line caption under the clip; stacked where there is no room for both (a phone, a narrow column);
+ * their stills under reduced motion. Loaded lazily, sized so nothing shifts. Self-contained: no props, its own
+ * stylesheet; place it anywhere (Home shows it between Recent projects and How Iris works).
  */
 export function DemoClips() {
   const id = useId();
@@ -26,11 +27,11 @@ export function DemoClips() {
       <div className="demo-clips-row">
         {DEMO_CLIPS.map((c) => (
           <figure key={c.id} className="demo-clip" data-clip={c.id}>
-            <p className="demo-clip-label">{c.label}</p>
             <picture className="demo-clip-frame">
               <source media="(prefers-reduced-motion: reduce)" srcSet={c.still} />
               <img src={c.src} width={1000} height={625} loading="lazy" decoding="async" alt={c.alt} />
             </picture>
+            <p className="demo-clip-label">{c.label}</p>
             <figcaption className="demo-clip-caption">{c.caption}</figcaption>
           </figure>))}
       </div>

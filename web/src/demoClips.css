@@ -1,11 +1,13 @@
-/* "See it work" (DemoClips.tsx): the two demo clips side by side, stacked where there is no room for both (a phone, a
-   narrow column). Light only, on index.css's tokens. */
-.demo-clips { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.demo-clips-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
-.demo-clips-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
-.demo-clip { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.demo-clip-label { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
-.demo-clip-frame { display: block; aspect-ratio: 1000 / 625; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-  background: var(--surface); }
+/* "See it work" (DemoClips.tsx): the two demo clips side by side, each a white card (hairline, 12 px radius) with its
+   label and caption under the clip, like Home's other cards; stacked where there is no room for both (a phone, a narrow
+   column). Light only, on index.css's tokens. */
+.demo-clips { margin: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.demo-clips-title { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 500; letter-spacing: -.01em; color: var(--ink); }
+.demo-clips-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.demo-clip { margin: 0; display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); }
+.demo-clip-frame { display: block; aspect-ratio: 1000 / 625; overflow: hidden; border-bottom: 1px solid var(--line);
+  background: var(--panel, var(--raised)); }
 .demo-clip-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.demo-clip-caption { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.demo-clip-label { margin: 0; padding: 14px 16px 2px; font-size: 14.5px; font-weight: 500; color: var(--ink); }
+.demo-clip-caption { margin: 0; padding: 0 16px 16px; font-size: 13px; line-height: 1.5; color: var(--muted); }
