@@ -1,6 +1,6 @@
 import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, statusLine, type ActivityView, type Progress } from "./Activity";
+import { Activity, ActivityLine, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
 import { changeText, clearanceText, editText, framePieces, isAiReading, kindLabel, needsText, optionKey, recEditText, rejectionNotes, reviewText, type Rejection } from "./fixKinds";
 import { ChatPanel } from "./Chat";
@@ -3875,8 +3875,10 @@ export function App() {
     : planKind === "context" && context?.result?.proposals.length ? <span className="badge-n">{context.result.proposals.length}</span>
     : planOptions.length ? <span className="badge-n">{planOptions.length}</span> : null;
   const rulesOn = filterState.rules.filter((r) => r.on).length;
+  // The collapsed Activity strip says, in one calm line, what the last run is doing (dock.tsx shows it only there).
   const dockTabs: Partial<Record<PanelId, React.ReactNode>> = { clash: clashBadge, plan: planBadge,
-    filters: rulesOn ? <span className="badge-n">{rulesOn}</span> : null };
+    filters: rulesOn ? <span className="badge-n">{rulesOn}</span> : null,
+    activity: <ActivityLine attempts={proposal?.attempts ?? []} progress={progress} now={now} /> };
   const raise = () => { if (snap === "peek") setSnap("half"); };
   // The next clash still open after the selected one (the report's order), for "Next clash" once one is done.
   const nextClash = (() => {
