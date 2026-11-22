@@ -66,7 +66,7 @@ import { ProjectOverview } from "./ProjectOverview";
 import { PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
-import { readRail, writeRail, type NavId } from "./shellNav";
+import { browserStorage, readRail, writeRail, type NavId } from "./shellNav";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { EmptyState } from "./Holo";
 import { DrawingsPanel } from "./DrawingsPanel";
@@ -363,8 +363,7 @@ export function App() {
   const goWorkspace = () => { showPath(sceneId || report ? "/workspace" : "/home", true); setRoute(null); setHomeAsked(false); };
   // The app shell (AppShell.tsx): the sidebar collapsed to its rail (remembered apart for the 3D workspace, where it
   // starts collapsed, and the other pages), the phone and tablet drawer, and the dialogs it opens.
-  const shellStorage = () => (typeof localStorage === "undefined" ? null : localStorage);
-  const [rails, setRails] = useState(() => ({ pages: readRail(shellStorage(), "pages"), workspace: readRail(shellStorage(), "workspace") }));
+  const [rails, setRails] = useState(() => ({ pages: readRail(browserStorage(), "pages"), workspace: readRail(browserStorage(), "workspace") }));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -4303,7 +4302,7 @@ export function App() {
   const toggleRail = () => {
     const where = onPage ? "pages" : "workspace", next = !rail;
     setRails((r) => ({ ...r, [where]: next }));
-    writeRail(shellStorage(), where, next);
+    writeRail(browserStorage(), where, next);
   };
   // The search in the top bar: projects by name, the open clash list by number, title or element, the open models'
   // elements by name or GlobalId, and the pages.
