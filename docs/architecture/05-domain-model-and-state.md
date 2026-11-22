@@ -9,9 +9,14 @@
 > readings; re-branded on 2026-11-11) ·
 > `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings, `detect.Run` and
 > the saved checks' stores; re-branded on 2026-11-11) ·
+> `prepare.py`, `triage.py`, `titles.py`, `chat.py`, `agents.py`, `requirements.py`, `settings.py`, `limits.py`,
+> `spend.py`, `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `app.py` (its module-level stores),
+> and the browser storage in `web/src/` (`App.tsx`, `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`,
+> `reqFile.ts`, `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings;
+> review queue 2026-11-22; re-branded on 2026-11-11) ·
 > **Deeper design:** [docs/detection.md](../detection.md), [docs/requirements.md](../requirements.md),
 > [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md), [docs/uploads.md](../uploads.md),
-> [docs/engineer-workflow.md](../engineer-workflow.md)
+> [docs/engineer-workflow.md](../engineer-workflow.md), [docs/review-queue.md](../review-queue.md)
 
 Iris keeps almost everything in the memory of one server process: the open models with their edits, the clash
 reports, the shared triage and title runs, chat sessions, agent links, the caps and the day's spend. Only a few
@@ -353,6 +358,12 @@ Navisworks reports and Iris's own detection produce the same objects, so everyth
   records which clash it fixed (`fixes` in [12](12-web-app.md)). The edit-log entry the keep makes (`plans.apply`)
   carries `check = {verified, min_clearance_m, checked_against}` (`checked_against`: the largest count among the
   fixes kept) and, when the page sends one, the reviewer as `actor`.
+- **Prepared fixes** (`prepare.py`, the review queue: [docs/review-queue.md](../review-queue.md)) are plan `Item`s, one
+  per clash pair (never merged), streamed as `prepared` events and not kept on the server; each result is remembered in
+  `_last` like any other try. A **saved set** (`prepare.Saved`: `path`, `key`, `label`, `model`, `model_label`, `made`,
+  `calls`, `items`) is the proposal model's recorded replies for one unedited sample, read from
+  `samples/prepared/*.json` (`IRIS_PREPARED_DIR`). It holds replies only, never the check's results: every replayed
+  reply is tried and checked again.
 
 ### Shared jobs (`triage.py`, `titles.py`)
 
@@ -485,6 +496,8 @@ disk beyond the temp folder only through a project attach or save.
 | MCP job id | 10 hex | `Link.start` | The link; 16 jobs kept per link |
 | MCP plan id | `p` + 8 digits from Python's `hash` of the plan's kind and item keys | `mcp_server._plan_id` | This process only (string hashes are salted per process) |
 | Plan item key | The two GlobalIds sorted, joined by `\|` | `plans.pairs_for`, `build_root_cause` | The pair |
+| Saved-set key | A dict: `prepare.VERSION`, the files by name and sha256, `requirements` null, the default clearance, `PLAN_ROUNDS`, `agent.OPTIONS`, the proposal model id and thinking level, the domain prompt's sha256, `hosts` null | `prepare.saved_key` (none after a kept edit or with requirements in force) | The same files byte for byte, opened unedited, with the same code, prompt and proposal model: a saved set is used only when its key is equal |
+| Saved reply's question hash | 64 hex of sha256 of the system prompt, `\0` and the question text (no images) | `prepare.question_hash` | Any server, while Iris asks exactly the same question |
 | Pattern id | `ClassA\|ClassB\|fileA\|fileB` | `plans.patterns` | The classes and files |
 | Detection test id | `pair:a\|b`, `self:file`, `duplicates`, `clearance:MEP\|Structure`; under requirements `req:a\|b`, `req:a`, `req:duplicates` | `detect.default_tests`, `presets`, `requirements.compile_tests` | The file names or group ids |
 | Chat session id | 12 hex | `Chat.session` | The process; 200 sessions kept |
@@ -679,6 +692,7 @@ stateDiagram-v2
 | The samples' saved checks, read from `samples/saved-checks/*.json` and merged | `saved_checks._loaded` | One entry; read again when a file there changes |
 | Each opened file's SHA-256, by path, size and time | `saved_checks._digests` | 256 entries, cleared past that |
 | Whether this process measured a saved check's probe as it was saved | `saved_checks._probed` (run key → yes or no) | One entry per saved check looked up; the process's life |
+| Saved sets read, and the sha256 of each file a saved-set key names | `prepare._files`, `prepare._hashes` (by path, size and modified time) | Not bounded (one entry per file seen) |
 | The filters' index | `IfcScene._facets` (`facets.index`; `Workspace.facets` reads and builds it outside the lock and keeps it only if the revision held) | Until a kept edit changes the scene's revision or its elements |
 | Pictures being drawn | `built._running` | Only while drawing |
 | Saved drawing readings, by their PDF's sha256 | `drawing_reader._saved_index` (under `_saved_lock`, one folder) | Read again when a `*.reading.json` there changes (name, mtime or size) |
@@ -697,6 +711,8 @@ Paths under "temp" are in the system temporary folder (`tempfile.gettempdir()`).
 |---|---|---|
 | Sample models, sample reports, shipped STEP cache, sample drawings with their truth files and saved readings | `samples/`, `samples/reports/<name>/`, `samples/step-cache/`, `samples/drawings/` | Read-only; part of the deploy image |
 | Sample models, sample reports, shipped STEP cache, the samples' saved checks | `samples/`, `samples/reports/<name>/`, `samples/step-cache/`, `samples/saved-checks/` | Read-only; part of the deploy image |
+| Sample models, sample reports, shipped STEP cache | `samples/`, `samples/reports/<name>/`, `samples/step-cache/` | Read-only; part of the deploy image |
+| Saved AI proposals for a sample (the review queue) | `IRIS_PREPARED_DIR`, default `samples/prepared/*.json`; written only by `evals/prepare_saved.py` (none made yet) | Read-only to the server; part of the deploy image once made ([19](19-demo-data.md)) |
 | Uploaded models and STEP conversions; a project's files copied in to open it | temp `iris-models/<folder>/` (`service.MODELS`, `Workspace._roots`: one folder per opening or adding) | The scene is evicted (or the open or add fails); a removed model's file at once, its folder once it holds none of the scene's files |
 | Projects | `IRIS_PROJECTS_DIR`, default `server/.iris-projects/` (gitignored); on Cloud Run `/mnt/iris/projects` when a bucket is mounted. One folder per project: `project.json`, `models/`, `saved/<n>/` (with `state.json`), `reports/`, `drawings/` ([14](14-files-in-and-out.md)) | Kept; at most `IRIS_PROJECTS_MAX` (50) projects |
 | 2D drawings: the PDF and each page's PNG | temp `iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`): `source.pdf`, `page-<index>.png` | The scene is evicted (its folder goes when the scene object is let go, or on the next drawing call) |
@@ -779,4 +795,5 @@ fixes the link's agent applied meanwhile (`Link.applied`), and follows the link 
   renewal, expiry or caps.
 - A new store appears or a bound changes: a module-level dict in `app.py`, a cache, a temp folder, the settings store, a
   `IRIS_MAX_*` or budget variable.
+- What a saved set holds or its key changes (`prepare.Saved`, `saved_key`, `question_hash`, `FORMAT`).
 - A browser storage key is added, renamed or changes what it holds (grep `web/src` for `localStorage`).

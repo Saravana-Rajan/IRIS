@@ -9,6 +9,12 @@
 > deploy identity and the cloud footprint re-checked on 2026-11-22, the drawing reader's budget and the sample drawings
 > the same day · **Deeper design:**
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/uploads.md](../uploads.md)
+> `voice_live.relay`, `model_client.load_env` and `PRICES`, the budget in `server/iris/built.py`,
+> `web/src/Owner.tsx`, the deploy identity in `deploy/github-setup.sh` · **Checked against code:** re-branded on
+> 2026-11-11; origins, the owner cookie, the voice socket's Origin rule, deploy identity and the cloud footprint
+> re-checked on 2026-11-22; the prepare charge: review queue 2026-11-22 · **Deeper design:**
+> [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/uploads.md](../uploads.md),
+> [docs/review-queue.md](../review-queue.md)
 
 Iris is a public demo that spends money on every model call, on one shared set of credentials, in one process. This doc is
 how it keeps the credentials on the server, tells visitors apart, trusts exactly one person (the owner) and agents holding a link
@@ -173,7 +179,7 @@ What the owner gets that visitors do not:
 |---|---|---|
 | Read and change settings for everyone | Yes; visitors get 403 | `GET` / `PUT /api/settings` |
 | Their own thinking levels (main, fast, escalation), second tries, Show it built | Yes, per request | `owner.settings`, `owner.enter` |
-| Demo caps | Skipped, unless the owner sends `no_caps: false` | `app._take`, plan and wider-fix streams, chat's closures (proposals, second tries, detection runs) |
+| Demo caps | Skipped, unless the owner sends `no_caps: false` | `app._take`, plan, prepare and wider-fix streams, chat's closures (proposals, second tries, detection runs) |
 | Escalation day budget (`IRIS_ESCALATION_MAX_USD_DAY`) | Never refused (still counted) | `spend.claim(exempt=True)` in `escalation_refused`, `built_stream` |
 | Agent links they make | Proposals, second tries and detection runs not capped (`Link.owner`) | `mcp_hooks.charge`, `escalate`, `detect_run` |
 | MCP tool-call cap on their links | **Still applies** (`agent_call_limit.take(link.id)`) | `mcp_hooks` `allow_call` |
@@ -217,7 +223,7 @@ not counted. The state is per process, which is why the deploy pins one containe
 
 | Cap | Env (per visitor per hour / everyone per day) | Default | Deploy | What takes it, and how many |
 |---|---|---|---|---|
-| Proposals | `IRIS_PROPOSE_PER_HOUR` / `IRIS_PROPOSE_PER_DAY` | 0 / 0 | 20 / 300 | 1 per proposal (`/propose`, `/propose/stream`, chat and MCP `propose_fixes`); a plan `take_many` one per clash pair (the plan stream counts at most `plans.MAX_ITEMS`, 8); a root cause 1 for the cause, then one per fix only if it needs edits; a wider fix 3 (`take_many`); 1 to start a report's triage (following a run, or carrying readings to new rules, is free; stopping one is free and only for whoever started it or the owner (`triage.Job.may_stop`, 403 for anyone else following a shared run), and going on after a stop or a failed read is 1 for a run that asks only the rest, a stopped run never donating its readings to a free run under new rules; over Iris's kept checks, 1 only when the run asks the model about an unread clash, readings carried to a new list being free and making no audit call, and 1 for a run queued behind the one under way for what it does not read); 1 for a pattern reading (once per report, scene, set of patterns and triage prompt, shared by the route, chat and MCP `find_patterns`: `plans.read_patterns`); 1 for a requirements draft; 1 for a PDF report |
+| Proposals | `IRIS_PROPOSE_PER_HOUR` / `IRIS_PROPOSE_PER_DAY` | 0 / 0 | 20 / 300 | 1 per proposal (`/propose`, `/propose/stream`, chat and MCP `propose_fixes`); a plan `take_many` one per clash pair (the plan stream counts at most `plans.MAX_ITEMS`, 8); the review queue's `POST /api/scenes/{scene_id}/prepare/stream` `take_many` one per clash pair prepared live (`propose_limit.take_many(who, n_live)`, all or none, 429 before the stream; at most `plans.MAX_ITEMS`, 8, pairs a run, each up to `plans.PLAN_ROUNDS`, 2, model calls), a pair replayed from a saved set free (no model call, only the geometry check); a root cause 1 for the cause, then one per fix only if it needs edits; a wider fix 3 (`take_many`); 1 to start a report's triage (following a run, or carrying readings to new rules, is free; stopping one is free and only for whoever started it or the owner (`triage.Job.may_stop`, 403 for anyone else following a shared run), and going on after a stop or a failed read is 1 for a run that asks only the rest, a stopped run never donating its readings to a free run under new rules; over Iris's kept checks, 1 only when the run asks the model about an unread clash, readings carried to a new list being free and making no audit call, and 1 for a run queued behind the one under way for what it does not read); 1 for a pattern reading (once per report, scene, set of patterns and triage prompt, shared by the route, chat and MCP `find_patterns`: `plans.read_patterns`); 1 for a requirements draft; 1 for a PDF report |
 | Second tries | `IRIS_ESCALATE_PER_HOUR` / `IRIS_ESCALATE_PER_DAY` | 0 / 0 | 3 / 30 | 1 per second try on the escalation model, with 1 proposal (`take_all`), after the budget claim |
 | Chat messages | `IRIS_CHAT_PER_HOUR` / `IRIS_CHAT_PER_DAY` | 0 / 0 | 40 / 1500 | 1 per message; its tool calls take their own caps, as their routes do (the hand-edit tools take none: a check or a keep is geometry, no model call) |
 | Built views | `IRIS_BUILT_PER_HOUR` / `IRIS_BUILT_PER_DAY` | 0 / 0 | 6 / 60 | 1 per Show it built request that is neither cached nor being drawn already |
@@ -332,6 +338,13 @@ Main-model and fast-model calls (proposals, chat, plans, reports, drafts, triage
 are bounded by count, through the caps above, not by money; triage runs at most `IRIS_TRIAGE_WORKERS` calls at a
 time. Triage, titles and part names always run on the fast model: there is no switch to move them. Voice is bounded by its cap and the clip and session limits below.
 
+The review queue's prepared fixes are counted like a plan: one proposal per clash pair prepared live. A pair the
+sample's saved set holds is replayed with no model call, so it costs nothing (geometry only). That set is made by
+`evals/prepare_saved.py`, which calls Gemini, billed, only with `--model gemini --yes`, and only after the owner
+approves; every other mode runs offline. Its `--dry-run` estimate for Northbank, with no model call: 16 calls at
+most (8 pairs, 2 rounds), about $0.31 on `gemini-3.8-flash` at thinking low (the proposal model `.env` and
+`deploy/deploy.sh` configure), about $0.41 on `gemini-4-argon` ([19](19-demo-data.md)).
+
 ### The cloud footprint
 
 The Google Cloud footprint is kept minimal (owner decision, 2026-11-22; [20](20-decisions-limits-and-roadmap.md)).
@@ -363,7 +376,7 @@ How to deploy and change it: [17](17-deployment-and-operations.md).
 | Voice clip | 3,000,000 bytes; mono 16-bit WAV at 16 or 24 kHz | `app.transcribe_voice`: 413, 422 |
 | Live voice | First frame within 10 s; audio frames at most 32,768 bytes and even; at most the session's seconds of audio (`IRIS_VOICE_HOLD_MAX_S`, 60, hold to talk; `IRIS_VOICE_LIVE_MAX_S`, 120, hands-free), with 5 s grace on the clock; hands-free segments by loudness (`IRIS_VOICE_VAD_RMS`, 500; `IRIS_VOICE_SILENCE_MS`, 700), each transcribed on the fast model when silence ends it; 90 s for the last segments (`END_WAIT_S`) | `app.voice_live_socket`, `voice_live.relay`, `voice_live.Segmenter` |
 | Chat | 8 model calls per message (`chat.MAX_STEPS`); a message cut to 4,000 characters; 40 messages kept per session, 200 sessions | `chat.py`, `app.chat_turn` |
-| Plans | 8 pairs (`plans.MAX_ITEMS`) | `plans.py` |
+| Plans | 8 pairs (`plans.MAX_ITEMS`), for Fix together and the review queue's prepared fixes alike | `plans.py`, `prepare.pairs` |
 | Pictures in | Captured clash views 4 MB, PNG only; link captures 6 MB; built passes 12,000,000 characters each, square, 256 to 2,048 px | `app.save_view`, `app.link_capture`, `app.BuiltBody`, `built._decode` |
 | Requirements | 64 KB a file, 500 kept | `requirements.MAX_BYTES`, `REGISTRY_MAX` |
 | Streams | 64 unread events per request; progress dropped first | `app._RequestEvents` ([10](10-http-api-and-streams.md)) |
@@ -383,6 +396,7 @@ How to deploy and change it: [17](17-deployment-and-operations.md).
 - A new cap, a changed default or deploy value, or a new place that takes one (and the cap env vars in
   [15](15-requirements-settings-and-config.md)). A chat or MCP tool that does what a capped route does takes that
   route's cap.
+- A change to what runs free: a saved set's replayed pairs (`prepare.live_count`), a cached picture, a following run.
 - A change to how a visitor is identified (`limits.client_id`, `IRIS_TRUST_FORWARDED`), or to what Cloud Run's front
   end sends.
 - A new priced model or price in `model_client.PRICES` / `IRIS_MODEL_PRICES` or `IRIS_IMAGE_USD`, a new estimate,

@@ -9,12 +9,21 @@
 > (projects and decisions routes, 2D drawing routes, the detect stream's `phase` and `done`; re-branded 2026-11-11) ·
 > **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
+> `web/src/uploads.ts`, the container entry deployed by `deploy/deploy.sh` · **Checked against code:** re-branded 2026-11-11;
+> the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health` and the voice origin check re-checked 2026-11-22;
+> projects and decisions routes, 2D drawing routes 2026-11-22; review queue 2026-11-22 (the prepare route, its stream
+> and the route count) ·
+> **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md),
+> [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md),
+> [docs/review-queue.md](../review-queue.md)
 
 Iris's server is one FastAPI app, `app` in `server/iris/app.py`, that the page, the MCP server and anything
 else talk to. It serves 102 decorated routes under `/api/`, `GET /`, one WebSocket (live voice) and the MCP endpoint
 at `/mcp`. On one origin it also serves the built web app. Split, with the web app on another origin (Firebase
 Hosting, `IRIS_ALLOWED_ORIGINS` set, `origins.py`), it serves the API only and answers CORS for exactly those
 origins. Long work answers as newline-delimited JSON (NDJSON) so the page can show the agent working. This doc is the inventory of every route, stream event, header and error, and how
+origins. Long work answers as newline-delimited JSON (NDJSON) so the page can
+show the agent working. This doc is the inventory of every route, stream event, header and error, and how
 `web/src/api.ts` reads them. Other docs link here rather than list routes again. What each route's work does
 inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the caps' meaning is in
 [16](16-security-caps-and-cost.md); the MCP side of `/mcp` is in [11](11-mcp-and-agent-links.md).
@@ -163,10 +172,13 @@ is a 422 whose `detail` is a list, not a string.
 | 403 | Not allowed | owner-only settings; listing every project (`GET /api/projects` without `ids`) as a visitor; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin not in `IRIS_ALLOWED_ORIGINS` (closed before the handshake, which the server answers as HTTP 403) |
 | 404 | Gone or never there | "Model not loaded. Open it again." (`_scene`), "Clash report not loaded. Open it again." (`_report`), both with `X-Iris-Gone`; "This agent link has expired or was revoked." (`_link`), "That report has expired. Build it again.", "No such picture.", "No such image.", "No such clash.", "No owner is configured on this server.", "Proposal expired or unknown. Generate a new wider fix.", "No such project." (`projects.NotFound`, also for an id that is not 24 hex characters), "No such report in this project.", "No such drawing. Upload it again." (`_drawing`: no open scene holds it), "No such page." |
 | 409 | The state does not allow it | `requirements_unknown` (middleware); a new project past `IRIS_PROJECTS_MAX` (`projects.Full`); a scene's 31st drawing ("A model set holds at most 30 drawings."), also when the sample drawings would pass it; sample drawings asked for when the open models are not a demo that has them ("The open models have no sample drawings: they go with the sample building."); "No models are attached to this project yet."; "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
+| 403 | Not allowed | owner-only settings; listing every project (`GET /api/projects` without `ids`) as a visitor; a wrong owner token (under the unlock cap); second tries switched off; Show it built switched off; a live-voice socket from another origin not in `IRIS_ALLOWED_ORIGINS` (closed before the handshake, which the server answers as HTTP 403) |
+| 404 | Gone or never there | "Model not loaded. Open it again." (`_scene`), "Clash report not loaded. Open it again." (`_report`), both with `X-Iris-Gone`; "This agent link has expired or was revoked." (`_link`), "That report has expired. Build it again.", "No such picture.", "No such image.", "No such clash.", "No owner is configured on this server.", "Proposal expired or unknown. Generate a new wider fix.", "No such project." (`projects.NotFound`, also for an id that is not 24 hex characters), "No such report in this project.", "No such drawing. Upload it again." (`_drawing`: no open scene holds it), "No such page.", "Clash 'x' is not in this report." (`prepare/stream`) |
+| 409 | The state does not allow it | `requirements_unknown` (middleware); a new project past `IRIS_PROJECTS_MAX` (`projects.Full`); a scene's 31st drawing ("A model set holds at most 30 drawings."); "No models are attached to this project yet."; "Nothing has been changed yet. Accept a fix first." (export); "Triage the report first: …" (document); "Nothing may be edited here (…), so there is no second try to make."; "Only clashes found by Iris take captured views."; a wider fix whose scene changed or whose fresh check failed; a fix that does not pass when tried again before it is kept (`plans.NotVerified`, every keep route): "'Offset up 400' does not pass Iris's check on the model as it is now (collision with IfcSlab (-50 mm)), so nothing was kept. The model or the requirements may have changed since it was proposed: propose again.", or for a plan "Fix 2 of 3, '…', does not pass …" and "… with the other fixes in place (…)" |
 | 411 | Model or drawing upload without `Content-Length` | "Send the upload with its length (Content-Length)." |
 | 413 | Too big | model upload over `IRIS_MODEL_UPLOAD_MAX_MB` (checked on `Content-Length`, then on the unpacked size); report upload over `IRIS_UPLOAD_MAX_MB` or `IRIS_UPLOAD_MAX_FILES`; a requirements file over 64 KB (`requirements.MAX_BYTES`); a captured view over 4 MB; a capture reply over 6 MB; a voice clip over 3 MB; models too big for a wider fix (`IRIS_WIDER_FIX_MAX_MB`); a drawing over `IRIS_DRAWING_MAX_MB` ("plan.pdf is over 50 MB."), or a drawing upload whose `Content-Length` is over ten of them |
 | 415 | A captured view that is not a PNG | "Send a PNG." |
-| 422 | Valid JSON, wrong content | "Say which element the offset goes around (other).", "Say which element the trim butts against (other).", "Say what moves (moved) and what it must clear (obstacles): …", "Cannot apply this fix: …" (`edits.Unsupported` while keeping), "Check the tests: …", "Pick the clashes to fix.", an empty or over-long project name, a decision whose `state` or `decision` is not one Iris knows, a requirements file that does not parse, a trim sent to Show it built, oversized or malformed built-view passes, a WAV that is not mono 16-bit at 16 or 24 kHz |
+| 422 | Valid JSON, wrong content | "Say which element the offset goes around (other).", "Say which element the trim butts against (other).", "Say what moves (moved) and what it must clear (obstacles): …", "Cannot apply this fix: …" (`edits.Unsupported` while keeping), "Check the tests: …", "Pick the clashes to fix.", "Nothing to prepare." (`prepare/stream`), an empty or over-long project name, a decision whose `state` or `decision` is not one Iris knows, a requirements file that does not parse, a trim sent to Show it built, oversized or malformed built-view passes, a WAV that is not mono 16-bit at 16 or 24 kHz |
 | 429 | A cap or budget is used up | the words from `ProposeLimit`: "You've used 20 proposals this hour. Try again later.", "The demo has used today's proposals. …", "That needs 3 proposals; you have 1 left this hour. …", or the escalation model's day budget refusal (`spend.claim`); a drawing read the day's budget cannot cover (`drawing_reader.ReadRefused`, raised before its first event) |
 | 501 | Not part of this build | "reader not available" (`POST /api/drawings/{drawing_id}/read` without `drawing_reader.py`), "comparison not available" (without `drawing_compare.py`) |
 | 502 | A model call behind the route failed | "Gemini Pro could not draft requirements: …", "Transcription failed: …" |
@@ -203,6 +215,10 @@ is a 422 whose `detail` is a list, not a string.
   without its final event is an error too ("The server stopped before …").
 - **`proposeStream`** reads the same way by hand: it throws on `error`, returns the `result` event as the
   `Proposal`, and passes every other event to the pilot.
+- **`apiSend(url, init)`** is `send` with `jsonHeaders()`, for a stream read outside `api.ts`: the review queue's
+  `prepareFixes` (`web/src/reviewQueueModel.ts`, [12](12-web-app.md)) posts to `prepare/stream` through it, throws
+  `ApiError` on a refusal before the stream, and passes every event (`error` included) to its store, which says
+  so when the stream ends before `done`.
 - **`uploadModelsStream`** gzips each file over 1 MB (`pack`, `CompressionStream`), posts with `XMLHttpRequest` for
   upload progress (`upload` events made in the browser, after `packing` ones), parses the NDJSON from
   `responseText` as it grows, and retries once on a 409 `requirements_unknown`. Cross-origin it sets
@@ -396,6 +412,16 @@ triage jobs (`_triage_jobs`) and 32 titling jobs (`_title_jobs`).
 | `POST` | `/api/scenes/{scene_id}/plan/stream` | Fix together (`plans.build_batch`) or the root cause around one element (`plans.build_root_cause`) | `PlanRequest {report_id, clash_ids=[], hub?, fixed=[]}` | NDJSON | Fix together: one proposal per distinct pair (at most `plans.MAX_ITEMS`, 8), all or nothing (`take_many`); a root cause: one, then its fixes only if it needs edits; 422 with no clashes |
 | `POST` | `/api/scenes/{scene_id}/plan/apply` | Keeps a plan's chosen options, all or none (`plans.apply`: each tried again alone, then all together with `verify_together`, then kept in one transaction). The entry records `actor` = `reviewer` and `check = {verified, min_clearance_m, checked_against}`; one `accepted`, `geometry_validated` decision per kept fix is appended to the journal | `PlanApply {options, clash_ids?, reviewer?, reason?, clash_keys?, numbers?}`, each option with its `pair` and `others`; `clash_ids`, `clash_keys` and `numbers` are lists, one per option (keys and numbers used when the server cannot derive them itself) | `{files, pieces, groups, changed, not_cut, verified, decisions}` plus the patch | free; 400, 409 `NotVerified` (which fix and why), 422 |
 
+### Review queue
+
+Prepared fixes for the review queue (`prepare.py`, [docs/review-queue.md](../review-queue.md), [09](09-agent-workflows.md)).
+The route keeps nothing: the reviewer's Accept goes through `POST /api/scenes/{scene_id}/fix/apply` (`plans.apply`,
+tried again first), and Reject and Request another through `decisions` and `propose/stream`, as everywhere else.
+
+| Method | Path | What it does | Body / params | Reply | Caps / auth |
+|---|---|---|---|---|---|
+| `POST` | `/api/scenes/{scene_id}/prepare/stream` | Runs Fix together's loop (`plans._resolve_items` → `agent.resolve`) on each distinct physical pair the clashes stand for, one card each and never merged (`prepare.pairs`, `plans.pairs_for(..., merge=False)`), at most `plans.MAX_ITEMS` (8) (`prepare.run`). Pairs the scene's saved set holds (`prepare.load_saved`) are replayed first from the model's recorded replies, each option checked again by geometry; the rest are asked live | `PrepareRequest {report_id, clash_ids=[], pick="ids", fixed=[]}`: `pick` `"ids"` prepares `clash_ids` less `fixed`; `"deepest"` lets the server pick the deepest open hard clashes not in `fixed` (`prepare.deepest`) | NDJSON (below) | one proposal per pair prepared live (`prepare.live_count`), all or none (`propose_limit.take_many`), charged before the stream; a pair replayed from a saved set is free; the owner has no caps. Before the stream: 404 scene, report, or a clash id the report does not hold; 422 "Nothing to prepare."; 429 the proposal cap |
+
 ### Chat and voice
 
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
@@ -455,7 +481,7 @@ buffer fills, so the first events arrive only with the result. Such an edge can 
 
 | Pattern | Routes | How it works | When the reader goes away |
 |---|---|---|---|
-| Queue and worker thread | `propose/stream`, `detect/stream`, `plan/stream`, `document/stream`, both `models/upload/stream` routes, `drawings/{drawing_id}/read` | The route charges, makes a `queue.Queue`, starts `work` with `owner.spawn` and returns a sync generator that yields `json.dumps(event) + "\n"` until the `None` sentinel (Starlette iterates it in its thread pool). The upload stream yields `{"type": "tick"}` after 5 s with no event. | The work runs to the end; the queue is unbounded. |
+| Queue and worker thread | `propose/stream`, `detect/stream`, `plan/stream`, `prepare/stream`, `document/stream`, both `models/upload/stream` routes, `drawings/{drawing_id}/read` | The route charges, makes a `queue.Queue`, starts `work` with `owner.spawn` and returns a sync generator that yields `json.dumps(event) + "\n"` until the `None` sentinel (Starlette iterates it in its thread pool). The upload stream yields `{"type": "tick"}` after 5 s with no event. `prepare/stream`'s `work` runs `prepare.run` with `events.put` as its emitter; an exception becomes `{"type": "error", "detail": "<kind>: <words>"}` before the sentinel. | The work runs to the end; the queue is unbounded. |
 | `_RequestEvents` | `chat`, `context/stream`, `built/stream` | A bounded queue (64) that never blocks a worker, even under `Workspace.lock`. When full it drops or evicts progress events (`thinking`, `tool`, `tool_result`, `trial`, `reasoning`, `ideas`, `checking`, `attempt`, `context_progress`, `item`, `checking_plan`, and wrapped ones) to keep results, errors and the end; if results alone fill it, the request ends with `error` "Request cancelled: too many unread result events. Please retry." The async reader polls every 50 ms and checks `request.is_disconnected()`. | Sets `cancel`: the chat turn and the wider search stop at their next check; a built view's work carries on. |
 | Shared job, replayed | `triage/stream`, `titles/stream` | One `triage.Job` / `titles.Job` per report key (triage over Iris's checks: one per scene, `scene:<id>`); `Job.follow()` yields every event so far, then new ones, and `{"type": "ping"}` after 15 s of quiet. A late follower of triage skips reasoning sent before it joined. | Other followers and the job carry on. |
 | Link channel | `links/{token}/events` | An async generator polling the subscriber's queue every 0.1 s; `heartbeat` after 15 s idle; ends after about 240 s (under the service's request timeout), when the page leaves, or when the link is gone. | The subscriber is removed. |
@@ -553,6 +579,19 @@ model…}`, `titles {items: {id: title}}` per batch, `batch_error {detail}`, `do
 | `checking_plan` | `retry?` (the items given their next-best option) |
 | `plan` | the whole plan (`kind, title, root_cause, strategy, hub, items, check, seconds, advice`) |
 | `error` | `detail` |
+
+**`POST /api/scenes/{scene_id}/prepare/stream`** (`prepare.run`, `plans._resolve_items`). In this order:
+`prepare_start`; then each pair's `item` events, the pairs a saved set holds first and the live ones after, a pair's
+last `item` (`status` done) followed at once by its `prepared` (one lock, so no other event falls between); then
+`done`. Pairs run `plans.PLAN_WORKERS` (4) at a time, so their `item` events interleave.
+
+| Type | Fields |
+|---|---|
+| `prepare_start` | `total`, `items` (`[{key, clash_ids, element_a, element_b, label, distance_m, saved}]`, `saved` true for a pair the saved set holds), `skipped` (why some clashes cannot be prepared, as words), `saved` (`Saved.info()`: `{label, model, made, title}` of the saved set in use, or null when none is used) |
+| `item` | as `plan/stream`'s: `key`, `status` thinking, checking (`attempt`, `passed`, `seconds?`, `checked?`, `reason?`) or done (`ok`, `title`: the best option's title, or why not; a replay miss without its exception's name) |
+| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready`: at least one option passed the check in this run; `failed`), `source` (`live` or `saved`), `options` (every option that passed, best first, each an `agent.Option` as a dict), `understanding`, `tried` (attempts), `model` (who proposed: the live model's label, or the saved set's `model_label`), `recommended` (the requirements allow no edit), `why` (failed only: `plans.failure_summary`, the recommendation, or `prepare.MISS`), `done` (how many have finished, this one included), `total` |
+| `done` | `ready`, `failed`, `total`, `seconds` |
+| `error` | `detail` (`<kind>: <words>`; the run failed, and no `done` follows) |
 
 **`POST /api/reports/{report_id}/document/stream`** (`document.generate`): `progress {step, done?, total?}` with
 step `explaining`, `summarising`, `rendering` or `bcf`; `ready {url, name, bytes}` (the url is
@@ -710,9 +749,10 @@ sequenceDiagram
 
 - A route added, removed, renamed or with a new method in `server/iris/app.py` (the docs-map test checks every
   decorated route against the tables above), or a route added another way (`app.router.routes`, `app.mount`).
-- A new body field, reply field, status code or refusal message on a route; a new cap charged by a route.
+- A new body field, reply field, status code or refusal message on a route; a new cap charged by a route, or a change
+  to what is free (a pair replayed from a saved set costs nothing on `prepare/stream`: `prepare.live_count`).
 - A new NDJSON stream, a new event `type` or field from `agent.resolve`, `detect.run`, `triage.Job`, `titles.Job`,
-  `plans`, `document.generate`, `built.make`, `context_planner.build`, `chat.Chat`, `step.convert`,
+  `plans`, `prepare.run`, `document.generate`, `built.make`, `context_planner.build`, `chat.Chat`, `step.convert`,
   `Workspace.open_paths`, `Workspace.add_models`, or `Link.publish`.
 - A change to `_ndjson`, `NDJSON_HEADERS`, `_RequestEvents` (size, what counts as progress), keep-alives, or how
   long the link events stream lives.

@@ -228,12 +228,22 @@ export class Viewer {
   private drawStyle = new DrawingStyle();
   /** The 3D view's targets for Shaded with edges and Hidden line. */
   private styled: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget] | null = null;
+  /** The stage the viewer was made in: `mountIn(null)` brings its elements back here. */
+  private readonly homeHost: HTMLElement;
+  /** Every element the viewer itself put in its host (`own`), in their order: `mountIn` moves exactly these, never the
+   * page's own children of the stage. */
+  private owned: HTMLElement[] = [];
+  /** While they are away from `homeHost`: a marker where each was, so each goes back to its place among the page's own. */
+  private marks = new Map<HTMLElement, Comment>();
+  /** Elements that already redraw on a pointer, wheel or touch (`redrawOnPointer`, once each). */
+  private pointerWoken = new WeakSet<HTMLElement>();
 
   constructor(private host: HTMLElement) {
+    this.homeHost = host;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.localClippingEnabled = true;
-    host.appendChild(this.renderer.domElement);
+    this.own(this.renderer.domElement);
     // The graphics card can take the context away (short of memory, a driver reset). three.js takes it back when the
     // browser restores it; every pane is then drawn again, and meanwhile the stage says what happened.
     this.renderer.domElement.addEventListener("webglcontextlost", () => this.contextLost(true));
@@ -241,7 +251,7 @@ export class Viewer {
     this.pane3d = document.createElement("div");
     this.pane3d.className = "view-pane view-3d";
     this.pane3d.hidden = true;   // until models are open: the start page and the project's own page sit there
-    host.appendChild(this.pane3d);
+    this.own(this.pane3d);
     this.controls = new OrbitControls(this.camera, this.pane3d);
     this.controls.enableDamping = true;
     this.controls.zoomToCursor = true;  // the wheel zooms to what is under the pointer, not the orbit centre
@@ -275,7 +285,7 @@ export class Viewer {
     this.editLabel = this.label("edit-label");
     this.measureCanvas = document.createElement("canvas");
     this.measureCanvas.className = "measure-layer";
-    host.appendChild(this.measureCanvas);
+    this.own(this.measureCanvas);
     this.buildMarker();
     this.resize.observe(host);
     this.fit();
@@ -283,8 +293,7 @@ export class Viewer {
     // nothing moved kept the page's thread busy. Every method call draws for a moment (wakeOnCalls); so does any
     // pointer, wheel or touch over the stage (the drawings' and the cube's own handlers) and every move of the camera.
     this.wakeOnCalls();
-    for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "touchstart", "touchmove"])
-      host.addEventListener(type, () => this.redraw(), { capture: true, passive: true });
+    this.redrawOnPointer(host);
     this.controls.addEventListener("start", () => { this.controlsHeld = true; });
     this.controls.addEventListener("end", () => { this.controlsHeld = false; this.cameraMoved = performance.now(); });
     this.controls.addEventListener("change", () => { this.cameraMoved = performance.now(); this.redraw(); });
@@ -1819,7 +1828,7 @@ export class Viewer {
     const layer = document.createElement("canvas");
     layer.className = "view-anno";
     el.appendChild(layer);
-    this.host.appendChild(el);
+    this.own(el);
     const view = new DrawingView(this.defaultSpec(kind));
     const pane: Pane = { spec: view.spec, el, rect: { x: 0, y: 0, w: 1, h: 1 }, pinned: false, view, key: ++this.paneSeq };
     this.attachDrawingInput(pane);
@@ -2937,7 +2946,7 @@ export class Viewer {
   private label(cls: string) {
     const el = document.createElement("div");
     el.className = `viewer-label ${cls}`;
-    this.host.appendChild(el);
+    this.own(el);
     return el;
   }
 
@@ -3040,6 +3049,63 @@ export class Viewer {
     this.markerLabel.remove();
     this.editLabel.remove();
     this.measureCanvas.remove();
+    for (const mark of this.marks.values()) mark.remove();
+    this.marks.clear();
+  }
+
+  // ---------------------------------------------------------------- where the viewer is shown
+
+  /** Put an element of the viewer's own in its host, and keep it in `owned` (so `mountIn` moves it). */
+  private own<T extends HTMLElement>(el: T): T {
+    this.owned = this.owned.filter((n) => n.parentNode === this.host);   // forget the ones taken out (old panes, notes)
+    this.host.appendChild(el);
+    this.owned.push(el);
+    return el;
+  }
+
+  /** Any pointer, wheel or touch over `el` draws for a moment (capture phase: the drawings' and the cube's own handlers
+   * stop some). Once per element. */
+  private redrawOnPointer(el: HTMLElement) {
+    if (this.pointerWoken.has(el)) return;
+    this.pointerWoken.add(el);
+    for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "touchstart", "touchmove"])
+      el.addEventListener(type, () => this.redraw(), { capture: true, passive: true });
+  }
+
+  /**
+   * Show the page's one viewer in another place (a second screen that shows the model, such as the review queue's
+   * right-hand pane), or back on its own stage (`null`). Every element the viewer put in its stage moves to `el`, in
+   * their order: the canvas, the 3D pane (its controls and view cube), the measure layer, the labels, the drawing panes,
+   * the lost-context note. The stage's other children (the page's toolbar and chips) stay where they are. `el` then sizes
+   * the canvas and the panes (it is watched for resizes) and a pointer over it draws, as over the stage. `mountIn(null)`
+   * puts each element back in its place on the stage, and one made while away at the end. A moved canvas keeps its WebGL
+   * context: nothing is made again. The same element twice, or `null` when already home, does nothing.
+   */
+  mountIn(el: HTMLElement | null): void {
+    const from = this.host, to = el ?? this.homeHost;
+    if (to === from) return;
+    const nodes = this.owned.filter((n) => n.parentNode === from);
+    if (to === this.homeHost) {
+      for (const [node, mark] of this.marks) if (!nodes.includes(node)) mark.remove();   // taken out while away
+      for (const node of nodes) {
+        const mark = this.marks.get(node);
+        if (mark?.parentNode === to) to.replaceChild(node, mark);
+        else { mark?.remove(); to.appendChild(node); }
+      }
+      this.marks.clear();
+    } else {
+      for (const node of nodes) {
+        if (from === this.homeHost) this.marks.set(node, from.insertBefore(document.createComment("viewer"), node));
+        to.appendChild(node);
+      }
+    }
+    this.owned = nodes;
+    this.host = to;
+    this.resize.disconnect();
+    this.resize.observe(to);
+    this.redrawOnPointer(to);
+    this.fit();
+    this.redraw();
   }
 
   /** The stage changed size. Resizing the canvas clears it, so only when its size really changed, and then everything
@@ -3078,7 +3144,7 @@ export class Viewer {
     note.className = "view-lost";
     note.setAttribute("role", "status");
     note.textContent = "The graphics card dropped the 3D view. Bringing it back…";
-    this.host.appendChild(note);
+    this.own(note);
     this.lostNote = note;
     this.lostTimer = window.setTimeout(() => {
       note.textContent = "The graphics card has not given the 3D view back. Fewer views use less of its memory.";

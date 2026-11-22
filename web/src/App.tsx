@@ -60,6 +60,7 @@ import { CoordinationOverview } from "./CoordinationOverview";
 import { ClashHeader } from "./ClashHeader";
 import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, undoableFix, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
+import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, ProjectSteps, SaveButton } from "./ProjectOverview";
@@ -337,6 +338,9 @@ export function App() {
     setReviewerState(name);
     try { if (name.trim()) localStorage.setItem("iris.reviewer", name.trim()); else localStorage.removeItem("iris.reviewer"); } catch { /* private window */ }
   };
+  // The review queue (docs/review-queue.md): prepared fixes, one clash per screen, over the workspace.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => { setReviewOpen(false); }, [sceneId, report?.id]);
   // "Modify" on a proposal opened the Edit tool for this clash: a hand edit kept for it records a "modified" decision.
   const modifying = useRef<{ item: ProposalItem; clash: { id: string; key: string; number?: number | null }; scene: string } | null>(null);
   const pid = route?.view === "project" ? route.pid : null;
@@ -4084,6 +4088,10 @@ export function App() {
     <CoordinationOverview summary={coordSummary} onFilter={filterCoord}
       onRunChecks={() => void (checks.length ? runDetect(null, sceneId, { all: true }) : runDetect(null))}
       onTriage={() => void runTriage(false)} triaged={!!triageRun || Object.keys(listTriage).length > 0} />);
+  /** Review fixes (docs/review-queue.md): the one entry point on Clash review, in the list's head. */
+  const reviewEntry = sceneId && report && <ReviewFixesEntry sceneId={sceneId} reportId={report.id} reportTitle={report.title}
+    clashes={report.clashes} triage={listTriage} ticked={checked} fixed={[...Object.keys(fixes), ...Object.keys(reviewed)]}
+    onOpen={() => setReviewOpen(true)} />;
   /** On the Coordination step the overview leads the Clashes tab, above triage. */
   const withCoord = (card: React.ReactNode) => (projStep === "coordination" && coordCard ? <>{coordCard}{card}</> : card);
   const sampleSet = demos.find((d) => d.tour === "northbank")?.files ?? demos[0]?.files ?? [];
@@ -4294,7 +4302,7 @@ export function App() {
               onPropose={sceneId ? proposeFromList : undefined} onSetAside={(c, note) => review([c.id], "by_design", note)}
               onFocus={(f) => setListFocus(f)}
               view={leftView} onView={setLeftView} insightsCount={insightsOpen}
-              status={detecting && <p className="live-line"><i className="spinner" aria-hidden /> {detecting.phase}</p>}
+              status={<>{detecting && <p className="live-line"><i className="spinner" aria-hidden /> {detecting.phase}</p>}{reviewEntry}</>}
               picker={report.origin === "iris" && checks.length > 1 && <CheckPicker checks={checks} total={report.clashes.length}
                 value={viewCheck} onPick={setViewCheck} disabled={!!busy || !!detecting || !sceneId}
                 onAgain={(key) => void runDetect(null, sceneId, { check: key })} onAll={() => void runDetect(null, sceneId, { all: true })}
@@ -4802,6 +4810,28 @@ export function App() {
       {lightbox && report && lightbox.clash.images[lightbox.index] &&
         <Lightbox reportId={report.id} clash={lightbox.clash} index={lightbox.index} onClose={() => setLightbox(null)}
           onMove={(index) => setLightbox((l) => l && { ...l, index })} />}
+      {reviewOpen && sceneId && report && <ReviewQueue sceneId={sceneId} reportId={report.id} reportTitle={report.title} clashes={report.clashes}
+        viewer={viewer.current} reviewer={reviewer} onReviewer={setReviewer} onDecisions={(d) => noteDecisions(d, true)}
+        onClose={() => setReviewOpen(false)}
+        onKept={async (kept, { option: o, pair }) => {
+          // As accept() after its keep: the queue made the keep request (the server tried the fix again first).
+          const sid = sceneId, epoch = sceneEpoch.current;
+          const live = () => sceneEpoch.current === epoch;
+          const groups = kept.groups ?? (kept.pieces?.length ? [kept.pieces] : []);
+          if (kept.decisions?.length) noteDecisions(kept.decisions);
+          staleContext();
+          viewer.current?.preview([]);
+          await applyToViewer(sid, kept, groups, live);
+          if (!live()) return;
+          setEdits((e) => {
+            const next = { ...e };
+            for (const ps of groups) if (ps.length) { const [first, ...added] = ps; next[first] = [...(next[first] ?? []), ...added]; }
+            return next;
+          });
+          if (kept.cut !== false) markFixed([[pair[0] ?? null, pair[1] ?? null]], [o.title]);
+          if (a && b && samePair(a, b, pair[0] ?? "", pair[1] ?? "")) resetWork();
+          setRemeasure((n) => n + 1);
+        }} />}
     </div>
   );
 }
