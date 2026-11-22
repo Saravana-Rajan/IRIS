@@ -148,7 +148,6 @@ else
 fi
 
 # 4. Deploy.
-ARGS+=(--cpu-boost)              # extra CPU while an instance starts: faster cold starts, no idle cost
 gcloud run deploy "$SERVICE" "${ARGS[@]}"
 
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
