@@ -1027,6 +1027,15 @@ IndexedDB is used.
   card's width (about 500 px); frames are the whole window, and each clip crops its part, so Northbank's run gives
   the card and steps 2-4. `--keep` keeps the frames and times, `--from <folder>` encodes them again without a
   new proposal, and `--gpu` draws with the graphics card instead of SwiftShader.
+- **`web/scripts/capture-drawings.cjs`** (with **`timelapse.py`**): records the first screen's "2D drawing reader"
+  clip in the app as a visitor tries it: **Try the sample drawings**, the sample building opening, the two sample
+  sheets read (each replays its saved Gemini reading: no model call, $0), the mismatch sheet's Mismatches tab and one
+  mismatch shown on the sheet. Writes `web/public/demos/drawings.webp` and `drawings-still.webp` (1000 px, 16:10) and
+  a full-size MP4 for the hackathon video (`~/Downloads/Iris-demo/iris-drawings.mp4`, `--out-mp4` elsewhere);
+  `--clash` records the 3D clash check instead (`iris-3d-clash.mp4`). Run against one origin (the server serving
+  `web/dist`); it needs no Gemini credentials. Launches SwiftShader through ANGLE
+  (`--use-angle=swiftshader --enable-unsafe-swiftshader`), `--gpu` for the graphics card; `--keep` / `--from`
+  as `capture-proposals.cjs`. Not served by the app.
 - **`web/scripts/video-cards.cjs`** and **`web/scripts/record-demo.cjs`:** helper scripts that draw title cards and
   record screen takes of the app with Playwright (`web/tests/record-demo.test.mjs` covers the recorder). Not served by
   the app.
@@ -1080,5 +1089,5 @@ IndexedDB is used.
 - A new or renamed panel, a change to the default layout, the side bars' buttons, what is saved, or how `setTab` and
   the dock follow each other (also [docs/panels.md](../panels.md)).
 - A new tour, act, `TourState` field, `TourActions` action or recording in `web/public/tour/`.
-- A change to the build: scripts, dependencies, the Vite proxy, `copy-wasm.mjs`, `capture-demos.cjs`, `capture-proposals.cjs`, `record-demo.cjs`, `video-cards.cjs`, `web/public/`.
+- A change to the build: scripts, dependencies, the Vite proxy, `copy-wasm.mjs`, `capture-demos.cjs`, `capture-proposals.cjs`, `capture-drawings.cjs`, `record-demo.cjs`, `video-cards.cjs`, `web/public/`.
 - The identity or motion library in `assets/brand/iris/`, or its adoption by the app.

@@ -591,12 +591,29 @@ def test_sample_drawings_only_go_with_the_sample_building(sample_scene, tmp_path
     assert client.post("/api/scenes/nope/drawings/samples").status_code == 404
 
 
-def test_an_uploaded_drawing_has_no_saved_reading_unless_it_is_a_sample_sheet(sample_scene):
+def test_an_uploaded_drawing_has_no_saved_reading_unless_it_is_a_sample_sheet(sample_scene, tmp_path, monkeypatch):
+    from iris import drawing_reader as dr
     client, ws, sid = sample_scene
     [plain] = upload(client, sid, ("plan.pdf", plan_pdf())).json()
     assert plain["saved_reading"] is None
     [same] = upload(client, sid, ("copy.pdf", (SAMPLE_SHEETS / "Northbank-M-201.pdf").read_bytes())).json()
     assert same["saved_reading"]["model"] == "gemini-3.8-flash"     # the very same file: its saved reading is honest
+
+    # A read of the plain upload goes to the model (no saved reading to replay), and nothing says "saved".
+    calls = []
+
+    def live(self, page, images, system, text, schema):
+        calls.append(page.index)
+        return {"items": [], "title": None}, {"model": self.model, "usd": 0.0}
+    monkeypatch.setattr(dr.GeminiReader, "read", live)
+    monkeypatch.setattr(dr, "CACHE", tmp_path / "live-cache")       # no reply cached by an earlier run
+    events = ndjson(client.post(f"/api/drawings/{plain['id']}/read", json={},
+                                headers={"Accept-Encoding": "gzip, deflate, br, zstd"}))
+    assert calls == [0]
+    assert events[0]["type"] == "page" and events[0]["saved"] is False
+    done = events[-1]
+    assert done["type"] == "done" and done["saved"] is None
+    assert not any("saved_reading" in i["evidence"] for i in client.get(f"/api/drawings/{plain['id']}/items").json())
 
 
 def test_two_issues_of_one_sheet_are_each_compared_whole():

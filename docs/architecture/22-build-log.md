@@ -1042,6 +1042,80 @@ fix), `test_projects.py` (the route builds with no triage), `test_document_engin
 `report-dialog.test.mjs`, `clash-fixed.test.mjs`, `projects-api.test.mjs` (Save, `closedText`), `corner.test.mjs`
 (the More label), `npm test`, `tsc`, `npm run build`, `test_docs_map.py` and the full server suite (the two pango PDF
 tests fail locally, as before).
+**Nov 22 (2026-11-22), the sample drawings demo: saved readings, the samples route, See it work**
+([docs/drawings.md](../drawings.md), [10](10-http-api-and-streams.md), [12](12-web-app.md), [19](19-demo-data.md)).
+Each sample sheet ships with the drawing reader's Gemini 3.8 Flash reply to it (`samples/drawings/*.reading.json`,
+made once by `evals/save_drawing_readings.py`), keyed by the PDF's sha256, `prompt_hash()` and the page size; a read
+of that very file replays it as the same NDJSON stream (`page.saved`, `evidence.saved_reading`, `done.saved`, $0, no
+budget check), and any other PDF is read live as before. `POST /api/scenes/{scene_id}/drawings/samples` attaches the
+open demo's sheets; the first screen's **Try the sample drawings** and the Drawings step's **Add the sample
+drawings** use it, and the page labels a replay "Saved AI reading of this sample (Gemini 3.8 Flash)". `--check`
+(no model call): the clean sheet 123 items (119 confirmed, 3 AI-read, 1 text only), 0 mismatches; the mismatch sheet
+124 items (121 / 2 / 1), exactly its 4 planted mismatches (size differs, missing in model, type differs, missing in
+drawing). The first screen's **See it work** (`DemoClips.tsx`) plays `check.webp` beside the new `drawings.webp`,
+recorded by `web/scripts/capture-drawings.cjs` against one origin with no Gemini credentials (Metal GPU, `--gpu`);
+the full-size MP4s for the hackathon video go to `~/Downloads/Iris-demo/`. Found on the way: the recorder's frames
+(CDP `Page.captureScreenshot` with `clip.scale` 2) laid the page out at twice the window while capturing, so every
+frame showed it shifted and the sheet viewer fitted the page to the wrong size; frames now come from Playwright's
+screenshot, and the sheet viewer fits the page again when its stage resizes until the reader moves the view.
+Checked: `test_drawing_reader.py` (a replay and three misses: another file, a changed prompt, another page size),
+`test_drawings.py` (the samples route, a sample read with no model call, and an upload read live), the web tests
+(`drawings-samples.test.mjs`), `tsc`, the build, `test_docs_map.py`, the full server suite (only the two pango PDF
+tests fail locally).
+
+**Nov 22 (2026-11-22), the samples' first check builds no geometry** ([docs/detection.md](../detection.md), "Saved
+checks for the samples"; [02](02-system-architecture.md), [04](04-server-code-map.md),
+[05](05-domain-model-and-state.md), [06](06-geometry-and-detection.md), [10](10-http-api-and-streams.md),
+[14](14-files-in-and-out.md), [17](17-deployment-and-operations.md), [18](18-testing-and-evals.md),
+[19](19-demo-data.md); [samples/README.md](../../samples/README.md)). On the live service (`iris-api`: 2 vCPU, 4 GiB,
+one instance, scale to zero, CPU boost) the first coordination check of Northbank (four IFCs, 1,732 elements checked,
+464 clashes) once took 186 s on a cold instance with two scenes opened at nearly the same time; warm it takes about
+11 s. Nearly all of it was building geometry twice: every element's box when the models open (`IfcScene.bounds`),
+then detection's triangle tree (`detect._tree`, the same elements again, with the clash kernels) and the measures.
+On one machine detection is deterministic whatever the threads (1, 2, 4 and 10 checked, on linux/x86_64 and
+macOS/arm64), so the shipped samples now carry what their geometry gave (`server/iris/saved_checks.py`;
+`samples/saved-checks/northbank.json`, generated, about 550 KB with both platforms, committed; `.gitignore` allows the
+folder and `.dockerignore` already lets its JSON into the image): each file's element boxes, keyed by the file's
+SHA-256, `IfcScene.big()`, `saved_checks.BOXES_VERSION`, the IfcOpenShell version and the platform
+(`IfcScene.bounds(saved=True)` and `add_files(saved=True)`, passed by `Workspace.open_paths` and `add_models`); and
+each test's measurement of the default check, under one key for the whole run (the files' hashes in order, every box
+to the bit, every test's settings and candidate pairs, the offset, `detect.VERSION` (new, 1), the IfcOpenShell
+version and the platform). **Per platform** (`saved_checks.PLATFORM`; `PLATFORMS`: `linux-x86_64`, `darwin-arm64`):
+on Northbank, linux/x86_64's boxes (in Docker) differ from macOS/arm64's in the last bit for 12 elements, and the
+triangle queries' depths differ for 46 clashes and their points for 309 (so the #N order too), so a Mac-made replay on
+Cloud Run would not be its live check. The pairs go into the key as a set, sorted: NumPy's sort orders boxes that start
+at the same x differently on x86 and ARM. **The probe:** before a process first replays a check it measures `PROBES`
+(8) of its clashes again (pairs the triangle queries measured, spread over the tests) in a small tree of just their
+elements; any difference to the bit and it runs live, with a logged warning, remembered per process (`_probed`). With
+the Mac's entry forced in on linux/x86_64, the probe refuses it; it costs about 0.5 s once per process locally.
+`detect.run(replay=True)` on a scene at revision 0 takes the saved check, all tests or none; the workspace's runs
+(`Workspace._run_check`: the detect stream, Run all again, chat, MCP) and the requirements preview's count pass it, a
+direct call measures live. Everything after the measurement is made live (the rules, clash ids, #N, the diff, the
+report, coverage, kept checks, triage input, Insights); the events are the same but for the phase line ("Unchanged
+sample models: taking the saved geometry of n elements"), and `Run.saved` and the detect stream's `done` (`saved`)
+say so. Any difference runs live: another byte, a kept edit or a model added or removed, a box a trial moved, another
+test or setting, other candidate pairs, another platform or probe, other code. Regenerate with `uv run python -m
+iris.saved_checks --docker` from `server/` (no AI): this machine's entry, then linux/x86_64's in Docker
+(`python:3.13-slim-bookworm`, `--platform linux/amd64`, the same IfcOpenShell, NumPy and defusedxml versions), merged
+into one file (`saved_checks.merge`); bump `detect.VERSION` or `BOXES_VERSION` first for a change to what detection
+measures or how boxes are made. `saved_checks._digests` is capped (cleared past 256 entries). Also in detection: the
+broad phase (`detect._candidates`) takes every element's window at once, in chunks of `CANDIDATES_CHUNK` (2^20)
+window entries, instead of one element at a time, giving the same pairs in the same order; and the triangle tree uses
+`scene.THREADS` (the CPUs the process may use) instead of `os.cpu_count()`, with the same results. Measured on Apple
+Silicon (10 cores): live, opening the four files 0.1-0.5 s, boxes 1.5-1.7 s, the check 2.4-2.8 s (tree 1.5 s,
+measures 0.8 s, broad phase 0.3 s, now 0.13 s); limited to 2 threads, as on Cloud Run, boxes 4.1 s and the check 5.8 s
+(tree 4.6 s); replayed, boxes 0.04 s and the check 0.3 s (0.5-0.6 s with a process's first probe). On a busy machine
+(load about 30 on 10 cores), open to first result: one scene 6.2-7.0 s with the code before, 0.7 s replayed; two scenes
+opened at once 9.0-13.2 s before, 1.2 s replayed. On linux/x86_64 in Docker (emulated) the replay equals the live run
+to the bit (464 clashes; the probe passes; 7.7 s for the probe's first OpenCASCADE call under emulation). The first
+OpenCASCADE call in a fresh process takes 0.3 s; `import iris.app` about 2.7 s, 1.1 s of it the `mcp` package.
+Expected on Cloud Run, not yet measured there: about 11 s warm live becomes about 1-2 s for the unchanged samples,
+warm or cold, with no triangulation on the open or the first check; a cold start's container start and imports are
+unchanged. Checked:
+`test_saved_checks.py` (7: replay equals live on a fixture and on Northbank, edits and settings miss, both platforms'
+entries current), `test_detect.py` (`test_the_broad_phase_gives_every_near_pair_in_sweep_order` and
+`test_the_broad_phase_on_the_fixtures_as_before`, both against the old one-at-a-time sweep kept in the test),
+`test_checks.py`, `test_docs_map.py`, the full server suite.
 
 **Nov 22 (2026-11-22), the sidebar app shell and the lifemed theme** ([12](12-web-app.md), [01](01-product-and-journeys.md)).
 Iris is now an app with a left sidebar, not a website (the owner's brief). **The shell** (`AppShell.tsx`, `shellNav.ts`,

@@ -583,6 +583,9 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
   const [attempt, setAttempt] = useState(0);
   const drag = useRef<{ id: number; x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
   const dims = { w: page.width_px, h: page.height_px };
+  // The view is the automatic fit until the reader zooms, pans or picks: until then it follows the stage's size.
+  const fitted = useRef(true);
+  const moveView = (f: (v: View | null) => View | null) => { fitted.current = false; setView(f); };
 
   useLayoutEffect(() => {
     const el = stage.current;
@@ -594,8 +597,9 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // Fit the width once the stage has a size (the viewer is keyed by page, so each page starts fitted).
-  useLayoutEffect(() => { if (size && size.w > 0) setView((v) => v ?? fitWidth(size, dims)); }, [size]);
+  // Fit the width once the stage has a size (the viewer is keyed by page, so each page starts fitted), and again when
+  // the stage settles at another size before the reader has moved the view (a note or the items arriving above it).
+  useLayoutEffect(() => { if (size && size.w > 0) setView((v) => (v && !fitted.current ? v : fitWidth(size, dims))); }, [size]);
 
   useEffect(() => {
     const el = stage.current;
@@ -605,7 +609,7 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       const r = el.getBoundingClientRect();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * r.height : e.deltaY;
       const f = Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0015));
-      setView((v) => v && zoomAt(v, f, e.clientX - r.left, e.clientY - r.top));
+      moveView((v) => v && zoomAt(v, f, e.clientX - r.left, e.clientY - r.top));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -619,14 +623,16 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       if (!v) return v;
       const [x0, y0, x1, y1] = pickedItem.box;
       const inside = v.x + x0 * v.s >= 0 && v.y + y0 * v.s >= 0 && v.x + x1 * v.s <= size.w && v.y + y1 * v.s <= size.h;
-      return inside ? v : centreOn(v, pickedItem.box, size);
+      if (inside) return v;
+      fitted.current = false;
+      return centreOn(v, pickedItem.box, size);
     });
   }, [pickedItem, size]);
 
-  const fit = () => { if (size) setView(fitWidth(size, dims)); };
-  const zoom = (f: number) => { if (size) setView((v) => v && zoomAt(v, f, size.w / 2, size.h / 2)); };
+  const fit = () => { if (size) { fitted.current = true; setView(fitWidth(size, dims)); } };
+  const zoom = (f: number) => { if (size) moveView((v) => v && zoomAt(v, f, size.w / 2, size.h / 2)); };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const pan = (dx: number, dy: number) => setView((v) => v && { ...v, x: v.x + dx, y: v.y + dy });
+    const pan = (dx: number, dy: number) => moveView((v) => v && { ...v, x: v.x + dx, y: v.y + dy });
     const step = e.shiftKey ? 200 : 60;
     switch (e.key) {
       case "+": case "=": zoom(1.25); break;
@@ -653,7 +659,7 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
       d.moved = true;
       e.currentTarget.setPointerCapture?.(e.pointerId);   // only once it is a drag, so a click still reaches a box
     }
-    setView((v) => v && { ...v, x: d.vx + dx, y: d.vy + dy });
+    moveView((v) => v && { ...v, x: d.vx + dx, y: d.vy + dy });
   };
   const up = (e: PointerEvent<HTMLDivElement>) => { if (drag.current?.id === e.pointerId) drag.current = null; };
 
