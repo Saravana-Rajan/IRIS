@@ -70,6 +70,7 @@ import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
 import { browserStorage, readRail, writeRail, type NavId } from "./shellNav";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { EmptyState } from "./Holo";
+import { CursorGlow } from "./CursorGlow";
 import { DrawingsPanel } from "./DrawingsPanel";
 import { addSampleDrawings, compareDrawings, drawingItems, listDrawings, readDrawing, uploadDrawings, type Comparison, type Drawing, type Item as DrawingItem } from "./drawingsApi";
 import { demoOfFiles, openSampleDrawings, SAMPLE_DRAWINGS_BUSY } from "./sampleDrawings";
@@ -4987,6 +4988,8 @@ export function App() {
           </div>
         </div>
       </div>
+      {/* The pink glow that follows the cursor: over the pages only, never the 3D workspace */}
+      <CursorGlow on={onPage} />
       {newOpen && <NewProjectDialog onCreate={(n) => void newProject(n)} onClose={() => { setNewOpen(false); setCreateError(null); }}
         busy={creating} error={createError ?? undefined} />}
     </div>

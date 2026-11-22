@@ -1,7 +1,7 @@
 import { Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
 import type { CSSProperties, MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
-import { HoloRibbon, TextReveal } from "./Holo";
+import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
 import { ownClick, projectPath, type ProjectStep } from "./projectRoute";
 import { plural, whenText, type Project } from "./projectsApi";
@@ -82,7 +82,8 @@ export function StartScreen({
     <div className="home">
       <header className="home-hero">
         <div className="home-hero-in">
-          <div className="home-art"><HoloRibbon size="clamp(220px, 42cqi, 500px)" /></div>
+          {/* The hero's art: a soft pink wash until the 3D glass aperture arrives (feature/hero-ribbon) */}
+          <div className="home-art" aria-hidden><div className="home-art-wash" /></div>
           <div className="home-hero-text">
             <h1 className="home-greeting"><TextReveal text={hello} once="home-greeting" step={90} /></h1>
             <p className="home-tagline">
@@ -161,7 +162,7 @@ export function StartScreen({
             </ul>
           ) : (
             <div className="home-recent-empty">
-              <HoloRibbon size={40} className="home-recent-art" />
+              <MarkBadge size={40} className="home-recent-art" />
               <p>No projects yet. A project keeps your models, checks and decisions together.</p>
               <button type="button" className="home-textbtn" onClick={onNewProject}>Create one</button>
             </div>

@@ -27,30 +27,11 @@ export function useReducedMotion(): boolean {
 }
 
 /**
- * The holographic ribbon (lifemed-like): a loop of fine threads in the `--holo` colours that share one diameter and fan
- * apart around it, so together they read as one iridescent ribbon twisted at two points. It turns slowly in its own
- * plane (the twist travels round, a 28 s loop) and sways in 3D (26 s), over a blurred glow, with a glassy spark. CSS
- * only: every moving layer is a transform the compositor animates, painted once. Still under reduced motion.
- * Decorative (aria-hidden). `size` is its width and height: pixels, or any CSS length (e.g. "clamp(240px, 40cqi,
- * 520px)", which keeps the full detail); under 160 px it draws fewer, thicker threads.
+ * Iris's mark in a soft pink circle (the Aperture's blades in the holo colours, drawn through a CSS mask of
+ * `/brand/iris-spinner.svg`): the small art of empty states, the loading card and Home's quiet lines. Decorative.
  */
-export function HoloRibbon({ size = 320, className = "" }: { size?: number | string; className?: string }) {
-  const small = typeof size === "number" && size < 160;
-  const n = typeof size !== "number" || size >= 200 ? 11 : small ? (size < 100 ? 4 : 5) : 8;
-  return (
-    <div className={`holo-ribbon${small ? " holo-small" : ""} ${className}`.trim()}
-      style={{ "--hr": typeof size === "number" ? `${size}px` : size } as CSSProperties} aria-hidden>
-      <div className="holo-glow" />
-      <div className="holo-stage">
-        <div className="holo-sway">
-          <div className="holo-fan">
-            {Array.from({ length: n }, (_, k) => <span key={k} style={{ "--t": +(k / (n - 1)).toFixed(3) } as CSSProperties} />)}
-          </div>
-        </div>
-      </div>
-      <div className="holo-spark" />
-    </div>
-  );
+export function MarkBadge({ size = 64, className = "" }: { size?: number; className?: string }) {
+  return <span className={`mark-badge ${className}`.trim()} style={{ "--mb": `${size}px` } as CSSProperties} aria-hidden />;
 }
 
 /** Texts already revealed in this page load (TextReveal's `once`): seen again, they are simply there. */
@@ -115,7 +96,7 @@ export function CountUp({ value, ms = 900, className = "" }: { value: number; ms
 }
 
 /**
- * An empty page or panel (Synthesia-like): a small holographic ribbon, a title, one line and one primary action,
+ * An empty page or panel (Synthesia-like): the mark in a soft pink circle, a title, one line and one primary action,
  * centred. `compact` is the smaller one for a card or a side panel.
  */
 export function EmptyState({ title, line, action, compact = false, className = "" }: {
@@ -123,7 +104,7 @@ export function EmptyState({ title, line, action, compact = false, className = "
 }) {
   return (
     <div className={`empty-state${compact ? " compact" : ""} ${className}`}>
-      <HoloRibbon size={compact ? 72 : 120} className="empty-state-art" />
+      <MarkBadge size={compact ? 56 : 72} className="empty-state-art" />
       <h2 className="empty-state-title">{title}</h2>
       {line && <p className="empty-state-line">{line}</p>}
       {action && <div className="empty-state-action">{action}</div>}

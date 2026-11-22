@@ -4,7 +4,6 @@
 // boot splash draws the same lockup. The older split-O (`IrisMark`, `MarkShapes`) is kept for the notch and the old
 // landing only, which App no longer shows.
 
-import { HoloRibbon } from "./Holo";
 
 /** The pupil with its hexagonal aperture cut out (even-odd), in the mark's 100 x 100 box. */
 const PUPIL = "M 26 50 A 24 24 0 1 0 74 50 A 24 24 0 1 0 26 50 Z M 60 50 L 55 58.66 L 45 58.66 L 40 50 L 45 41.34 L 55 41.34 Z";
@@ -177,7 +176,7 @@ export function LoadCard({ load, now, onCancel }: { load: LoadProgress; now: num
   return (
     <section className="load-card" role="status" aria-live="polite" onClick={(e) => e.stopPropagation()}>
       <div className="load-head">
-        <HoloRibbon size={48} className="load-ribbon" />
+        <span className="mark-badge load-mark" style={{ "--mb": "48px" } as React.CSSProperties} aria-hidden />
         <div><h2>{load.title}</h2>
           <p className="hint">{n} model{n === 1 ? "" : "s"} · {elapsed} s</p></div>
         {onCancel && <button type="button" className="btn small ghost load-cancel" onClick={onCancel}>Cancel</button>}

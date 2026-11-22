@@ -66,12 +66,13 @@ test("the greeting: the time of day and the reviewer's name, or 'there' without 
   assert.match(markup({}), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/, "no name at all");
 });
 
-test("the hero: the principle, what Iris does, the ribbon; no brand header, and the page scrolls in its container", async () => {
+test("the hero: the principle, what Iris does, a soft pink wash (no ribbon); no brand header, and the page scrolls in its container", async () => {
   const html = markup({});
   assert.match(html, /^<div class="home">/);
   assert.match(html, /<p class="home-tagline">.*AI proposes\. Geometry proves\. The engineer decides\..*?<\/p>/);
   assert.match(text(html), /Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked, and report what was decided\./);
-  assert.match(html, /<div class="home-art"><div class="holo-ribbon"[^>]*aria-hidden="true"/, "the ribbon, decorative");
+  assert.match(html, /<div class="home-art" aria-hidden="true"><div class="home-art-wash"><\/div><\/div>/, "a soft wash, decorative, until the 3D aperture");
+  assert.doesNotMatch(html, /holo-ribbon/, "the striped ribbon is gone");
   assert.doesNotMatch(html, /wordmark|by Techjays|start-brand/i, "the shell has the brand");
   const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
   assert.match(css, /\.home \{[^}]*height: 100%;[^}]*overflow: hidden auto;/, "scrolls inside the main panel, never sideways");
@@ -216,18 +217,15 @@ test("the last session: Resume (primary) and Start fresh (ghost), with what was 
   assert.deepEqual([resumed, fresh], [1, 1]);
 });
 
-test("the ribbon: its size in pixels or any CSS length, fewer threads when small; still where there is no window", async () => {
-  const ribbon = (p) => renderToStaticMarkup(h(holo.HoloRibbon, p));
-  const big = ribbon({ size: 480 });
-  assert.match(big, /^<div class="holo-ribbon" style="--hr:480px" aria-hidden="true">/);
-  assert.equal(big.match(/style="--t:/g).length, 11);
-  assert.match(ribbon({ size: 120 }), /class="holo-ribbon holo-small"/);
-  assert.equal(ribbon({ size: 72 }).match(/style="--t:/g).length, 4);
-  assert.match(ribbon({ size: "clamp(220px, 42cqi, 500px)" }), /style="--hr:clamp\(220px, 42cqi, 500px\)"/);
+test("the mark badge (empty states, loading, Home's quiet lines) and the still motion where there is no window", async () => {
+  assert.equal(renderToStaticMarkup(h(holo.MarkBadge, { size: 72 })), '<span class="mark-badge" style="--mb:72px" aria-hidden="true"></span>');
+  assert.match(renderToStaticMarkup(h(holo.EmptyState, { title: "No reports yet" })), /<span class="mark-badge empty-state-art" style="--mb:72px" aria-hidden="true"><\/span>/);
+  assert.equal(holo.HoloRibbon, undefined, "no ribbon any more");
   assert.equal(holo.prefersReducedMotion(), true, "no window: still");
   assert.equal(renderToStaticMarkup(h(holo.TextReveal, { text: "Good morning, Ana", once: "t" })), "<span class=\"\">Good morning, Ana</span>");
   const css = await readFile(new URL("../src/holo.css", import.meta.url), "utf8");
-  assert.match(css, /prefers-reduced-motion: reduce\)[^}]*\.holo-glow, \.holo-sway, \.holo-fan[^}]*animation: none/, "still under reduced motion");
+  assert.match(css, /\.mark-badge::after \{[^}]*mask: url\("\/brand\/iris-spinner\.svg"\)/, "the Aperture's blades through a mask");
+  assert.doesNotMatch(css, /holo-ribbon|holo-fan/);
 });
 
 // ------------------------------------------------------------------------------------------------- sampleDrawings.ts
