@@ -19,6 +19,17 @@ files or other application code is included. Original metadata, IFC GlobalIds, g
 are preserved. `.gitattributes` disables newline conversion for these files. Regenerate them with the generator
 rather than editing the IFC/STEP text by hand.
 
+## Sample drawings
+
+`drawings/` holds two generated MEP plan sheets of Northbank Level 02 for the 2D drawing reader
+([docs/drawings.md](../docs/drawings.md)): `Northbank-M-201.pdf`, drawn from the models with their own tags and sizes,
+and `Northbank-M-201-mismatch.pdf`, the same sheet with four planted differences (a changed size, a missing run, an
+extra run, a pipe drawn as a duct). Each has a `.truth.json` answer key (every item with its tag, kind, size, box in
+page pixels at 150 dpi and GlobalId, plus the planted mismatches). They are synthetic, drawn by
+`evals/make_drawings.py` from the IFCs above, which it only reads. Regenerate them, from the repo root, with
+`uv run --directory server python ../evals/make_drawings.py`; `server/tests/test_make_drawings.py` fails when they are
+stale.
+
 ## Open the demos
 
 Follow [the local setup](../README.md#run-locally), then use the landing page's demo cards. The server lists every

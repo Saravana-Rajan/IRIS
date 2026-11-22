@@ -152,6 +152,31 @@ def test_chat_finds_root_causes_and_builds_a_plan(tmp_path):
     assert result["summary"] == "1 of 1 clash fixed, verified together"
 
 
+def test_chat_words_an_as_designed_root_cause_as_never_geometry_checked(tmp_path):
+    """Nothing was edited, so nothing was checked: neither "verified" nor "not all verified"."""
+    from test_plans import _report_xml, _setup as plan_setup
+
+    ws, sid, rid, main, beam = plan_setup(tmp_path)
+    end = next(e for e in ws.scene(sid).model.by_type("IfcDuctSegment") if e.Tag != "SA-1").GlobalId
+    (tmp_path / "reports" / "r4").mkdir(parents=True)
+    (tmp_path / "reports" / "r4" / "report.xml").write_text(_report_xml([(main, beam, -0.15), (end, beam, -0.05)]))
+    rid4 = ws.open_report_sample("r4").id
+
+    class Cause:
+        def complete_json(self, system, text, images=None):
+            return {"root_cause": "they bear on the beam", "strategy": "as_designed", "reason": "mark them by design"}
+    ws._model = Cause()
+    model = Scripted([[("plan_root_cause", {"hub": beam})], "They are as designed."])
+    events = []
+    chat = Chat(ws, model)
+    chat.turn(chat.session(None), "why does the beam clash", Context(sid, rid4), events.append)
+    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "plan_root_cause")
+    assert result["summary"] == "nothing edited, accepted as designed — no geometry check"
+    assert "verified" not in result["summary"]
+    told = json.loads(next(m for m in model.seen if m.get("role") == "tool")["content"])
+    assert told["strategy"] == "as_designed" and told["verified_together"] is None and told["geometry_checked"] is False
+
+
 def _pattern(n: int = 1) -> dict:
     """A pattern as plans.patterns gives it (the run fixture has too few pairs to make one)."""
     return {"id": f"IfcBeam|IfcDuctSegment|S{n}|M", "classes": ["IfcBeam", "IfcDuctSegment"], "files": [f"S{n}", "M"],

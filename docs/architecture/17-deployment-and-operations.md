@@ -7,6 +7,11 @@
 > `server/iris/settings.py` (the settings file), `server/iris/service.py` (eviction), `.env.example`,
 > `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
 > **Checked against code:** 2026-11-22 (the deploy files, CI/CD).
+> `deploy/env.yaml`, `deploy/.gcloudignore`, `deploy/README.md`, `server/iris/app.py` (static files, streams,
+> exports), `server/iris/settings.py` (the settings file), `server/iris/projects.py` (the projects folder),
+> `server/iris/service.py` (eviction), `.env.example`, `.gitignore`,
+> `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
+> **Checked against code:** 2026-11-22 (the Cloud Run deploy files, the projects folder).
 > **Deeper design:** [docs/uploads.md](../uploads.md) (memory and uploads), [docs/mcp.md](../mcp.md),
 > [docs/voice.md](../voice.md) (the voice socket), [deploy/README.md](../../deploy/README.md) (every command)
 
@@ -138,6 +143,7 @@ of the service's env vars on every deploy.
 - **Caps and limits** come from `deploy/env.yaml`:
   - the proposal, chat, voice, built-view, upload, link and agent-call caps;
   - `IRIS_MAX_SCENES` and `IRIS_MAX_REPORTS`, 8 each;
+  - `IRIS_PROJECTS_MAX` 50;
   - `IRIS_SCENE_BUDGET_MB` 300, and `IRIS_UPLOAD_MAX_MB` and `IRIS_MODEL_UPLOAD_MAX_MB`, 150 each;
   - `IRIS_ESCALATION_MAX_USD_DAY` 25;
   - `IRIS_BUILT_VIEWS` 0 and `IRIS_OPEN_WEIGHTS` 0.
@@ -162,6 +168,9 @@ of the service's env vars on every deploy.
   repository variables are set.
 - **With a bucket** (`BUCKET`), the script also sets `IRIS_SETTINGS_FILE=/mnt/iris/settings.json` and
   `IRIS_BUILT_CACHE=/mnt/iris/built`.
+  URL, `https://iris-PROJECT_NUMBER.REGION.run.app`.
+- **With a bucket** (`BUCKET`), the script also sets `IRIS_SETTINGS_FILE=/mnt/iris/settings.json`,
+  `IRIS_BUILT_CACHE=/mnt/iris/built` and `IRIS_PROJECTS_DIR=/mnt/iris/projects`.
 
 A changed value takes effect only in a new revision, so it needs a redeploy. The settings for everyone
 ([15](15-requirements-settings-and-config.md)) change live from the owner menu instead.
@@ -186,17 +195,24 @@ grants it. The deploy service account `iris-deploy` has no Secret Manager role: 
 ### Persistent storage
 
 Without a bucket, nothing the server writes outlives the instance. The settings for everyone go to
-`server/.iris-settings.json` inside the container, and a restart loses them.
+`server/.iris-settings.json` inside the container, and a restart loses them. Projects go to `server/.iris-projects`
+on the container's in-memory disk: they count against the 4 GiB and are lost with the instance.
 
 With `BUCKET` set, a Cloud Storage bucket is mounted through Cloud Storage FUSE at `/mnt/iris`:
 
 - the settings for everyone (`IRIS_SETTINGS_FILE`) survive restarts and redeploys;
-- the Show it built picture cache (`IRIS_BUILT_CACHE`) is kept, so a restart does not pay for the same picture again.
+- the Show it built picture cache (`IRIS_BUILT_CACHE`) is kept, so a restart does not pay for the same picture again;
+- projects (`IRIS_PROJECTS_DIR=/mnt/iris/projects`: original models, saved states, kept reports) survive restarts
+  and redeploys ([14](14-files-in-and-out.md)).
 
 The service account needs `roles/storage.objectUser` on the bucket.
 
 Uploads, conversions and exports stay in the container's temp folders. On Cloud Run those folders are in memory and
-count against the 4 GiB, so they are not moved to the bucket. FUSE is too slow for a scene's working files.
+count against the 4 GiB, so they are not moved to the bucket. FUSE is too slow for a scene's working files: opening a
+project copies its files into the temp folder first, so a scene never works from the bucket.
+
+`.gitignore` and `deploy/.gcloudignore` leave out `server/.iris-projects`, so local projects never reach git or a
+build.
 
 ### What warm costs
 
@@ -482,7 +498,8 @@ gone. The page and agents recover as follows:
 
 | Lost | What people see | Recovery |
 |---|---|---|
-| open scenes and every kept edit | A page that is still open shows one notice at its next call: "The server no longer holds your models". The 404 "Model not loaded. Open it again." carries `X-Iris-Gone`. | The notice's **Open them again** reopens the same sample models and runs the check again (for uploads, **Pick your files again**). Edits live only in memory, so export kept fixes before a redeploy. |
+| open scenes and every kept edit | A page that is still open shows one notice at its next call: "The server no longer holds your models". The 404 "Model not loaded. Open it again." carries `X-Iris-Gone`. | The notice's **Open them again** reopens the same sample models and runs the check again (for uploads, **Pick your files again**). Edits live only in memory, so export kept fixes, or save them to a project, before a redeploy. |
+| projects (without a bucket) | the browser's list of projects comes back empty (`GET /api/projects` skips ids it does not know) | deploy with `BUCKET` |
 | open reports | the same notice, for the clash report | **Open it again** |
 | registered requirements | 409 `requirements_unknown` | automatic: `api.ts` `send` registers the file again and retries once |
 | triage and title runs | the Triage card shows nothing new | run triage again |
@@ -498,6 +515,8 @@ These survive a restart:
 - the owner's cookie, which is signed with a key made from the token, so it stays valid while the token is unchanged;
 - everything in the image (`samples/`, `web/dist`), and the web app on Firebase Hosting;
 - with a bucket, the settings and the picture cache.
+- everything in the image (`samples/`, `web/dist`);
+- with a bucket, the settings, the picture cache and the projects.
 
 ### Keeping memory and disk in bounds
 
@@ -508,6 +527,8 @@ Cloud Run's filesystem is in memory. Every temp file counts against the same 4 G
   Scenes that a live agent link points at go last. A dropped scene's upload or conversion folder is deleted.
 - **Reports** (`Workspace._keep`): past `IRIS_MAX_REPORTS`, the oldest goes (live links' reports last), and an
   uploaded report's folder is deleted.
+- **Projects** are capped by `IRIS_PROJECTS_MAX` (50); one more is refused (409), none is dropped. Without a bucket
+  they sit on the in-memory disk.
 - **Everything else in memory** is a bounded table that drops its oldest entry. The full list is in
   [05](05-domain-model-and-state.md).
 - **Bigger models** are refused before they cost anything, by the upload cap (`IRIS_MODEL_UPLOAD_MAX_MB`, counted

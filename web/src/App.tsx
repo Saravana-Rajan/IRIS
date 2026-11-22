@@ -1,8 +1,8 @@
-import { Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Compass, Download, FileSpreadsheet, FileText, FolderOpen, Hand, Info, LayoutPanelLeft, List, LocateFixed, Menu, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
+import { Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, Menu, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
-import { changeText, clearanceText, editText, framePieces, hostRows, isAiReading, kindLabel, needsText, optionKey, recEditText, rejectionNotes, reviewText, type Rejection } from "./fixKinds";
+import { changeText, clearanceText, editText, framePieces, isAiReading, kindLabel, needsText, optionKey, recEditText, rejectionNotes, reviewText, type Rejection } from "./fixKinds";
 import { ChatPanel } from "./Chat";
 import { ChatRequestOwner } from "./chatRequest";
 import { ReportDialog, ReviewBlock } from "./ReportDoc";
@@ -18,9 +18,9 @@ import { loadSignoffs, migrateTitleKeyed, saveSignoffs, signoffScope } from "./s
 import { addByDesign, addPenetration, hasByDesign, hasPenetration, load as loadRequirements, save as saveRequirements, shortLabel, type Saved as SavedRequirements } from "./reqFile";
 import { setGoneHandler, setRequirements, type Recommendation, type Requirements, type RuleAudit } from "./api";
 import { api, ApiError, type Demo, type ElementProperties, type CheckSummary, type DetectEvent, type DetectSetup, type DetectTest, type ContextEvent, type ContextObjective, type ContextProposal, type Evidence, type Signoff, type Team, type AgentEvent, type ChatEvent, type Matches, type Measure, type Option, type Pattern, type PatternVerdict, type Plan, type PlanEvent, type PlanItem, type Proposal, type Report, type ReportClash, type RootCause, type TriageKind, type TriageVerdict, type Verdict } from "./api";
-import { About, projectName } from "./About";
-import { AboutIris } from "./AboutIris";
-import { aboutTabFromHash, currentHash, showAboutHash, type AboutTab } from "./aboutRoute";
+import { projectName } from "./About";
+import { StartScreen } from "./StartScreen";
+import { aboutTabNow, type AboutTab } from "./aboutRoute";
 import { AgentDialog, timeLeft, type AgentLogEntry } from "./Agent";
 import { ClashPanel, Lightbox } from "./ClashPanel";
 import { PlanPanel, type PlanRun } from "./PlanPanel";
@@ -45,7 +45,7 @@ import { SheetBar } from "./Sheet";
 import { MenuSheet } from "./AppMenu";
 import { shortNames } from "./names";
 import { DEFAULT_AI_NAMES, setAiNames, type AiNames } from "./aiNames";
-import { AppIcon, KeptToast, LoadCard, Notch, Wordmark, type LoadProgress, type NotchStatus } from "./Brand";
+import { AppIcon, KeptToast, LoadCard, Notch, Wordmark, serverLine, type LoadProgress, type NotchStatus } from "./Brand";
 import { DockHost, SlotHost, inSlot, usePanelSlots, type DockHandle } from "./dock";
 import { FiltersPanel, blankRule } from "./FiltersPanel";
 import { ElementCard, type CardActions } from "./ElementCard";
@@ -53,6 +53,20 @@ import { EMPTY as NO_FILTERS, applied, complete, evaluate, legend, matching, mig
 import { CLASSIC_KEY, PANE, PANELS, isPanel, type PanelId } from "./dockLayout";
 import { runs, type Origin, type RunHandle, type RunKind } from "./runlog";
 import type { Peek } from "./workingsGraph";
+import { ImportPanel } from "./ImportPanel";
+import { applyDraw, applyEvent, drawnUpTo, failAll, initRows, removeRow, sendableFiles, type ImportRow } from "./importRows";
+import { ModelSummary } from "./ModelSummaryPanel";
+import { CoordinationOverview } from "./CoordinationOverview";
+import { ClashHeader } from "./ClashHeader";
+import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, type CoordinationFilter } from "./coordination";
+import { ProposalCard } from "./ProposalCard";
+import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
+import { ProjectsHome } from "./ProjectsHome";
+import { ProjectOverview, ProjectSteps } from "./ProjectOverview";
+import { PROJECT_STEPS, PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, ownClick, projectPath, showPath, showProjectRoute, type ProjectRoute, type ProjectStep } from "./projectRoute";
+import { addReport, attachScene, createProject, getProject, listProjects, myProjectIds, openProject, patchProject, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
+import { DrawingsPanel } from "./DrawingsPanel";
+import { compareDrawings, drawingItems, listDrawings, readDrawing, uploadDrawings, type Comparison, type Drawing, type Item as DrawingItem } from "./drawingsApi";
 import type * as THREE from "three";
 
 type Stats = { elements: number; triangles: number; parseMs: number };
@@ -239,7 +253,7 @@ export function App() {
   const [chatReport, setChatReport] = useState<string | null>(null);
   // The image dialog: a clash's Navisworks views, opened from the clash panel or a row's thumbnail.
   // About Iris (AboutIris.tsx): open on a tab, or null. The address carries it (#about, #about/fixes), so it can be shared.
-  const [aboutTab, setAboutTab] = useState<AboutTab | null>(aboutTabFromHash(currentHash()));
+  const [aboutTab, setAboutTab] = useState<AboutTab | null>(aboutTabNow);
   const aboutPushed = useRef(false);   // this page added the #about history entry, so closing goes Back over it
   // Gemini Pro's reasoning summaries for the current proposal, as they stream in.
   const [thoughts, setThoughts] = useState<{ round: number; text: string }[]>([]);
@@ -292,6 +306,93 @@ export function App() {
   const [reqOpen, setReqOpen] = useState(false);
   // A blank project: the workspace without a demo, waiting for the visitor's own models (ProjectStart.tsx).
   const [blank, setBlank] = useState(false);
+  // Projects (docs/engineer-workflow.md): the address says the page (`#projects`, `#project/<pid>/<step>`); the projects
+  // this browser knows, the one the address names, and what the page is doing with it (opening, saving).
+  const [route, setRoute] = useState<ProjectRoute | null>(() => currentProjectRoute());
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [projectError, setProjectError] = useState<string | null>(null);
+  const [projectBusy, setProjectBusy] = useState<string | null>(null);
+  // The project whose models this page opened by itself (a workspace step with them not open): once per visit.
+  const autoOpened = useRef<string | null>(null);
+  // Per-file import rows (importRows.ts, ImportPanel.tsx) and the files behind them, for Retry.
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const importBatch = useRef<{ files: File[]; mode: "open" | "add" } | null>(null);
+  // 2D drawings of the open models (DrawingsPanel.tsx, drawingsApi.ts): the sheets, what reading found on each, and the
+  // comparison with the models; read on the Drawings step, again after an upload or a reading (`drawingsTry`).
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [drawingItemsBy, setDrawingItemsBy] = useState<Record<string, DrawingItem[]>>({});
+  const [drawingCompare, setDrawingCompare] = useState<Comparison | null>(null);
+  const [drawingsError, setDrawingsError] = useState<string | null>(null);
+  const [drawingsTry, setDrawingsTry] = useState(0);
+  // The model summary's row isolated now (ModelSummaryPanel.tsx), and the coordination overview's filter on the list.
+  const [summaryIsolated, setSummaryIsolated] = useState<string | null>(null);
+  const [coordFilter, setCoordFilter] = useState<CoordinationFilter | null>(null);
+  // Who decides (docs/engineer-workflow.md, step 9): a name kept in this browser, sent with every decision and keep.
+  const [reviewer, setReviewerState] = useState<string>(() => { try { return localStorage.getItem("iris.reviewer") ?? ""; } catch { return ""; } });
+  const setReviewer = (name: string) => {
+    setReviewerState(name);
+    try { if (name.trim()) localStorage.setItem("iris.reviewer", name.trim()); else localStorage.removeItem("iris.reviewer"); } catch { /* private window */ }
+  };
+  // "Modify" on a proposal opened the Edit tool for this clash: a hand edit kept for it records a "modified" decision.
+  const modifying = useRef<{ item: ProposalItem; clash: { id: string; key: string; number?: number | null }; scene: string } | null>(null);
+  const pid = route?.view === "project" ? route.pid : null;
+  const projStep: ProjectStep | null = route?.view === "project" ? route.step : null;
+  /** Models, Coordination and Clash review happen in the workspace, under the step bar; the other steps are pages. */
+  const workStep = projStep === "models" || projStep === "coordination" || projStep === "clash";
+  const projectHere = project && project.id === pid ? project : null;
+  /** The models on screen are the project's (opened from it, or kept with it). */
+  const projectOpen = !!projectHere && !!sceneId && projectHere.scene_id === sceneId;
+  /** Where the page is when it is on no project's page: the open session (`/workspace`), else the first screen. */
+  const homePath = () => (sceneId || report ? "/workspace" : "/home");
+  /** Go to a project page (`push`: a new history entry, so Back returns), or back to the workspace (null). */
+  const goRoute = (next: ProjectRoute | null, push = true) => { showProjectRoute(next, push, homePath()); setRoute(next); };
+  /** A link the page follows itself: its real address for a new tab, a plain click handled here. */
+  const linkTo = (href: string, go: () => void) => ({ href, onClick: (e: React.MouseEvent) => { if (!ownClick(e)) return; e.preventDefault(); go(); } });
+  const goStep = (s: ProjectStep, id: string | null = pid) => { if (id) goRoute({ view: "project", pid: id, step: s }); };
+  const goProjects = () => goRoute({ view: "projects" });
+  useEffect(() => {   // Back, Forward or an edited address moves between the project pages
+    // An old address (#projects, #project/<pid>/<step>, #about, #owner) becomes its path; "/" is the first screen.
+    const old = typeof window !== "undefined" && window.location ? legacyPath(window.location.hash ?? "") : null;
+    if (old) showPath(old, false);
+    else if (typeof window !== "undefined" && window.location && /^\/?(index\.html)?$/.test(currentPath())) showPath("/home", false);
+    const read = () => setRoute(currentProjectRoute());
+    window.addEventListener("hashchange", read);
+    window.addEventListener("popstate", read);
+    return () => { window.removeEventListener("hashchange", read); window.removeEventListener("popstate", read); };
+  }, []);
+  // The projects home: the projects this browser created or opened (by id: there are no accounts), newest first.
+  useEffect(() => {
+    if (route?.view !== "projects") return;
+    let live = true;
+    const asked = myProjectIds();
+    setProjectsLoading(true); setProjectsError(null);
+    listProjects(asked).then((list) => { if (!live) return; setProjects(list); pruneProjectIds(asked, list); })
+      .catch((e: unknown) => { if (live) setProjectsError(`Could not read the projects: ${(e as Error).message}`); })
+      .finally(() => { if (live) setProjectsLoading(false); });
+    return () => { live = false; };
+  }, [route?.view]);
+  // The project the address names: read from the server (kept in this browser's list once it answers).
+  useEffect(() => {
+    if (!pid) return;
+    let live = true;
+    setProjectError(null);
+    if (autoOpened.current !== pid) autoOpened.current = null;
+    getProject(pid).then((p) => {
+      if (!live) return;
+      setProject((was) => (was && was.id === p.id && was.updated > p.updated ? was : p));   // never an older copy over a newer
+      rememberProject(p.id);
+    })
+      .catch((e: unknown) => {
+        if (!live) return;
+        setProject(null);
+        setProjectError(e instanceof ApiError && e.status === 404 ? "No project with this address on this server. It may have been removed."
+          : `Could not read the project: ${(e as Error).message}`);
+      });
+    return () => { live = false; };
+  }, [pid]);
   // Gemini Pro's audit of the by-design rules after a triage under requirements, and whether the triage shown was
   // read under other requirements (a level, strictness or guidance since changed).
   const [triageAudit, setTriageAudit] = useState<Record<string, RuleAudit>>({});
@@ -308,17 +409,11 @@ export function App() {
   const [signoffs, setSignoffs] = useState<Record<string, Signoff[]>>({});
   const [docOpen, setDocOpen] = useState(false);
   const [touring, setTouring] = useState(false);
-  const [tourWhich, setTourWhich] = useState<"northbank" | "cell">("northbank");
-  const startTour = (which: "northbank" | "cell") => { setTourWhich(which); setTouring(true); };
-  const openAbout = (tab: AboutTab = "overview") => { aboutPushed.current = true; showAboutHash(tab, true); setAboutTab(tab); };
-  const switchAbout = (tab: AboutTab) => { showAboutHash(tab, false); setAboutTab(tab); };
-  const closeAbout = () => {
-    if (aboutPushed.current && typeof window !== "undefined" && window.history) { aboutPushed.current = false; window.history.back(); }
-    else showAboutHash(null, false);
-    setAboutTab(null);
-  };
+  // The guided tour and the About dialog are no longer offered (docs/ui-design.md §10); an /about address shows nothing
+  // of its own and a tour starts only from code (the tour's hooks stay).
+  const [tourWhich] = useState<"northbank" | "cell">("northbank");
   useEffect(() => {   // Back, Forward or an edited address opens, switches or closes the About page
-    const read = () => { const t = aboutTabFromHash(currentHash()); if (!t) aboutPushed.current = false; setAboutTab(t); };
+    const read = () => { const t = aboutTabNow(); if (!t) aboutPushed.current = false; setAboutTab(t); };
     window.addEventListener("hashchange", read);
     window.addEventListener("popstate", read);
     return () => { window.removeEventListener("hashchange", read); window.removeEventListener("popstate", read); };
@@ -347,7 +442,7 @@ export function App() {
   const [layoutRev, setLayoutRev] = useState(0);
   const [adding, setAdding] = useState<string[]>([]);
   const [removing, setRemoving] = useState<{ index: number; name: string; text: string; edits: number } | null>(null);
-  const pickFor = useRef<"open" | "add">("open");
+  const pickFor = useRef<"open" | "add" | "project">("open");
   const sampleReports = useRef<Record<string, string>>({});   // report id → the sample report it was opened from
   const goneWords = useRef(new Set<string>());   // the server's words for it: the notice says them, never the error line
   const [agentOpen, setAgentOpen] = useState(false);
@@ -449,6 +544,11 @@ export function App() {
       setPicked(listed[0]?.files ?? files.slice(0, 1));
     }).catch((e) => setError(`Can't reach the Iris server: ${e.message}`));
     api.reportSamples().then(setReportSamples).catch(() => undefined);
+    // Wake the server while the first screen is read (Cloud Run scales to zero; a cold start takes 20–40 s): a request
+    // that nothing waits for. A server without /api/health answers 404, awake; the samples are asked then.
+    try {
+      void api.wake?.();
+    } catch { /* no fetch here (tests) */ }
     return () => {
       ++sceneEpoch.current; ++workspaceEpoch.current; ++previewRequest.current;
       directContext.current?.retire(); pilot.current?.cancel(); chatOwner.current.invalidate(); v.dispose();
@@ -1236,9 +1336,9 @@ export function App() {
     return !!viewer.current?.frameFix(meshes, meshes.length ? [] : movedPairs(o.moved, sides));
   }
 
-  /** Set an option aside: the next one still open is chosen, and the report stops proposing it. */
-  function reject(o: Option, i: number) {
-    const next = { ...rejected, [optionKey(o)]: { title: o.title, kind: o.kind, edit: editText(o), why: "" } };
+  /** Set an option aside (with why, when said): the next one still open is chosen, and the report stops proposing it. */
+  function reject(o: Option, i: number, why = "") {
+    const next = { ...rejected, [optionKey(o)]: { title: o.title, kind: o.kind, edit: editText(o), why } };
     setRejected(next);
     const open = proposal?.options.map((x, j) => (next[optionKey(x)] ? -1 : j)).filter((j) => j >= 0) ?? [];
     setChosen(open.find((j) => j > i) ?? open[0] ?? null);
@@ -1250,6 +1350,63 @@ export function App() {
     });
   }
   function unreject(o: Option) { setRejected((r) => { const { [optionKey(o)]: _gone, ...rest } = r; return rest; }); }
+
+  // ------------------------------------------------------------------ decisions (docs/engineer-workflow.md, step 9)
+
+  /** The clash a decision is about, as the journal keys it: its id, its stable key and its #N. */
+  function clashRefFor(id: string | null | undefined) {
+    const c = id ? report?.clashes.find((x) => x.id === id) : null;
+    return c ? { id: c.id, key: coordClashKey(c, report?.title), number: c.number } : null;
+  }
+  /** Decisions from a reply, into the edit log the page shows (the next read of the log has them too). */
+  function noteDecisions(add: Decision[], all = false) {
+    setJournal((j) => {
+      if (!j) return j;
+      const have = all ? [] : j.decisions ?? [];
+      const seen = new Set(have.map(decisionId));
+      return { ...j, decisions: [...have, ...add.filter((d) => !seen.has(decisionId(d)))] };
+    });
+  }
+  /** Record a decision that is not a keep: rejected, modified or another requested. Accepting goes through the keep. */
+  async function recordDecision(item: ProposalItem, kind: Exclude<DecisionKind, "accepted">, reason: string | null,
+    ref: { id: string; key: string; number?: number | null } | null = clashRefFor(clashRef.current?.id)): Promise<void> {
+    const sid = sceneId;
+    if (!sid || !ref) return;   // a pair picked by hand: no clash to record it against
+    const epoch = sceneEpoch.current;
+    try {
+      const r = await api.decide(sid, toDecision(item, stateOf(item), kind, reason, reviewer, ref));
+      if (sceneEpoch.current === epoch) noteDecisions(r.decisions, true);
+    } catch (e) { if (sceneEpoch.current === epoch) setError(`The decision was not recorded: ${(e as Error).message}`); }
+  }
+  /** Reject an option, with the reason the card asks for: set aside here, and recorded. */
+  function rejectOption(o: Option, i: number, why: string) {
+    reject(o, i, why);
+    void recordDecision(o, "rejected", why);
+  }
+  /** Modify: the Edit tool opens on the fix's element; the hand edit kept for this clash records the proposal as modified. */
+  function modifyOption(o: Option) {
+    const ref = clashRefFor(clashRef.current?.id);
+    if (!sceneId || !ref) return;
+    modifying.current = { item: o, clash: ref, scene: sceneId };
+    if (o.moved[0]) setSelected({ globalId: o.moved[0], info: null });
+    setTool((t) => (t.edit ? t : { ...t, edit: true, measure: false }));
+    flash("Edit by hand: keeping the edit records this proposal as modified.");
+  }
+  /** Another proposal, this one kept: a second, longer look when there is one (it keeps these options), else a new try. */
+  function requestAnother(item: ProposalItem) {
+    void recordDecision(item, "requested_another", null);
+    void (canEscalate && proposal && !proposal.escalated ? escalate() : propose());
+  }
+  /** The newest decision of `kind` about an option of the clash, its time in milliseconds (the server's is seconds). */
+  function lastDecision(key: string | null | undefined, title: string, kind: DecisionKind): Decision | null {
+    if (!key) return null;
+    const list = journal?.decisions ?? [];
+    for (let k = list.length - 1; k >= 0; k--) {
+      const d = list[k];
+      if (d.clash_key === key && d.decision === kind && d.option.title === title) return { ...d, at: toMs(d.at) };
+    }
+    return null;
+  }
 
   function clearManual() { ++previewRequest.current; setManual(null); setManualPreview(null); }
   function resetWork(keepContext = false, keepStandIns = false) { clearManual(); setProposal(null); setChosen(null); setProgress(null); setCompare("after"); setPeek(null); setRejected({}); if (!keepStandIns) setStandIns({}); if (!keepContext) setViewContext(false); }
@@ -1265,8 +1422,14 @@ export function App() {
    * converted to IFC on the server; Export gives it back as STEP too. */
   /** Open models: samples, uploads, or (`existing`) a scene the server still holds, to resume a session. */
   async function open(source: string[] | File[] = picked, existing?: OpenedScene) {
-    if (!source.length) return;
     const upload = source[0] instanceof File;
+    // Chosen files, one row each (importRows.ts): a file that is not a model is refused in its row and not sent.
+    if (upload && !existing) {
+      importBatch.current = { files: source as File[], mode: "open" };
+      setImportRows(initRows(source as File[]));
+      source = sendableFiles(source as File[]);
+    } else if (!existing) setImportRows([]);
+    if (!source.length) return;
     const names = (source as (string | File)[]).map((x) => (typeof x === "string" ? x : x.name));
     const hasStep = names.some((n) => /\.(step|stp)$/i.test(n));
     ++workspaceEpoch.current; replaceChatWork(); retireDirectWork();
@@ -1301,10 +1464,11 @@ export function App() {
         ? await api.uploadModelsStream(source as File[], (e) => {
           const line = uploadStatus(e, hasStep);
           if (line && sceneEpoch.current === epoch) { setBusy(line); step({ line }); }
+          if (sceneEpoch.current === epoch) setImportRows((r) => applyEvent(r, e));
         })
         : await api.open(source as string[]));
       if (sceneEpoch.current !== epoch) return;
-      if (upload) setBusy("Drawing the models…");
+      if (upload) { setBusy("Drawing the models…"); setImportRows((r) => applyEvent(r, { type: "done" })); }
       step({ step: "download", files: shortNames(files), ends: { server: Date.now() - load.started } });
       // The early parse, if the server kept the files as sent (same names, same order); else (or it failed) as below.
       const same = files.length === (source as File[]).length
@@ -1322,8 +1486,10 @@ export function App() {
       step({ step: "draw", ends: { ...load.ends, download: Date.now() - load.started } });
       handed = !!staged;   // the viewer shows it, or disposes it if this open is superseded
       const stats = await viewer.current!.load(bytes, files, () => sceneEpoch.current === epoch,
-        (drawn, elements) => step({ drawn, elements }), staged ? Promise.resolve(staged) : undefined);
+        (drawn, elements) => { step({ drawn, elements }); if (upload) setImportRows((r) => applyDraw(r, drawnUpTo(files, drawn), false)); },
+        staged ? Promise.resolve(staged) : undefined);
       if (sceneEpoch.current !== epoch || !stats) return;
+      if (upload) setImportRows((r) => applyDraw(r, drawnUpTo(files, files.length)));
       sceneRevision.current = revision ?? null;
       sceneLayout.current = opened ?? null;
       setAdding([]); setRemoving(null);
@@ -1336,7 +1502,12 @@ export function App() {
       setStats(stats); setSceneId(id); setA(null); setB(null); setStandIns({}); setSelected(null);
       setStepFiles(Object.values(stepMap ?? {})); setSceneFiles(files); setResumable(null); sceneUploaded.current = upload;
       return id;
-    } catch (e) { if (sceneEpoch.current === epoch) setError((e as Error).message); } finally {
+    } catch (e) {
+      if (sceneEpoch.current === epoch) {
+        setError((e as Error).message);
+        if (upload && !existing) setImportRows((r) => failAll(r, (e as Error).message));
+      }
+    } finally {
       if (sceneEpoch.current === epoch) { setBusy(null); setLoading(null); }
       // Parsed early and never shown (the upload failed, the server renamed or reordered the files): let it go.
       if (early && !handed) { const v = viewer.current; early.then((s) => v?.drop(s), () => undefined); }
@@ -1346,30 +1517,56 @@ export function App() {
   /** The start page's buttons: open the demo models and let Iris check them (the golden path also picks the duct
    * through the girder and proposes a fix). A Navisworks report is optional: Coordinate › Import. */
   async function startGolden() { golden.current = true; await openDemo(); }
+  /** Cancel on the loading card: this page stops waiting for the models it was opening (the server may still open
+   * them; nothing here uses them), and the import rows say so, with Retry. */
+  function cancelOpen() {
+    ++sceneEpoch.current;
+    golden.current = false;
+    setBusy(null); setLoading(null); setProjectBusy(null);
+    setImportRows((r) => (r.length ? failAll(r, "Cancelled: the page stopped waiting for these models.") : r));
+  }
   async function openDemo(source?: string[] | File[]) {
     const id = await open(source);
     if (id) await runDetect(null, id);
+    return id;
+  }
+  /** Retry on the import list: the same files again, the whole batch (the server opens them together, all or none). */
+  function retryImport() {
+    const b = importBatch.current;
+    if (!b) return;
+    if (projectHere && pid) void importToProject(b.files);
+    else void (b.mode === "add" ? addModels(b.files) : openDemo(b.files));
   }
 
   /** Add models to the open scene (docs/add-and-remove-models.md): samples by name, or the visitor's own files. Only the
    * new files are fetched (an uploaded IFC is read from the visitor's own file) and drawn beside the others; fixes,
    * edits, checks and triage stay. Then every kept check runs again, as opening checks. */
-  async function addModels(source: string[] | File[]) {
+  async function addModels(source: string[] | File[]): Promise<boolean> {
     const sid = sceneId;
-    if (!sid || !source.length) return;
+    if (!sid || !source.length) return false;
     const upload = source[0] instanceof File;
+    if (upload) {
+      importBatch.current = { files: source as File[], mode: "add" };
+      setImportRows(initRows(source as File[]));
+      source = sendableFiles(source as File[]);
+      if (!source.length) return false;
+    }
     const names = (source as (string | File)[]).map((x) => (typeof x === "string" ? x : x.name));
     const refusal = modelsWait() ?? addRefusal(names, sceneFiles, stepFiles) ?? (upload ? uploadRefusal(source as File[], uploadMax) : null);
-    if (refusal) { setError(refusal); return; }
+    if (refusal) { setError(refusal); if (upload) setImportRows((r) => failAll(r, refusal)); return false; }
     const hasStep = names.some((n) => /\.(step|stp)$/i.test(n));
     const epoch = sceneEpoch.current, live = () => sceneEpoch.current === epoch;
     setBusy(`Adding ${names.length === 1 ? shortNames(names)[0] : `${names.length} models`}${hasStep ? " and converting the STEP" : ""}…`);
     setError(null);
     try {
       const added: AddedModels = upload
-        ? await api.addModelsStream(sid, source as File[], (e) => { const line = uploadStatus(e, hasStep); if (line && live()) setBusy(line); })
+        ? await api.addModelsStream(sid, source as File[], (e) => {
+          const line = uploadStatus(e, hasStep); if (line && live()) setBusy(line);
+          if (live()) setImportRows((r) => applyEvent(r, e));
+        })
         : await api.addModels(sid, source as string[]);
-      if (!live()) return;
+      if (!live()) return false;
+      if (upload) setImportRows((r) => applyEvent(r, { type: "done" }));
       sceneUploaded.current ||= upload;   // a sample scene with an upload added can only be picked again by hand
       setAdding([]);
       if (!nextLayout(added.layout)) await reloadModels(sid, live);   // another tab or an agent changed the list meanwhile
@@ -1379,13 +1576,142 @@ export function App() {
           const local = upload ? localFile(source as File[], added.files, added.step, i) : null;
           return local ? new Uint8Array(await local.arrayBuffer()) : api.file(sid, i);
         }));
-        if (!live()) return;
+        if (!live()) return false;
         const drawn = await viewer.current!.add(bytes, added.added.map((i) => added.files[i]), live);
-        if (!live() || !drawn) return;
+        if (!live() || !drawn) return false;
         adoptFiles(added, drawn);
       }
-    } catch (e) { if (live()) setError((e as Error).message); return; } finally { if (live()) setBusy(null); }
+      if (upload) setImportRows((r) => applyDraw(r, drawnUpTo(names, names.length)));
+    } catch (e) {
+      if (live()) { setError((e as Error).message); if (upload) setImportRows((r) => failAll(r, (e as Error).message)); }
+      return false;
+    } finally { if (live()) setBusy(null); }
     await runDetect(null, sid, { all: true });
+    return true;
+  }
+
+  // ------------------------------------------------------------------ projects (docs/engineer-workflow.md)
+
+  /** PDFs among chosen files are drawings (the Drawings step), not models: [models, drawings]. */
+  function splitDrawings(files: File[]): [File[], File[]] {
+    const pdf = files.filter((f) => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+    return [files.filter((f) => !pdf.includes(f)), pdf];
+  }
+  /** Add PDF drawings to the open models' scene (they are read there against the models). */
+  async function addDrawings(sid: string | null, pdfs: File[]) {
+    if (!pdfs.length) return;
+    if (!sid) { setError("Open or import the models first: a drawing is read against the open models."); return; }
+    try {
+      const added = await uploadDrawings(sid, pdfs);
+      flash(`${added.length} drawing${added.length === 1 ? "" : "s"} added: see Drawings.`);
+      setDrawingsTry((n) => n + 1);
+    } catch (e) { setError(`The drawings were not added: ${(e as Error).message}`); }
+  }
+  /** Files chosen anywhere outside a project: models opened (or added to those open), PDFs to the drawings. */
+  async function importFiles(files: File[], adding = !!sceneId) {
+    const [models, pdfs] = splitDrawings(files);
+    let sid: string | null = sceneId;
+    if (models.length) sid = adding && sceneId ? ((await addModels(models)) ? sceneId : null) : (await openDemo(models)) ?? null;
+    await addDrawings(sid, pdfs);
+  }
+
+  /** Keep the open scene's models with the project (the server copies their original files into it). */
+  async function keepModels(id: string, sid: string): Promise<boolean> {
+    try { setProject(await attachScene(id, sid)); return true; }
+    catch (e) { setError(`The models are open, but could not be kept with the project: ${(e as Error).message}`); return false; }
+  }
+  /** Files chosen on a project's Models step: added to the project's open models, or opened as its models; then kept
+   * with the project, and checked. */
+  async function importToProject(chosen: File[]) {
+    const p = projectHere;
+    if (!p) return;
+    const [files, pdfs] = splitDrawings(chosen);
+    autoOpened.current = p.id;   // this page is opening its models: never twice
+    if (!files.length) { await addDrawings(projectOpen ? sceneId : null, pdfs); return; }
+    if (projectOpen && sceneId) {
+      const sid = sceneId;
+      if (await addModels(files)) { await keepModels(p.id, sid); await addDrawings(sid, pdfs); }
+      return;
+    }
+    const id = await open(files);
+    if (!id) return;
+    await keepModels(p.id, id);
+    await addDrawings(id, pdfs);
+    await runDetect(null, id);
+  }
+  /** The sample building (or `names`) as the project's models: opened, kept with the project, checked. */
+  async function samplesToProject(names: string[]) {
+    if (projectHere) await samplesInto(projectHere, names);
+  }
+  async function samplesInto(p: Project, names: string[]) {
+    if (!names.length) return;
+    autoOpened.current = p.id;
+    const id = await open(names);
+    if (!id) return;
+    await keepModels(p.id, id);
+    await runDetect(null, id);
+  }
+  /** Open the project: its last saved state (else its original models) as a new scene, adopted as a resumed session
+   * is; its clashes come back numbered and titled as before once checked. */
+  async function openProjectScene(p: Project) {
+    if (busy || projectBusy) return;
+    autoOpened.current = p.id;
+    setProjectBusy("Opening the project…"); setError(null);
+    try {
+      const o = await openProject(p.id);
+      setProject(o.project);
+      const info = o.scene ?? await api.sceneInfo(o.scene_id);
+      const id = await open(info.files, { id: o.scene_id, files: info.files, step: info.step, revision: info.revision, layout: info.layout });
+      if (!id) return;
+      sceneUploaded.current = true;   // the project's own files: opened again from the project, never by a sample's name
+      if (info.report_id) {
+        const rep = await loadReport(() => api.report(info.report_id!), "the project's clashes");
+        if (rep) {
+          unionSerial.current = rep.serial ?? 0;
+          setChecks(info.checks ?? []); setRanCheck(null); setViewCheck(null);
+          lastTests.current = (info.checks ?? []).find((c) => c.key === "models")?.tests ?? null;
+        }
+      } else await runDetect(null, id);
+    } catch (e) { setError(`Could not open the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
+  }
+  /** Save: the edited models, the edit log and the decisions as the project's next saved state. */
+  async function saveProjectNow() {
+    const p = projectHere;
+    if (!p || !sceneId || !projectOpen || projectBusy) return;
+    setProjectBusy("Saving…");
+    try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); }
+    catch (e) { setError(`Could not save the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
+  }
+  /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
+   * again), opened on its Clash review. Opening and checking it call no model. */
+  async function trySample() {
+    const names = demos.find((d) => d.tour === "northbank")?.files ?? demos[0]?.files ?? [];
+    if (busy || projectBusy || !names.length) return;
+    setProjectBusy("Opening the sample building…"); setError(null);
+    let p: Project | null = null;
+    try {
+      const mine = await listProjects(myProjectIds()).catch(() => [] as Project[]);
+      p = mine.find((x) => x.name === SAMPLE_PROJECT && x.files.length > 0) ?? null;
+      if (p) { setProject(p); goStep("clash", p.id); return; }   // its models open on the step (the effect above)
+      p = await createProject(SAMPLE_PROJECT);
+      rememberProject(p.id);
+      autoOpened.current = p.id;
+      setProject(p);
+      goStep("clash", p.id);
+    } catch (e) { setError(`Could not open the sample building: ${(e as Error).message}`); return; }
+    finally { setProjectBusy(null); }
+    if (p) await samplesInto(p, names);
+  }
+  /** Create a project, keep its id in this browser and open its overview. */
+  async function newProject(name: string) {
+    setProjectsError(null);
+    try {
+      const p = await createProject(name);
+      rememberProject(p.id);
+      setProjects((l) => [p, ...l.filter((x) => x.id !== p.id)]);
+      setProject(p);
+      goStep("overview", p.id);
+    } catch (e) { setProjectsError(`Could not create the project: ${(e as Error).message}`); }
   }
 
   /** Whether a reply's layout is the one after this page's (its own add or remove), so it may update in place. */
@@ -2378,10 +2704,13 @@ export function App() {
     });
     try {
       // Each fix names its clash: the server tries them again, alone and together, before keeping any.
+      const refs = items.map((i) => clashRefFor(i.clash_ids?.[0] ?? null));
       const kept = await api.applyPlan(sceneId, items.map((i) => ({ ...i.option!, pair: [i.element_a, i.element_b], others: i.others ?? [] })),
-        items.map((i) => i.clash_ids?.[0] ?? null));
+        items.map((i) => i.clash_ids?.[0] ?? null),
+        { reviewer, clash_keys: refs.map((r) => r?.key ?? null), numbers: refs.map((r) => r?.number ?? null) });
       const pieces = kept.pieces;
       if (!live()) return;
+      if (kept.decisions?.length) noteDecisions(kept.decisions);
       staleContext();
       viewer.current?.preview([]);
       await applyToViewer(sceneId, kept, pieces, live);
@@ -2509,6 +2838,12 @@ export function App() {
     staleContext(); setRemeasure((n) => n + 1);
     const st = k.entry?.status as (JournalEntry["status"] & { pair?: string[] }) | null | undefined;
     if (st?.resolved && st.pair?.length === 2) markFixed([[st.pair[0], st.pair[1]]], [k.entry?.summary ?? "Edited by hand"]);
+    // "Modify" sent the engineer here from a proposal: the edit kept for that clash is the proposal, modified by hand.
+    const m = modifying.current;
+    if (m && m.scene === sid && k.entry && (k.entry.clashes.some((c) => c.id === m.clash.id) || clashRef.current?.id === m.clash.id)) {
+      modifying.current = null;
+      void recordDecision(m.item, "modified", `Kept a hand edit instead: ${k.entry.summary || k.entry.title}`, m.clash);
+    }
     setKept({ text: "Edit kept in the model", detail: k.entry ? `${k.entry.id}: ${k.entry.summary}` : "Checked again first", n: Date.now() });
     window.clearTimeout(keptTimer.current);
     keptTimer.current = window.setTimeout(() => setKept(null), 3200);
@@ -3032,10 +3367,14 @@ export function App() {
     const built = pair && canBuild(o) && builtDone.current[builtKey(pair, o)]?.status !== "done"
       && !builtPending.current.has(builtKey(pair, o)) ? builtPasses(builtFix(o, false), pair) : null;
     try {
-      const kept = await api.accept(sceneId, o, pair, ids[0] ?? null);
+      // Who accepts it: the server re-checks it, keeps it and records the "accepted" decision itself (the reply's
+      // `decisions`); the page never posts one as well.
+      const ref = clashRefFor(ids[0] ?? null);
+      const kept = await api.accept(sceneId, o, pair, ids[0] ?? null, { reviewer, clash_key: ref?.key ?? null, number: ref?.number ?? null });
       // Each split run's pieces, the original first (a combined fix can split several runs).
       const groups = kept.groups ?? (kept.pieces?.length ? [kept.pieces] : []);
       if (!live()) return;
+      if (kept.decisions?.length) noteDecisions(kept.decisions);
       staleContext();
       // A penetration the host's team must cut: asked for (its provision for void is in the model), not yet fixed.
       const requested = kept.cut === false;
@@ -3126,10 +3465,110 @@ export function App() {
   // Not read yet (a check run since, or a triage stopped part way), or a read that failed (asked again): what
   // "Triage N unread" / "Continue · N left" reads. The server keeps every reading, so only these are asked.
   const unread = listReport ? listReport.clashes.filter((c) => !listTriage[c.id] || listTriage[c.id].error).length : 0;
+  // The coordination overview (docs/engineer-workflow.md, step 4): the list's clashes by class, severity and status,
+  // from the kept checks behind the list (an imported report has none), and its filter on the list.
+  const coordChecks = useMemo(() => (report?.origin === "iris" ? (viewCheck ? checks.filter((k) => k.key === viewCheck) : checks) : []),
+    [report?.origin, checks, viewCheck]);
+  const coordSummary = useMemo(() => (listReport ? coordOverview(listReport.clashes, listTriage, { fixes, reviewed, checks: coordChecks }) : null),
+    [listReport, listTriage, fixes, reviewed, coordChecks]);
+  const resolvedIds = useMemo(() => resolvedIdsOf(coordChecks), [coordChecks]);
+  const coordList = useMemo(() => (coordFilter && listReport ? {
+    label: coordFilterLabel(coordFilter),
+    keep: (c: ReportClash) => passes(c, listTriage[c.id], statusOf(c, { fixes, reviewed, resolvedIds }), coordFilter),
+  } : null), [coordFilter, listReport, listTriage, fixes, reviewed, resolvedIds]);
+  useEffect(() => { setCoordFilter(null); }, [report?.id]);
+  /** One of the overview's numbers: the list filtered to it (all of them: no filter), on the Clashes tab. */
+  const filterCoord = (f: CoordinationFilter) => {
+    setCoordFilter(f.cls || f.severity || f.status ? f : null);
+    setLeftView("clashes"); setListFocusState(null); setTriageFilterState(null);
+    if (compact) setListOpen(true);
+  };
+  // The numbers a project keeps (PATCH counts): its open models' clashes, open, resolved (a fix kept, re-checked by
+  // geometry when kept, or gone from a re-run) and reviewed (by design, sent to the author).
+  const liveCounts: CoordCounts | null = coordSummary && projectOpen ? {
+    clashes: coordSummary.total, open: coordSummary.byStatus.open,
+    resolved: coordSummary.byStatus.fix_kept_pending_recheck + coordSummary.byStatus.resolved_geometry,
+    reviewed: coordSummary.byStatus.reviewed_by_design + coordSummary.byStatus.sent_to_author } : null;
+  const countsKey = liveCounts ? JSON.stringify(liveCounts) : "";
+  useEffect(() => {
+    const p = projectHere;
+    if (!countsKey || !p || !projectOpen) return;
+    const k = p.counts;
+    if (k && JSON.stringify({ clashes: k.clashes, open: k.open, resolved: k.resolved, reviewed: k.reviewed }) === countsKey) return;
+    const counts = JSON.parse(countsKey) as CoordCounts;
+    const t = window.setTimeout(() => {
+      patchProject(p.id, { counts }).then((next) => setProject((was) => (was?.id === next.id ? next : was))).catch(() => undefined);
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [countsKey, projectHere?.id, projectOpen]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // A project's models step with its models not open here: open them (once a visit; the overview's button any time).
+  useEffect(() => {
+    const p = projectHere;
+    if (!workStep || !p || projectOpen || busy || projectBusy || !p.files.length || autoOpened.current === p.id) return;
+    void openProjectScene(p);
+  }, [workStep, projectHere?.id, projectOpen, busy, projectBusy]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setDrawings((d) => (d.length ? [] : d)); setDrawingItemsBy({}); setDrawingCompare(null); }, [sceneId]);
+  useEffect(() => {
+    if (!sceneId || projStep !== "drawings") return;
+    let live = true;
+    setDrawingsError(null);
+    void (async () => {
+      const list = await listDrawings(sceneId);
+      if (!live) return;
+      setDrawings(list);
+      const items = await Promise.all(list.map(async (d) => [d.id, await drawingItems(d.id).catch(() => [] as DrawingItem[])] as const));
+      if (!live) return;
+      setDrawingItemsBy(Object.fromEntries(items));
+      const cmp = list.length ? await compareDrawings(sceneId).catch(() => null) : null;
+      if (live) setDrawingCompare(cmp);
+    })().catch((e: unknown) => { if (live) setDrawingsError(`Could not read the drawings: ${(e as Error).message}`); });
+    return () => { live = false; };
+  }, [sceneId, projStep, drawingsTry]);
+  // Clash review's address names the clash open (/projects/<pid>/clashes/<n>): opened from the address once the list
+  // has it, and written (in place) as clashes are picked and left.
+  const clashFromPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (route?.view !== "project" || route.step !== "clash" || !route.clash || !report) return;
+    const key = `${report.id}#${route.clash}`;
+    if (clashFromPath.current === key) return;
+    const c = report.clashes.find((x) => x.number === route.clash);
+    if (!c) return;
+    clashFromPath.current = key;
+    if (clash?.id !== c.id) selectClash(c);
+  }, [route, report?.id, matches]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (route?.view !== "project" || route.step !== "clash" || !projectOpen) return;
+    const n = clash?.number;
+    if (route.clash === n) return;
+    if (!n && route.clash && clashFromPath.current !== `${report?.id}#${route.clash}`) return;   // not opened from it yet
+    const next: ProjectRoute = n ? { view: "project", pid: route.pid, step: "clash", clash: n } : { view: "project", pid: route.pid, step: "clash" };
+    showProjectRoute(next, false); setRoute(next);
+  }, [clash?.number, route, projectOpen]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Outside a project the address says whether a session is open: /workspace once models or a report open, else /home.
+  useEffect(() => {
+    if (route || aboutTab) return;
+    if ((sceneId || report) && currentPath() === "/home") showPath("/workspace", false);
+  }, [route, aboutTab, sceneId, report?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // What happened to the project, newest first: the open session's decisions and kept edits, saves and reports.
+  const projectActivity = useMemo((): ActivityItem[] => {
+    const out: ActivityItem[] = [];
+    if (projectOpen) {
+      for (const d of journal?.decisions ?? []) out.push({ at: toMs(d.at), text: decisionLine(d) });
+      for (const e of journal?.entries ?? []) {
+        const at = Date.parse(e.when);
+        if (Number.isFinite(at)) out.push({ at, text: `${e.state === "undone" ? "Edit undone" : "Edit kept"}: ${e.title || e.summary}${e.actor ? ` · ${e.actor}` : ""}` });
+      }
+    }
+    for (const sv of projectHere?.saved ?? []) out.push({ at: toMs(sv.at), text: `Saved state ${sv.n}: ${sv.edits} edit${sv.edits === 1 ? "" : "s"}, ${sv.files.length} model${sv.files.length === 1 ? "" : "s"}` });
+    for (const r of projectHere?.reports ?? []) out.push({ at: toMs(r.at), text: `Report kept: ${r.name}` });
+    return out;
+  }, [projectOpen, journal, projectHere]);
   // Until a report or the models are open, the page is the landing: no panels, just what Iris is and the demo.
-  const landing = !stats && !report && !blank;
+  // A project's workspace step with nothing open yet is a blank workspace (its import), never the landing.
+  const blankish = blank || (!!pid && workStep);
+  const landing = !stats && !report && !blankish;
   // A blank project before anything opens: the drop zone has the whole stage (no sheet on a phone).
-  const starting = blank && !stats && !report;
+  const starting = blankish && !stats && !report;
   // The dock is the desktop's; the landing, phones, tablets and the Classic layout switch use the classic layout.
   const docked = layout === "desktop" && !landing && !classic;
   dockedNow.current = docked;
@@ -3173,8 +3612,6 @@ export function App() {
   // The Edit tool works over the model: a Properties panel floating there closes (one docked in a side bar stays), and
   // the next selection brings it back.
   useEffect(() => { if (tool.edit && docked) dock.current?.closeFloating("properties"); }, [tool.edit, docked]);
-  const pickedDemo = demos.find((d) => d.files.length === picked.length && d.files.every((f) => picked.includes(f)));
-  const startLabel = pickedDemo?.label ?? "Open the models";
   const planning = !!planRun && planRun.phase !== "done";
   /** What adding or removing a model must wait for (sceneModels.waitFor), in words, or null. */
   const modelsWait = () => waitFor({ busy, detecting: !!detecting, proposing: proposing || !!runningNow.current, planning,
@@ -3338,7 +3775,8 @@ export function App() {
       ) : plan && (
         <dl className="diff">
           <dt>Plan</dt><dd>{planOptions.length} fix{planOptions.length === 1 ? "" : "es"} shown together</dd>
-          <dt>Check</dt><dd className={plan.check.passed ? "ok" : "bad"}>{plan.check.passed ? "all clear, checked as one" : "not all clear"}</dd>
+          <dt>Check</dt><dd className={plan.check.passed ? "ok" : "bad"}>{plan.check.geometry === false || plan.strategy === "as_designed"
+            ? "unverified: nothing was tried on the geometry" : plan.check.passed ? "all clear, checked as one" : "not all clear"}</dd>
         </dl>
       )}
       {compare === "both" && <p className="hint"><i className="sw ghost" />orange ghost: as it is now</p>}
@@ -3382,7 +3820,7 @@ export function App() {
   // first models open, the card in the middle says it in full and the notch keeps the logo.
   const notchStatus: NotchStatus | null = loading
     ? (stats ? { title: loading.title, parts: loading.step === "draw" ? { done: loading.drawn, total: loading.files.length } : undefined,
-        detail: loading.step === "server" ? loading.line ?? "Opening on the server"
+        detail: loading.step === "server" ? serverLine(loading, now)?.text ?? "Opening the models"
           : loading.step === "download" ? `Downloading ${loading.fetched} of ${loading.files.length}`
           : loading.drawn < loading.files.length ? `Drawing model ${loading.drawn + 1} of ${loading.files.length}: ${loading.files[loading.drawn]}` : "Fitting the view" }
       : null)
@@ -3404,8 +3842,6 @@ export function App() {
   const keptNote = fixedCount > 0 ? ` · ${fixedCount} ${fixedCount === 1 ? "fix" : "fixes"} kept` : "";
   const corner = (
     <div className="corner" ref={cornerEl} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-      {landing && <button className="btn primary" disabled={!picked.length || !!busy} onClick={startGolden}><Sparkles size={15} aria-hidden /> Watch Iris fix a clash</button>}
-      {fixedCount > 0 && !exportable && <span className="chip ok">{fixedCount} fixed</span>}
       {reqLabel && !landing && <button className="btn req-pill" onClick={() => setReqOpen(true)} data-tip-side="bottom"
         data-tip={`Checking, triage and fixes follow "${reqSaved!.doc.name}" (${reqLabel})`}><ClipboardCheck size={15} aria-hidden /><span className="req-pill-label"> {reqLabel}</span></button>}
       {agentLink && <button className="btn agent-pill" onClick={() => setAgentOpen(true)} aria-label="Agent connected" data-tip-side="bottom"
@@ -3520,8 +3956,6 @@ export function App() {
       <button key={p.id} className="pop-item" onClick={() => { close(); showPanel(p.id); }}>
         {p.title}{dock.current && !dock.current.isOpen(p.id) ? <span className="why"> closed</span> : null}</button>))
       : <p className="hint">The list on the left, Clash, Plan and Chat on the right, Activity below.</p>}
-    {docked && <p className="hint">Drag a tab to dock it anywhere. The buttons beside the tabs collapse a side bar, float a
-      panel or open it in its own window; a right click on a tab does the same.</p>}
     {docked && <button className="pop-item" onClick={() => { close(); dock.current?.reset(); }}><RotateCcw size={14} aria-hidden /> Reset the layout</button>}
     <label className="pop-item check"><input type="checkbox" checked={workings.on} onChange={(e) => { close(); setWorkingsOn(e.target.checked); }} /> Workings in Activity</label>
     <label className="pop-item check"><input type="checkbox" checked={classic} onChange={(e) => { close(); setClassic(e.target.checked); }} /> Classic layout (fixed panels)</label>
@@ -3595,6 +4029,169 @@ export function App() {
       } : undefined,
     };
   };
+  // ------------------------------------------------------------------ the project shell (docs/engineer-workflow.md)
+  /** GlobalId → name for what a proposal card names: the open models' own names, else the report's. */
+  const namesFor = (ids: readonly (string | null | undefined)[]) => Object.fromEntries(ids.filter((g): g is string => !!g)
+    .map((g) => [g, sceneClasses.current?.map[g]?.[1] || elementName(g)] as const).filter(([, n]) => !!n));
+  // The clash before and after the one on screen, in the list's order (the investigation header's arrows).
+  const listAt = clash && listReport ? listReport.clashes.findIndex((c) => c.id === clash.id) : -1;
+  const listPrev = listAt > 0 ? listReport!.clashes[listAt - 1] : null;
+  const listNext = listAt >= 0 && listReport && listAt + 1 < listReport.clashes.length ? listReport.clashes[listAt + 1] : null;
+  const importPanel = (
+    <ImportPanel rows={importRows} onRetry={retryImport} busy={!!busy || !!projectBusy}
+      onRemove={(n) => { setImportRows((r) => removeRow(r, n)); if (importBatch.current) importBatch.current.files = importBatch.current.files.filter((f) => f.name !== n); }}
+      onPick={() => { pickFor.current = pid && projectHere ? "project" : sceneId ? "add" : "open"; modelInput.current?.click(); }}
+      onDrop={(fs) => void (pid && projectHere ? importToProject(fs) : importFiles(fs))}
+      onClose={importRows.length ? () => setImportRows([]) : undefined} />);
+  const coordCard = coordSummary && (
+    <CoordinationOverview summary={coordSummary} onFilter={filterCoord}
+      onRunChecks={() => void (checks.length ? runDetect(null, sceneId, { all: true }) : runDetect(null))}
+      onTriage={() => void runTriage(false)} triaged={!!triageRun || Object.keys(listTriage).length > 0} />);
+  /** On the Coordination step the overview leads the Clashes tab, above triage. */
+  const withCoord = (card: React.ReactNode) => (projStep === "coordination" && coordCard ? <>{coordCard}{card}</> : card);
+  const sampleSet = demos.find((d) => d.tour === "northbank")?.files ?? demos[0]?.files ?? [];
+  // A project's Models step (left pane): import with per-file rows, the models open and the model summary.
+  const modelsStep = projectHere && (
+    <div className="proj-work">
+      {importPanel}
+      {!projectOpen && !projectBusy && (
+        <div className="proj-work-note">
+          {sceneId && stats ? <>
+            <p className="hint">The models open now are not this project's{projectHere.files.length ? "" : " (it has none yet)"}.</p>
+            <button className="btn small" disabled={!!busy} onClick={() => void (autoOpened.current = projectHere.id, keepModels(projectHere.id, sceneId))}>
+              <Boxes size={14} aria-hidden /> Keep the open models in this project</button>
+          </> : null}
+          {projectHere.files.length > 0
+            ? <button className="btn small primary" disabled={!!busy} onClick={() => void openProjectScene(projectHere)}>
+              <FolderOpen size={14} aria-hidden /> Open the project's models</button>
+            : sampleSet.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void samplesToProject(sampleSet)}
+              data-tip={`Synthetic sample models: ${shortNames(sampleSet).join(", ")}`}>
+              <FolderOpen size={14} aria-hidden /> Use the sample building</button>}
+        </div>)}
+      {projectBusy && <p className="live-line"><i className="spinner" aria-hidden /> {projectBusy}</p>}
+      {projectOpen && modelNames.length > 0 && (
+        <section className="proj-open-models" aria-label="Models open in the workspace">
+          <h3>Models in the workspace</h3>
+          <ul>{modelNames.map((n, i) => (
+            <li key={`${n}:${i}`}>
+              <label className="check" data-tip="Show or hide it in the views"><input type="checkbox" checked={!tool.hiddenModels.includes(i)}
+                onChange={(e) => setModelVisible(i, e.target.checked)} /> <span className="mono">{n}</span></label>
+              {!gone?.scene && <button type="button" className="ibtn" aria-label={`Remove ${n}`} data-tip={addWait ?? "Remove it from the open models"}
+                disabled={!!addWait} onClick={() => askRemove(i)}><Trash2 size={13} aria-hidden /></button>}
+            </li>))}</ul>
+        </section>)}
+      {projectOpen && <ModelSummary index={facetIndex} isolated={temporary.isolated ? summaryIsolated : null}
+        onIsolate={(ids, label) => { isolateNow(ids); setSummaryIsolated(label); }}
+        onClear={() => { endIsolation(); setSummaryIsolated(null); }} />}
+      {projectOpen && !facetIndex && facetsError && <p className="hint">The model summary could not be read: {facetsError}
+        <button className="btn small ghost" onClick={() => setFacetsTry((n) => n + 1)}>Try again</button></p>}
+    </div>);
+  // The step bar over the workspace (desktop): the project's steps, Save, and the report.
+  const workBar = pid && workStep && !compact ? (
+    <div className="proj-workbar">
+      <ProjectSteps step={projStep!} onStep={(st) => goStep(st)} project={projectHere} onProjects={goProjects}
+        hrefOf={(st) => projectPath(pid, st)} projectsHref={PROJECTS_PATH}
+        counts={liveCounts ?? projectHere?.counts ?? null}
+        actions={<>
+          {projectBusy && <span className="hint"><i className="spinner" aria-hidden /> {projectBusy}</span>}
+          {projectError && <span className="bad small">{projectError}</span>}
+          <button type="button" className="btn small" disabled={!projectOpen || !!projectBusy || !!busy} onClick={() => void saveProjectNow()}
+            data-tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"}
+            data-tip-side="bottom">Save</button>
+          {report && <button type="button" className="btn small" onClick={() => { setDocOpen(true); setDocReady(false); }}>
+            <FileText size={14} aria-hidden /> Report</button>}
+        </>} />
+    </div>) : null;
+  const decisionsList = journal?.decisions ?? [];
+  // GlobalId → name for the Drawings step's model side (the open models' own names).
+  const drawingNames = projStep === "drawings" ? Object.fromEntries(Object.entries(sceneClasses.current?.map ?? {}).map(([g, cn]) => [g, cn[1]])) : {};
+  // The project pages (the projects home, and a project's Overview, Reports and Activity) over the workspace.
+  const projectPage = route?.view === "projects" ? (
+    <div className="proj-shell" role="region" aria-label="Projects">
+      <div className="proj-shell-top">
+        <button type="button" className="brand" onClick={() => goRoute(null)} aria-label="Iris: back"><Wordmark height={20} /></button>
+        <span className="spacer" />
+        <button type="button" className="btn small ghost" onClick={() => goRoute(null)}>{stats || report ? "Back to the workspace" : "Back to Iris"}</button>
+      </div>
+      <ProjectsHome projects={projects} loading={projectsLoading} error={projectsError ?? undefined}
+        onCreate={(n) => void newProject(n)} onOpen={(id) => goStep("overview", id)} hrefOf={(id) => projectPath(id)}
+        onDemo={sampleSet.length ? () => { goRoute(null); void openDemo(sampleSet); } : undefined} />
+    </div>)
+    : pid && (!workStep || !projectHere) ? (
+    <div className="proj-shell" role="region" aria-label="Project">
+      {error && !goneWords.current.has(error) && <div className="proj-shell-alert" role="alert" onClick={() => setError(null)}>{error} <X size={13} aria-hidden /></div>}
+      {projectHere ? (
+        <ProjectOverview project={projectHere} step={projStep ?? "overview"} onStep={(st) => goStep(st)} onProjects={goProjects}
+          stepHref={(st) => projectPath(projectHere.id, st)} projectsHref={PROJECTS_PATH}
+          counts={liveCounts} reports={projectHere.reports} activity={projectActivity}
+          onImport={() => goStep("models")} saving={projectBusy === "Saving…"}
+          onOpenWorkspace={() => { if (!projectOpen && projectHere.files.length) void openProjectScene(projectHere); goStep(projectHere.files.length ? "coordination" : "models"); }}
+          onSave={() => { if (projectOpen) void saveProjectNow(); else setError("Open the project's models first: nothing of it is open to save."); }}>
+          {projStep === "drawings" && (projectOpen && sceneId ? (
+            <section className="proj-drawings" aria-label="Drawings">
+              <DrawingsPanel sceneId={sceneId} drawings={drawings} items={drawingItemsBy} compare={drawingCompare} busy={!!busy}
+                names={drawingNames} error={drawingsError} onRetry={() => setDrawingsTry((n) => n + 1)}
+                onUpload={(files, progress) => uploadDrawings(sceneId, files, progress).then((r) => { setDrawingsTry((n) => n + 1); return r; })}
+                onRead={(did, onEvent) => readDrawing(did, { onEvent }).then((r) => { setDrawingsTry((n) => n + 1); return r; })}
+                onFocusElement={(gid) => { goStep("models"); setSelected({ globalId: gid, info: null }); isolateNow([gid]); }} />
+            </section>
+          ) : (
+            <section className="proj-card" aria-label="Drawings">
+              <div className="proj-card-head"><h2>Drawings</h2></div>
+              <p className="proj-text proj-empty-line">{projectHere.files.length
+                ? "Open the project's models first: each PDF drawing is read against the open models."
+                : "Import the models first: each PDF drawing is read against them."}</p>
+              {projectHere.files.length > 0 && <div className="proj-card-foot"><button type="button" className="btn small primary"
+                disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>Open the project's models</button></div>}
+            </section>))}
+          {projStep === "reports" && (
+            <section className="proj-card" aria-label="Build a report">
+              <div className="proj-card-head"><h2>Build a report</h2></div>
+              {projectOpen && report ? <>
+                <p className="proj-text">A PDF for the design teams, with the project's name on the cover, and BCF issues. Each report built
+                  here is kept with the project and listed above.</p>
+                <div className="proj-card-foot"><button type="button" className="btn primary small" onClick={() => { setDocOpen(true); setDocReady(false); }}>
+                  <FileText size={14} aria-hidden /> Build the report (PDF, BCF)</button></div>
+              </> : <p className="proj-text proj-empty-line">{projectHere.files.length
+                ? "Open the workspace and run the clash tests first: a report is built from the open clash list."
+                : "Import the models and run the clash tests first."}</p>}
+            </section>)}
+          {projStep === "activity" && (
+            <section className="proj-card" aria-label="Decisions">
+              <div className="proj-card-head"><h2>Decisions{decisionsList.length > 0 && <span className="proj-count">{decisionsList.length}</span>}</h2></div>
+              {projectOpen && decisionsList.length ? (
+                <table className="proj-mini">
+                  <thead><tr><th scope="col">When</th><th scope="col">Clash</th><th scope="col">Proposal</th><th scope="col">State</th>
+                    <th scope="col">Decision</th><th scope="col">Reviewer</th><th scope="col">Why</th></tr></thead>
+                  <tbody>{[...decisionsList].reverse().map((d, k) => {
+                    const w = decisionWords({ ...d, at: toMs(d.at) });
+                    return <tr key={k}><td title={w.iso}>{w.when}</td><td className="mono">{d.number ? `#${d.number}` : d.clash_id}</td>
+                      <td className="proj-file" title={d.option.title}>{d.option.title}</td><td>{STATE_LABEL[d.state] ?? d.state}</td>
+                      <td>{w.verb}</td><td>{d.reviewer || "not recorded"}</td><td>{d.reason ?? ""}</td></tr>;
+                  })}</tbody>
+                </table>
+              ) : <p className="proj-text proj-empty-line">{projectOpen
+                ? "No decisions yet. Accepting, rejecting, modifying or asking for another proposal records one here, with the reviewer and why."
+                : "Open the workspace to read the decisions: a saved project's decisions come back with its models."}</p>}
+            </section>)}
+          {projStep === "activity" && projectOpen && journal && journal.entries.length > 0 && (
+            <section className="proj-card" aria-label="Edit log">
+              <div className="proj-card-head"><h2>Edit log<span className="proj-count">{journal.entries.length}</span></h2></div>
+              <EditPanel journal={journal} busy={!!busy} csvUrl={sceneId ? api.journalCsvUrl(sceneId) : null}
+                clashLabel={clashTag} onUndo={() => void stepEdit("undo")} onRedo={() => void stepEdit("redo")} onUndoTo={(e) => void undoTo(e)}
+                onShow={(e) => { goStep("clash"); const v = viewer.current; v?.frameEverywhere([...e.elements, ...e.created].filter((g) => v.isShown(g))); }} />
+            </section>)}
+        </ProjectOverview>
+      ) : (
+        <div className="proj-page"><div className="proj-scroll"><div className="proj-body">
+          <p className="proj-eyebrow">Project</p>
+          {projectError
+            ? <div className="proj-alert" role="alert">{projectError}</div>
+            : <div className="proj-loading" aria-live="polite"><span className="spinner" aria-hidden /> Loading the project…</div>}
+          <div><button type="button" className="btn small" onClick={goProjects}>All projects</button></div>
+        </div></div></div>)}
+    </div>) : null;
+
   const elementCard = (fold: boolean, closable: boolean) => selected && (
     <ElementCard key={selected.globalId} gid={selected.globalId} info={selected.info}
       props={elementProps?.gid === selected.globalId ? elementProps.data : null}
@@ -3602,12 +4199,16 @@ export function App() {
       actions={{ ...cardActions(selected.globalId), ...(closable ? { onClose: () => setSelected(null) } : {}) }} />);
 
   return (
-    <div className={`app ${compact ? "" : "notched"} ${docked ? "docked" : ""} ${resizing ? "resizing" : ""} ${landing ? "landing" : ""} ${starting ? "starting" : ""} ${compact ? `${layout} snap-${snap}` : ""} ${compact && listOpen ? "list-open" : ""}`}
+    <div className={`app ${compact ? "" : "notched"} ${docked ? "docked" : ""} ${resizing ? "resizing" : ""} ${landing ? "landing" : ""} ${starting ? "starting" : ""} ${compact ? `${layout} snap-${snap}` : ""} ${compact && listOpen ? "list-open" : ""} ${workBar ? "projected" : ""}`}
       style={{ "--left-w": `${widths.left}px`, "--right-w": `${widths.right}px` } as React.CSSProperties}>
+      {workBar}
       {compact ? (
       <header className="bar">
-        <button type="button" className="brand" onClick={() => openAbout()} aria-label="About Iris">
+        <button type="button" className="brand" onClick={() => goRoute(null)} aria-label="Iris: the first screen">
           {layout === "phone" ? <AppIcon size={30} /> : <Wordmark height={24} />}</button>
+        {pid && workStep && <select className="proj-step-pick" value={projStep ?? "overview"} aria-label={`Project step${projectHere ? `: ${projectHere.name}` : ""}`}
+          onChange={(e) => goStep(e.target.value as ProjectStep)}>
+          {PROJECT_STEPS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>}
         <span className="spacer" />
         {layout === "tablet" && !landing && (report || sceneId) && <button className={`btn ghost ${listOpen ? "on" : ""}`} data-tour="drawer"
           aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
@@ -3624,18 +4225,22 @@ export function App() {
           <Menu size={18} aria-hidden /><span>Menu</span></button>
       </header>
       ) : null}
-      <input ref={modelInput} type="file" hidden multiple accept=".ifc,.step,.stp" disabled={!!busy}
+      <input ref={modelInput} type="file" hidden multiple accept=".ifc,.step,.stp,.pdf" disabled={!!busy}
         onChange={(e) => {
-          const files = [...(e.target.files ?? [])], forAdding = pickFor.current === "add";
+          // A PDF can be chosen so its row says plainly that 2D drawings are not supported yet (importRows.ts).
+          const files = [...(e.target.files ?? [])], forWhat = pickFor.current;
           e.target.value = ""; pickFor.current = "open";
-          if (files.length) void (forAdding ? addModels(files) : openDemo(files));
+          if (files.length) void (forWhat === "project" ? importToProject(files) : importFiles(files, forWhat === "add"));
         }} />
       <input ref={folderInput} type="file" hidden multiple disabled={!!busy} {...{ webkitdirectory: "" }} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
       <input ref={filesInput} type="file" hidden multiple disabled={!!busy} accept=".xml,.png,.jpg,.jpeg" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
 
       {inSlot(slots.clashes, <aside className="pane left">
+        {projStep === "models" && projectHere ? modelsStep : <>
+        {importRows.length > 0 && !pid && importPanel}
         {report
           ? <ReportList report={listReport ?? shownReport ?? report} naming={naming} matches={matches}
+              coord={coordList} onClearCoord={() => setCoordFilter(null)}
               thumbs={report.origin === "iris" && matches ? thumbs : undefined} onThumb={needThumb}
               focus={listFocus} onClearFocus={() => setListFocus(null)} reveal={listReveal} selected={viewPlan || activeContext ? null : clash?.id ?? null} onSelect={(c) => { if (compact && tab === "chat") setTab("clash"); selectClash(c); }} onImage={(c, index) => setLightbox({ clash: c, index })} fixes={fixes}
               reviewed={reviewed} checked={checked} busy={planning || proposing || !!running} triage={listTriage} triageFilter={triageFilter}
@@ -3651,14 +4256,14 @@ export function App() {
                 value={viewCheck} onPick={setViewCheck} disabled={!!busy || !!detecting || !sceneId}
                 onAgain={(key) => void runDetect(null, sceneId, { check: key })} onAll={() => void runDetect(null, sceneId, { all: true })}
                 onRemove={(key) => void removeCheck(key)} />}
-              triageCard={<TriageCard run={triageRun} active={triageModel} workers={triageWorkers} forceCompact={!!listFocus} results={listTriage} now={now} filter={triageFilter} onFilter={setTriageFilter}
+              triageCard={withCoord(<TriageCard run={triageRun} active={triageModel} workers={triageWorkers} forceCompact={!!listFocus} results={listTriage} now={now} filter={triageFilter} onFilter={setTriageFilter}
                 live={Object.entries(triageLive).map(([id, text]) => ({ id, text, name: (() => { const c = shownReport?.clashes.find((x) => x.id === id); return c ? clashLabel(c) : id; })() }))}
                 onOpen={(id) => { const c = report.clashes.find((x) => x.id === id); if (c) selectClash(c); }}
                 total={(listReport ?? report).clashes.length} unread={unread} resolved={(id) => !!fixes[id] || !!reviewed[id]} onRun={runTriage} onStop={stopTriage}
                 onSetAside={(ids) => review(ids, "by_design", "Triage: by design or not physical")}
                 onFlag={(ids) => review(ids, "author", "Triage: modelling error")}
-                requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />}
-              insights={<>{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
+                requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />)}
+              insights={<>{projStep !== "coordination" && coordCard}{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
                 detection={shownCheck ?? { coverage: [], diff: { new: [], resolved: [], no_longer_checked: [], first: true }, elements: 0, seconds: 0 }}
                 progress={detecting} disabled={!!busy || !sceneId}
                 onAgain={() => void (shownCheck ? runDetect(null, sceneId, { check: shownCheck.key }) : runDetect(lastTests.current))}
@@ -3675,11 +4280,22 @@ export function App() {
                 onRun={(tests) => void runDetect(tests)} requirements={reqLabel} onRequirements={() => setReqOpen(true)} />
                 <p className="hint small">{coarse ? "Or tap element A in the model, then element B, and set each from its card."
                   : "Or double-click element A, then element B, in the model."}</p></div>
-            : <div className="empty-left">
+            : pid && projectHere
+            ? <div className="empty-left">
+              <Radar size={28} aria-hidden />
+              <h2>{projectBusy ?? (projectHere.files.length ? "The project's models are not open" : "No models in this project yet")}</h2>
+              <p className="hint">{projectHere.files.length ? "Open them to run the clash tests." : "Import the IFC or STEP models first."}</p>
+              {projectHere.files.length > 0
+                ? <button className="btn small primary" disabled={!!busy || !!projectBusy} onClick={() => void openProjectScene(projectHere)}>
+                  <FolderOpen size={14} aria-hidden /> Open the project's models</button>
+                : <button className="btn small primary" onClick={() => goStep("models")}><Upload size={14} aria-hidden /> Import models</button>}
+            </div>
+            : !importRows.length && <div className="empty-left">
               <Radar size={28} aria-hidden />
               <h2>Nothing to coordinate yet</h2>
               <p className="hint">Open the models: Iris checks them for clashes.</p>
             </div>}
+        </>}
       </aside>)}
 
       {inSlot(slots.model, <main className={`stage ${tool.measure ? "measuring" : ""} ${tool.edit ? "editing" : ""} ${temporaryCount ? "temp-on" : ""}`} ref={host} onClick={onClick}
@@ -3715,27 +4331,17 @@ export function App() {
             {isolating && isolatedFor != null ? `Clash #${isolatedFor} isolated` : temporary.isolated ? "Isolated for now" : `${temporary.hidden.length} hidden for now`}
             <button className="btn small" onClick={endIsolation}>{isolating ? "Show all" : "Reset"}</button>
           </div>)}
-        {!stats && !report && blank && (
-          <ProjectStart busy={!!busy} maxMb={uploadMax} onModels={(files) => void openDemo(files)} onReport={(files) => upload(files)}
-            onReportFolder={() => folderInput.current?.click()} onBack={() => setBlank(false)} />
+        {!stats && !report && blankish && (
+          <ProjectStart busy={!!busy || !!projectBusy} maxMb={uploadMax}
+            onModels={(files) => void (pid && projectHere ? importToProject(files) : importFiles(files, false))} onReport={(files) => upload(files)}
+            onReportFolder={() => folderInput.current?.click()} onBack={() => (pid ? goStep("overview") : setBlank(false))} />
         )}
-        {!stats && !busy && !blank && (
-          <About onAbout={() => openAbout()} start={{
-            label: startLabel,
-            disabled: !picked.length,
-            onStart: () => void openDemo(),
-            onCell: cellSample ? () => void openDemo([cellSample]) : undefined,
-            onGolden: startGolden,
-            onTour: () => startTour("northbank"),
-            onBlank: () => { setBlank(true); setError(null); },
-            onCellTour: cellSample ? () => startTour("cell") : undefined,
-            resume: resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
-              agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at, onResume: () => void resumeSession(), onFresh: startFresh } : undefined,
-            details: <>
-              Loads {picked.length} model{picked.length === 1 ? "" : "s"} ({shortNames(picked).join(", ")}) and checks
-              them. Other models: <b>Menu</b>, then <b>Models</b>.
-            </>,
-          }} />
+        {!stats && !busy && !blankish && (
+          <StartScreen onProjects={goProjects} projectsHref={PROJECTS_PATH}
+            onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy}
+            resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
+              agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
+              onResume: () => void resumeSession(), onFresh: startFresh } : undefined} />
         )}
         {hoverInfo && <div className="link-label" ref={hoverLabel} role="status" style={labelAt.current}>
           {hoverInfo.name && <b>{hoverInfo.name}</b>}<span>{hoverInfo.counts}</span>
@@ -3755,9 +4361,9 @@ export function App() {
             {elementCard(true, true)}
           </div>
         )}
-        {!compact && <Notch status={notchStatus} onLogo={() => openAbout()} />}
+        {!compact && <Notch status={notchStatus} onLogo={() => goRoute(null)} />}
         {!compact && corner}
-        {loading && !stats && !coverLoading && <LoadCard load={loading} now={now} />}
+        {loading && !stats && !coverLoading && <LoadCard load={loading} now={now} onCancel={cancelOpen} />}
         {compact && busy && <div className="overlay live"><i className="spinner" aria-hidden />{busy}</div>}
         {compact && proposing && <div className="overlay live"><i className="spinner" aria-hidden />{statusLine(progress, now, proposal?.attempts ?? [])}</div>}
         <div className={`pilot-glow ${pilotStatus?.driving ? "on" : ""}`} aria-hidden />
@@ -3856,7 +4462,10 @@ export function App() {
       </div>)}
       {inSlot(slots.clash, <div className="tab-body" hidden={!docked && tab !== "clash"}>
           {clash && report
-            ? (<><ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
+            ? (<><ClashHeader clash={shownClash ?? clash} triage={shownTriage[clash.id]} status={statusOf(clash, { fixes, reviewed, resolvedIds })}
+              onFocus={() => goToClash(clash, matches?.[clash.id], true)}
+              onPrev={listPrev ? () => selectClash(listPrev) : undefined} onNext={listNext ? () => selectClash(listNext) : undefined} />
+              <ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
               origin={report.origin} capturing={capturing === clash.id} />
               {evidence[clash.id]?.status === "recommended" && evidence[clash.id].kind === "penetration" &&
                 <div className="recommended">
@@ -3914,9 +4523,18 @@ export function App() {
           </>}
           <Thinking notes={thoughts} live={proposing} thinking={proposing && progress?.phase === "thinking"}
             model={progress?.model ?? proposal?.model ?? labels.proposal} />
+          {proposing && progress?.checking && <ProposalCard item={{ title: progress.checking.title, kind: progress.checking.kind, model: progress.model }}
+            state="ai_proposed" names={{}} />}
           {proposal && !proposing && <h2 ref={optionsHead}>Verified options</h2>}
+          {proposal && !proposing && (proposal.options.length > 0 || proposal.recommendation) && (
+            <label className="field reviewer-field">Your name, recorded with each decision
+              <input value={reviewer} maxLength={120} placeholder="Reviewer (no sign-in: a name you type)" autoComplete="name"
+                onChange={(e) => setReviewer(e.target.value)} /></label>)}
           {proposal && !proposing && proposal.recommendation && <Recommended rec={proposal.recommendation} advice={proposal.advice} model={proposal.model || labels.proposal} requirements={proposal.requirements ?? null}
-            onRequirements={() => setReqOpen(true)} />}
+            onRequirements={() => setReqOpen(true)}
+            card={<ProposalCard item={proposal.recommendation} state="unverified" names={namesFor([proposal.recommendation.element])} busy={!!busy}
+              onReject={(why) => void recordDecision(proposal.recommendation!, "rejected", why)} onAnother={() => requestAnother(proposal.recommendation!)}
+              decided={lastDecision(clashRefFor(clash?.id)?.key, proposal.recommendation.title, "rejected")} />} />}
           {proposal && !proposing && !proposal.options.length && !proposal.recommendation && <NoFix proposal={proposal} onRetry={propose}
             onEscalate={canEscalate && !proposal.escalated ? () => void escalate() : undefined} wonder={wonder}
             onFlag={clash ? () => review([clash.id], "author", "No verified fix: needs the model's author") : undefined} />}
@@ -3932,60 +4550,62 @@ export function App() {
                 : <button className="btn small" onClick={() => review([clash.id], "by_design", "A joint inside one model: built as modelled")}>
                   <CircleCheck size={13} aria-hidden /> Mark as not a clash</button>}
             </div>)}
-          {proposal?.options.map((o, i) => rejected[optionKey(o)] ? (
-            <div key={i} className="card rejected">
-              <span className="opt-head">
-                <span className="opt-rank">{i + 1}</span><span className="opt-kind">{kindLabel(o.kind)} · rejected</span>
-                <button type="button" className="btn small ghost undo" onClick={() => unreject(o)} data-tip="Put it back with the other options">
-                  <RotateCcw size={13} aria-hidden /> Undo</button></span>
-              <b className="opt-title">{o.title}</b>
-              <input className="rej-why" value={rejected[optionKey(o)].why} maxLength={200} aria-label={`Why reject ${o.title}`}
-                placeholder={`Why? (optional: ${labels.proposal} reads it on the next try)`}
-                onChange={(e) => { const why = e.target.value; setRejected((r) => r[optionKey(o)] ? { ...r, [optionKey(o)]: { ...r[optionKey(o)], why } } : r); }} />
-            </div>
-          ) : (
-            <div key={i} className={`card ${chosen === i ? "pick" : ""}`}>
-              <button className="card-body option" onClick={() => { clearManual(); setChosen(chosen === i ? null : i); }} aria-pressed={chosen === i}>
+          {proposal?.options.map((o, i) => {
+            const rej = rejected[optionKey(o)];
+            const key = clashRefFor(clash?.id)?.key;
+            const chips = <span className="chips">
+              {o.cleanup && <span className="chip" title="Tidies a joint inside one model; optional">model cleanup</span>}
+              {o.review && <span className="chip warn" data-tip={reviewText(o.review)}>{o.review} review</span>}
+              {proposal!.escalated && <span className={`chip model ${o.model === wonder ? "wonder" : ""}`}
+                data-tip={o.model === wonder ? `Found on the second try, by ${wonder}` : "Found on the first try"}>{o.model || labels.proposal}</span>}
+            </span>;
+            if (rej) {   // set aside: who decided, when and why; Undo puts it back with the others (the record stays)
+              const d = lastDecision(key, o.title, "rejected");
+              const w = d ? decisionWords(d) : null;
+              return (
+                <div key={i} className="card rejected" data-option={i}>
+                  <span className="opt-head">
+                    <span className="opt-rank">{i + 1}</span><span className="opt-kind">{kindLabel(o.kind)} · rejected</span>
+                    <button type="button" className="btn small ghost undo" onClick={() => unreject(o)} data-tip="Put it back with the other options">
+                      <RotateCcw size={13} aria-hidden /> Undo</button></span>
+                  <b className="opt-title">{o.title}</b>
+                  <span className="hint">{w ? `${w.verb} by ${w.who} · ${w.when}` : "Rejected"}{rej.why ? ` · Why: ${rej.why}` : ""}</span>
+                </div>);
+            }
+            return (
+              <div key={i} className={`card pcard-slot ${chosen === i ? "pick" : ""}`} data-option={i}>
                 <span className="opt-head">
-                  <span className="opt-rank">{i + 1}</span><span className="opt-kind">{kindLabel(o.kind)}</span>
-                  <span className="chips">
-                    {o.cleanup && <span className="chip" title="Tidies a joint inside one model; optional">model cleanup</span>}
-                    {o.review && <span className="chip warn" data-tip={reviewText(o.review)}>{o.review} review</span>}
-                    {proposal!.escalated && <span className={`chip model ${o.model === wonder ? "wonder" : ""}`}
-                      data-tip={o.model === wonder ? `Found on the second try, by ${wonder}` : "Found on the first try"}>{o.model || labels.proposal}</span>}
-                  </span></span>
-                <b className="opt-title">{o.title}</b>
-                <span className="opt-facts">
-                  <span className="fact"><span>Edit</span><span>{editText(o)}</span></span>
-                  <span className="fact"><span>Clearance</span><span>{clearanceText(o)}{o.kind !== "trim" && o.kind !== "seat" && o.min_clearance_m != null && o.edit?.fit !== "fitted"
-                    ? <span className="why"> · {Math.round((proposal!.clearance_m ?? 0.025) * 1000)} mm needed</span> : null}</span></span>
-                  {o.review && <span className="fact"><span>Review</span><span>{reviewText(o.review)}</span></span>}
-                  {hostRows(o).map(([k, v]) => <span key={k} className="fact"><span>{k}</span><span>{v}</span></span>)}
-                  {needsText(o.also_needs) && <span className="fact"><span>Also needs</span><span>{needsText(o.also_needs)}</span></span>}
+                  <span className="opt-rank">{i + 1}</span>{chips}
+                  <button type="button" className={`btn small ghost pcard-show ${chosen === i ? "on" : ""}`} aria-pressed={chosen === i}
+                    onClick={() => { clearManual(); setChosen(chosen === i ? null : i); }}
+                    data-tip={chosen === i ? "Shown in the model: click to hide it" : "Show this fix in the model"}>{chosen === i ? "Shown in 3D" : "Show in 3D"}</button>
                 </span>
-                {o.meets?.length ? <span className="meets">{o.meets.map((m) => <span key={m}><Check size={11} aria-hidden /> {m}</span>)}</span> : null}
-                {o.rationale && <span className="opt-why">{o.rationale}</span>}
+                <ProposalCard item={o} state={stateOf(o)} names={namesFor([...o.moved])}
+                  requiredClearanceMm={Math.round((proposal!.clearance_m ?? 0.025) * 1000)} busy={!!busy}
+                  acceptTour={chosen === i ? "accept" : undefined} onAccept={() => accept(o)} onReject={(why) => rejectOption(o, i, why)}
+                  onModify={sceneId && clash ? () => modifyOption(o) : undefined} onAnother={() => requestAnother(o)}
+                  onShowBeforeAfter={() => { clearManual(); setChosen(i); setCompare("both"); }} />
                 <ProofStrip o={o} rank={i} options={proposal!.options} before={measure && measure !== "busy" ? measure.distance_m : null} need={proposal!.clearance_m} />
-              </button>
-              {chosen === i && <div className="opt-actions">
-                <button className="btn primary" data-tour="accept" disabled={!!busy} onClick={() => accept(o)}><Check size={15} aria-hidden /> {o.cleanup ? "Accept this cleanup" : "Accept this fix"}</button>
-                <button type="button" className="btn" disabled={!!busy} onClick={() => reject(o, i)}
-                  data-tip={`Set it aside: the next proposal for this clash tells ${labels.proposal} you rejected it, and why if you say`}><X size={15} aria-hidden /> Reject</button>
-              </div>}
-              {chosen === i && canBuild(o) && a && b && (() => {
-                const run = builtRuns[builtKey([a, b], o)];
-                return run ? <BuiltView run={run} onRetry={() => showBuilt(o)} reopen={builtReopen} />
-                  : <button className="btn small" data-tour="show-built" disabled={!!busy} onClick={() => showBuilt(o)}
-                    data-tip={`${labels.image} draws Iris's view of this fix as a presentation render, checked against the model before you see it. About a minute.`}>
-                    <Building2 size={13} aria-hidden /> Show it built</button>;
-              })()}
-              {chosen === i && o.kind === "penetration" && o.edit && isAiReading(o.edit.reading_source) && sceneId && (
-                hasPenetration(reqSaved?.enabled ? reqSaved.doc : null, o.edit.host_group, o.edit.host_kind)
-                  ? <span className="chip ok"><Check size={11} aria-hidden /> in the requirements</span>
-                  : <button className="btn small" onClick={() => void addPenRule(o)}
-                    data-tip="Make this reading a rule for the host's group in the coordination requirements"><ClipboardPlus size={13} aria-hidden /> Add to requirements</button>)}
-            </div>
-          ))}
+                {chosen === i && canBuild(o) && a && b && (() => {
+                  const run = builtRuns[builtKey([a, b], o)];
+                  return run ? <BuiltView run={run} onRetry={() => showBuilt(o)} reopen={builtReopen} />
+                    : <button className="btn small" data-tour="show-built" disabled={!!busy} onClick={() => showBuilt(o)}
+                      data-tip={`${labels.image} draws Iris's view of this fix as a presentation render, checked against the model before you see it. About a minute.`}>
+                      <Building2 size={13} aria-hidden /> Show it built</button>;
+                })()}
+                {chosen === i && o.kind === "penetration" && o.edit && isAiReading(o.edit.reading_source) && sceneId && (
+                  hasPenetration(reqSaved?.enabled ? reqSaved.doc : null, o.edit.host_group, o.edit.host_kind)
+                    ? <span className="chip ok"><Check size={11} aria-hidden /> in the requirements</span>
+                    : <button className="btn small" onClick={() => void addPenRule(o)}
+                      data-tip="Make this reading a rule for the host's group in the coordination requirements"><ClipboardPlus size={13} aria-hidden /> Add to requirements</button>)}
+              </div>);
+          })}
+          {proposal && !proposing && proposal.attempts.some((t) => !t.passed) && (
+            <details className="tried">
+              <summary>What was tried · {proposal.attempts.filter((t) => !t.passed).length} refused by the geometry check</summary>
+              {proposal.attempts.filter((t) => !t.passed).map((t, k) => (
+                <ProposalCard key={k} item={t} state={stateOf(t)} names={namesFor(t.hit_ids ?? [])} />))}
+            </details>)}
           {proposal && !proposing && !hideFix && proposal.options.some((o) => rejected[optionKey(o)]) && (() => {
             const all = proposal.options.every((o) => rejected[optionKey(o)]);
             return <div className={`rejected-note${all ? " all" : ""}`}>
@@ -4064,6 +4684,16 @@ export function App() {
         </SheetBar>
       )}
       {menuOpen && <MenuSheet title="Iris" onClose={() => setMenuOpen(false)}>
+        <section className="menu-section"><h3><FolderOpen size={15} aria-hidden /> Projects</h3>
+          <a className="pop-item" data-menu="projects" {...linkTo(PROJECTS_PATH, () => { setMenuOpen(false); goProjects(); })}>
+            <FolderOpen size={16} aria-hidden /> All projects</a>
+          {projectHere && <a className="pop-item" {...linkTo(projectPath(projectHere.id), () => { setMenuOpen(false); goStep("overview"); })}>
+            <ChevronRight size={16} aria-hidden /> {projectHere.name || "Untitled project"}: overview</a>}
+          <p className="hint">A project keeps its models, decisions and reports together, to close and pick up again.</p>
+        </section>
+        {/* docs/ui-design.md §10.4: what each step does is on that step; the rest is here, folded on a desktop. */}
+        <details className="menu-more" open={compact || touring || undefined}>
+        <summary className="menu-more-sum">More: models, coordinate, this session, layout, help</summary>
         <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
           title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
           {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>
@@ -4079,21 +4709,17 @@ export function App() {
             {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
         </section>}
         {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(() => setMenuOpen(false))}</section>}
-        <section className="menu-section"><h3>Help</h3>
-          <button className="pop-item" onClick={() => { setMenuOpen(false); openAbout(); }}><Info size={16} aria-hidden /> About Iris</button>
-          {!touring && (compact || stats || report) && <button className="pop-item" onClick={() => { setMenuOpen(false); startTour(cellOpen ? "cell" : "northbank"); }}>
-            <Compass size={16} aria-hidden /> Take the guided tour</button>}
-        </section>
+        </details>
       </MenuSheet>}
 
       {(coverLoading || dockCover) && (
         <div className={`load-cover ${dockCover === "out" ? "out" : ""}`}>
-          <Notch status={notchStatus} onLogo={() => openAbout()} />
-          {coverCard && <LoadCard load={coverCard} now={now} />}
+          <Notch status={notchStatus} onLogo={() => goRoute(null)} />
+          {coverCard && <LoadCard load={coverCard} now={now} onCancel={coverLoading ? cancelOpen : undefined} />}
         </div>)}
       <Tooltips />
       {popouts.map((w, i) => <Tooltips key={i} doc={w.document} />)}
-      {aboutTab && <AboutIris tab={aboutTab} onTab={switchAbout} onClose={closeAbout} />}
+      {projectPage}
       {removing && (
         <div className="about-dialog" role="dialog" aria-modal="true" aria-label="Remove a model" onClick={() => setRemoving(null)}>
           <div className="report-dialog remove-dialog" onClick={(e) => e.stopPropagation()}>
@@ -4117,7 +4743,14 @@ export function App() {
         check={report.origin === "iris" ? checks.find((c) => c.key === viewCheck) ?? null : null}
         prepare={builtOn ? prepareReport : undefined}
         teams={modelTeams} onTeams={setModelTeams} evidence={evidence} signoffs={signoffs} reviewed={reviewed}
-        triageRunning={!!triageRun && !triageRun.done} onRunTriage={() => runTriage(false)} onClose={() => setDocOpen(false)} onReady={() => setDocReady(true)} />}
+        triageRunning={!!triageRun && !triageRun.done} onRunTriage={() => runTriage(false)} onClose={() => setDocOpen(false)} onReady={() => setDocReady(true)}
+        projectId={projectOpen ? pid : null} projectName={projectHere?.name ?? null}
+        onBuilt={projectOpen && projectHere ? (doc) => {
+          const id = projectHere.id;
+          addReport(id, { doc_id: doc.url, name: doc.name, kind: /\.pdf$/i.test(doc.name) || !doc.bcf ? "pdf" : "bcf" })
+            .then((next) => setProject((was) => (was?.id === next.id ? next : was)))
+            .catch((e: unknown) => setError(`The report was built, but not kept with the project: ${(e as Error).message}`));
+        } : undefined} />}
       {lightbox && report && lightbox.clash.images[lightbox.index] &&
         <Lightbox reportId={report.id} clash={lightbox.clash} index={lightbox.index} onClose={() => setLightbox(null)}
           onMove={(index) => setLightbox((l) => l && { ...l, index })} />}
@@ -4178,14 +4811,18 @@ function ProofStrip({ o, rank, options, before, need = 0.025 }: { o: Option; ran
   return <span className="proof-strip"><span className="ok">✓ Clash gone</span>{before != null && <span>{before < 0 ? `was ${Math.round(-before * 1000)} mm overlap` : `was ${Math.round(before * 1000)} mm apart`}</span>}<span>{o.checked_against ? `checked vs ${o.checked_against} elements` : "checked vs the model"}</span><span className="why">{why}</span></span>;
 }
 /** The requirements allow no edit here: Gemini Pro's recommendation for the designer, never tried or applied. */
-function Recommended({ rec, advice, requirements, onRequirements, model }: { rec: Recommendation; advice?: string; requirements: string | null; onRequirements: () => void; model: string }) {
+function Recommended({ rec, advice, requirements, onRequirements, model, card }: { rec: Recommendation; advice?: string; requirements: string | null; onRequirements: () => void; model: string;
+  /** The recommendation as a proposal card (Unverified: never tried on the model), in place of its own lines. */
+  card?: React.ReactNode }) {
   const change = recEditText(rec);
   return (
     <div className="recommended">
       <h3>Recommended for the designer</h3>
-      <p><b>{rec.title}</b>{change ? <> · <span className="mono">{change}</span></> : null}</p>
-      {rec.rationale && <p>{rec.rationale}</p>}
-      {rec.also_needs && <p><b>Also needs:</b> {rec.also_needs}</p>}
+      {card ?? <>
+        <p><b>{rec.title}</b>{change ? <> · <span className="mono">{change}</span></> : null}</p>
+        {rec.rationale && <p>{rec.rationale}</p>}
+        {rec.also_needs && <p><b>Also needs:</b> {rec.also_needs}</p>}
+      </>}
       {advice && <p><b>What decides it:</b> {advice}</p>}
       {rec.others.length > 0 && <p className="hint">{model} also considered: {rec.others.join("; ")}</p>}
       <p className="hint">Not edited: {rec.blocked_by}{requirements ? ` (requirements ${requirements})` : ""}. Nothing was tried
@@ -4287,3 +4924,23 @@ function keepPlaces(prev: RootCause[] | null, next: RootCause[]): RootCause[] {
   const seen = new Set(prev.map((r) => r.hub.global_id));
   return [...out, ...next.filter((r) => !seen.has(r.hub.global_id))];
 }
+
+/** A decision's identity, to merge a reply's decisions into the log without doubles. */
+function decisionId(d: Decision): string {
+  return [d.clash_key, d.decision, d.at, d.option.title, d.option.kind].join("|");
+}
+
+/** The coordination overview's filter in words, for the list's chip. */
+function coordFilterLabel(f: CoordinationFilter): string {
+  return [f.cls && CLASS_INFO[f.cls].label, f.severity && `${SEVERITY_LABEL[f.severity]} severity (AI-assessed)`,
+    f.status && STATUS_INFO[f.status].label].filter(Boolean).join(" · ") || "Every clash";
+}
+
+/** One decision as the project's activity says it: "#42: Rejected "Raise the duct" (Geometry-validated ✓), by Ana: too low". */
+function decisionLine(d: Decision): string {
+  const w = decisionWords({ ...d, at: toMs(d.at) });
+  return `${d.number ? `#${d.number}: ` : ""}${w.verb} "${d.option.title}" (${STATE_LABEL[d.state] ?? d.state}), by ${w.who}${w.why ? `: ${w.why}` : ""}`;
+}
+
+/** The sample building's project name (the first screen's "Try the sample building" finds it again by this name). */
+const SAMPLE_PROJECT = "Northbank sample building";

@@ -116,7 +116,7 @@ test("a reload resumes the list of kept checks on the check it showed; a list th
         open: async (names) => ({ id: "scene-1", files: names }), detect: async () => { throw new Error("no run on resume"); } } });
     await host.settle();
     assert.equal(host.state.resumable.clashes, 3, "the landing counts the list the server holds now");
-    host.component("About").props.start.resume.onResume();   // the landing's Pick up
+    host.component("StartScreen").props.resume.onResume();   // the first screen's Resume
     await host.settle();
     assert.deepEqual(asked.slice(-1), ["r9"], "the list the scene's checks make now (the old one is gone)");
     assert.equal(host.state.report?.id, "r9");

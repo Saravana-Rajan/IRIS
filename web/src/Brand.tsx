@@ -96,16 +96,41 @@ export interface LoadProgress {
 
 const STEPS = ["server", "download", "draw"] as const;
 
-/** The checklist card in the middle of an empty model while the first models open. */
-export function LoadCard({ load, now }: { load: LoadProgress; now: number }) {
+/** How long the first step may run before the card says the server may be waking (Cloud Run scales to zero). */
+export const WAKE_AFTER_MS = 3000;
+
+/** What the card says for the server's step: the server's own words (an upload's stages), else opening, and once that
+ * takes longer than WAKE_AFTER_MS, that the server may be waking (a first visit after a quiet spell). */
+export function serverLine(load: LoadProgress, now: number): { text: string; waking: boolean } {
+  if (load.line) return { text: load.line, waking: false };
+  const waking = now - load.started > WAKE_AFTER_MS;
+  return { text: waking ? "Waking up the server: the first visit can take up to 30 s" : "Opening the models", waking };
+}
+
+/** How far the whole opening is, 0–1, from what is measured: none while the server works (the bar moves without a
+ * number), then the files downloaded and drawn. */
+export function loadShare(load: LoadProgress): number | null {
+  const n = Math.max(1, load.files.length);
+  if (load.step === "server") return null;
+  if (load.step === "download") return 0.35 + 0.35 * (load.fetched / n);
+  return 0.7 + 0.3 * (load.drawn / n);
+}
+
+/** The checklist card in the middle of an empty model while the first models open: light, with a slim bar that never
+ * stands still, the time so far, the step in words (waking the server, opening, downloading n of N, drawing) and
+ * Cancel. */
+export function LoadCard({ load, now, onCancel }: { load: LoadProgress; now: number; onCancel?: () => void }) {
   const at = STEPS.indexOf(load.step);
   const n = load.files.length;
   const secs = (ms?: number) => (ms == null ? "" : `${(ms / 1000).toFixed(1)} s`);
+  const server = serverLine(load, now);
+  const share = loadShare(load);
+  const elapsed = Math.max(0, Math.round((now - load.started) / 1000));
   const rows: { text: string; aside: string; extra?: React.ReactNode }[] = [
-    { text: at > 0 ? "Opened on the server" : load.line ?? "Opening on the server", aside: at > 0 ? secs(load.ends.server) : "" },
-    { text: at > 1 ? `Downloaded ${n} of ${n} model${n === 1 ? "" : "s"}` : `Downloading model${n === 1 ? "" : "s"}: ${load.fetched} of ${n}`,
+    { text: at > 0 ? "Opened on the server" : server.text, aside: at > 0 ? secs(load.ends.server) : server.waking ? `${elapsed} s` : "" },
+    { text: at > 1 ? `Downloaded the models ${n}/${n}` : `Downloading the models ${load.fetched}/${n}`,
       aside: load.bytes ? `${(load.bytes / 1e6).toFixed(1)} MB` : "" },
-    { text: at === 2 && load.drawn < n ? `Drawing model ${load.drawn + 1} of ${n}: ${load.files[load.drawn]}` : `Drawing the model${n === 1 ? "" : "s"}`,
+    { text: at === 2 && load.drawn < n ? `Drawing ${load.drawn + 1}/${n}: ${load.files[load.drawn]}` : "Drawing",
       aside: load.elements ? `${load.elements.toLocaleString()} elements` : "",
       extra: at === 2 && n > 1 ? <><Parts done={load.drawn} total={n} />
         <p className="hint">{load.files.map((f, i) => `${f}${i < load.drawn ? " ✓" : ""}`).join(" · ")}</p></> : null },
@@ -113,10 +138,14 @@ export function LoadCard({ load, now }: { load: LoadProgress; now: number }) {
   return (
     <section className="load-card" role="status" aria-live="polite" onClick={(e) => e.stopPropagation()}>
       <div className="load-head">
-        <IrisMark size={44} motion="orbit" />
+        <IrisMark size={36} motion="orbit" />
         <div><h2>{load.title}</h2>
-          <p className="hint">{n} model{n === 1 ? "" : "s"} · {Math.max(0, Math.round((now - load.started) / 1000))} s</p></div>
+          <p className="hint">{n} model{n === 1 ? "" : "s"} · {elapsed} s</p></div>
+        {onCancel && <button type="button" className="btn small ghost load-cancel" onClick={onCancel}>Cancel</button>}
       </div>
+      <div className={`load-bar${share == null ? " busy" : ""}`} role="progressbar" aria-label="Opening the models"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={share == null ? undefined : Math.round(share * 100)}>
+        <i style={share == null ? undefined : { width: `${Math.round(share * 100)}%` }} /></div>
       <ol className="load-steps">
         {rows.map((r, i) => (
           <li key={i} className={i < at ? "done" : i === at ? "now" : "next"}>

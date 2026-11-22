@@ -66,7 +66,13 @@ export const contextResult = { type: "context_result", proposals: [contextPropos
 /** Runs production App render + dependency-aware passive effects, including cleanup before replacement.
  * Only external IO, the GPU viewer and leaf components are replaced. State/ref labels aid inspection;
  * the assertions always drive production event handlers and the real effect bodies. */
-export async function appHost({ initial = {}, api: overrides = {}, effects = true, layout = null } = {}) {
+/** A project as the server sends it (projectsApi.Project), with `fields` over the defaults. */
+export const projectOf = (fields = {}) => ({ id: "p1", name: "Northbank tower", created: 1700000000, updated: 1700000000, files: [],
+  scene_id: null, saved: [], reviews: {}, reports: [], counts: null, ...fields });
+
+/** `projects`: stand-ins for projectsApi's calls (each records itself in `host.projects.calls`); `path` (and `hash`, an
+ * old address): the page's address, with a history that keeps it as the page pushes or replaces it. */
+export async function appHost({ initial = {}, api: overrides = {}, effects = true, layout = null, projects: projectOverrides = {}, hash, path } = {}) {
   globalThis.__hostLayout = layout;
   const c = { id: "clash", name: "Clash", a: {}, b: {}, images: [] };
   const report = { id: "report", title: "Report", clashes: [c] };
@@ -100,15 +106,34 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     verify: (...args) => new Promise((resolve, reject) => verifyRequests.push({ args, resolve, reject })),
     applyContext: async () => ({ files: [], edits: contextProposal.edits, pieces: [], resolved_pairs: [{ element_a: "duct", element_b: "beam" }], checks }),
     file: async () => new Uint8Array([1]), accept: async () => ({ files: [], pieces: [] }),
+    decide: async (_sid, d) => ({ decision: { ...d, at: 1700000000 }, decisions: [{ ...d, at: 1700000000 }] }),
     titles: async () => {}, classes: async () => ({}), datums: async () => ({ levels: [], grids: [], storeys: {}, sources: { grids: null } }), facets: async () => null, detectTests: async () => ({ tests: [], teams: {}, elements: 0, rules: {} }), ...overrides };
+  const calls = [];
+  const projects = { ids: [], calls,
+    listProjects: async (ids) => { calls.push(["list", ids]); return []; },
+    createProject: async (name) => { calls.push(["create", name]); return projectOf({ id: "p-new", name }); },
+    getProject: async (id) => { calls.push(["get", id]); return projectOf({ id }); },
+    patchProject: async (id, patch) => { calls.push(["patch", id, patch]); return projectOf({ id, ...patch }); },
+    attachScene: async (id, sid) => { calls.push(["attach", id, sid]); return projectOf({ id, scene_id: sid, files: [{ name: "model.ifc", kind: "IFC", size: 1, sha256: "0" }] }); },
+    openProject: async (id) => { calls.push(["open", id]); return { scene_id: "scene-p", project: projectOf({ id, scene_id: "scene-p" }), scene: { id: "scene-p", files: ["model.ifc"], checks: [], report_id: null } }; },
+    saveProject: async (id, sid) => { calls.push(["save", id, sid]); return projectOf({ id, scene_id: sid }); },
+    setReview: async (id, r) => { calls.push(["review", id, r]); return projectOf({ id }); },
+    addReport: async (id, r) => { calls.push(["report", id, r]); return projectOf({ id }); },
+    ...projectOverrides };
   const key = `__irisHost${sequence++}`;
-  globalThis[key] = { hooks, api, viewer };
+  globalThis[key] = { hooks, api, viewer, projects };
+  const location = { hash: hash ?? "", pathname: path ?? "/", search: "" };
+  const go = (_state, _title, to) => {
+    const url = new URL(String(to), "http://iris.test" + location.pathname);
+    location.pathname = url.pathname; location.search = url.search; location.hash = url.hash;
+  };
   globalThis.window = { innerWidth: 1600, addEventListener() {}, removeEventListener() {},
-    setTimeout(fn) { const id = Symbol(); timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); } };
+    setTimeout(fn) { const id = Symbol(); timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
+    ...(hash !== undefined || path !== undefined ? { location, history: { state: null, pushState: go, replaceState: go, back() {} } } : {}) };
   globalThis.setInterval = () => Symbol(); globalThis.clearInterval = () => {};
   const react = url(`const h=globalThis.${key}.hooks; export const useState=(...a)=>h.useState(...a),useRef=(...a)=>h.useRef(...a),useMemo=(...a)=>h.useMemo(...a),useEffect=(...a)=>h.useEffect(...a);`);
-  const apiModule = url(`export const api=globalThis.${key}.api; export class ApiError extends Error { constructor(message,status){super(message);this.status=status;} } export const setRequirements=()=>{}; export const setGoneHandler=(fn)=>{globalThis.${key}.gone=fn;};`);
-  const names = ["Activity", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AboutIris", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon"];
+  const apiModule = url(`export const api=globalThis.${key}.api; export class ApiError extends Error { constructor(message,status){super(message);this.status=status;} } export const setRequirements=()=>{}; export const setGoneHandler=(fn)=>{globalThis.${key}.gone=fn;}; export const apiUrl=(p)=>p; export const wsUrl=(p)=>p; export const apiFetch=(p,i)=>globalThis.fetch(p,i);`);
+  const names = ["DrawingsPanel", "serverLine", "StartScreen", "ImportPanel", "ModelSummary", "CoordinationOverview", "ClashHeader", "ProposalCard", "ProjectsHome", "ProjectOverview", "ProjectSteps", "Activity", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon"];
   // The page's layout is none (not desktop, phone or tablet) unless a test asks for one: appHost({ layout }).
   const mocks = url(`${names.filter((name) => name !== "useLayout").map((name) => `export function ${name}(){return null;}`).join("\n")}
     export function useLayout(){return globalThis.__hostLayout ?? null;}
@@ -129,10 +154,26 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
   const views = await compiled("../src/viewer/views.ts", { three: import.meta.resolve("three") });
   const context = await compiled("../src/ContextPlan.tsx", { "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"), "lucide-react": icons, "./ReportList": mocks });
   const filtersModule = await compiled("../src/filters.ts", {});
+  // projectsApi: its pure helpers as they are, its calls through `projects` (no network in a test).
+  const projectsReal = await compiled("../src/projectsApi.ts", { "./api": apiModule });
+  const projectsModule = url(`export * from ${JSON.stringify(projectsReal)};
+    const p = () => globalThis.${key}.projects;
+    export const listProjects = (...a) => p().listProjects(...a), createProject = (...a) => p().createProject(...a),
+      getProject = (...a) => p().getProject(...a), patchProject = (...a) => p().patchProject(...a), attachScene = (...a) => p().attachScene(...a),
+      openProject = (...a) => p().openProject(...a), saveProject = (...a) => p().saveProject(...a), setReview = (...a) => p().setReview(...a),
+      addReport = (...a) => p().addReport(...a);
+    export const myProjectIds = () => [...p().ids];
+    export const rememberProject = (id) => { const s = p(); s.ids = [id, ...s.ids.filter((x) => x !== id)]; return [...s.ids]; };
+    export const pruneProjectIds = () => [...p().ids];`);
   const dependencies = { "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"), react, "lucide-react": icons,
     "./api": apiModule, "./chatRequest": ownership, "./ContextPlan": context, "./fixKinds": kinds, "./uploads": uploads, "./sceneModels": await compiled("../src/sceneModels.ts", {}), "./links": links,
-    "./signoffs": signoffs, "./aboutRoute": aboutRoute, "./dockLayout": dockLayout, "./names": fileNames, "./aiNames": aiNames, "./filters": filtersModule, "./checks": await compiled("../src/checks.ts", { "./filters": filtersModule }), "./runlog": await compiled("../src/runlog.ts"), "./viewer/views": views };
-  for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./AboutIris", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons"]) dependencies[name] = mocks;
+    "./signoffs": signoffs, "./aboutRoute": aboutRoute, "./dockLayout": dockLayout, "./names": fileNames, "./aiNames": aiNames, "./filters": filtersModule, "./checks": await compiled("../src/checks.ts", { "./filters": filtersModule }), "./runlog": await compiled("../src/runlog.ts"), "./viewer/views": views,
+    "./importRows": await compiled("../src/importRows.ts", {}), "./coordination": await compiled("../src/coordination.ts", {}),
+    "./proposalState": await compiled("../src/proposalState.ts", { "./fixKinds": kinds }), "./projectRoute": await compiled("../src/projectRoute.ts", {}),
+    "./drawingsApi": await compiled("../src/drawingsApi.ts", { "./api": apiModule }),
+    "./projectsApi": projectsModule };
+  for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons",
+    "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ProjectsHome", "./ProjectOverview"]) dependencies[name] = mocks;
   const { App } = await import(await compiled("../src/App.tsx", dependencies, true));
   function render() {
     let passes = 0;
@@ -142,7 +183,7 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     } while (dirty);
   }
   render(); await flush(); render();
-  return { state, refs, requests, contextRequests, planRequests, verifyRequests, actions, viewer, api, timers, render,
+  return { state, refs, requests, contextRequests, planRequests, verifyRequests, actions, viewer, api, timers, render, projects, location,
     async settle() { await flush(); render(); await flush(); render(); },
     button(text) { return find(tree, (n) => n.type === "button" && hasText(n, text)); },
     component(name) { return find(tree, (n) => n.type?.name === name); },

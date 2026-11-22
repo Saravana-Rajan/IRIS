@@ -1,0 +1,223 @@
+/* The Drawings step (DrawingsPanel.tsx, docs/drawings.md): AI reads, data checks, the engineer decides. The proof
+   grammar of docs/ui-design.md §1 and §3.2: AI-read = dashed indigo, confirmed by data = solid teal, text layer only =
+   dotted grey, mismatch = amber (differs) or red (missing), the engineer's choice = navy. Colours come from the app's
+   tokens only (index.css :root); each new token falls back to its legacy alias until index.css carries it. Light
+   theme only (owner decision): no dark-mode block here. */
+.dwg {
+  --d-ai: var(--ai, var(--spark)); --d-ai-soft: var(--ai-soft, var(--spark-soft)); --d-ai-line: var(--ai-line, var(--spark-line));
+  --d-proved: var(--proved, var(--ok)); --d-proved-soft: var(--proved-soft, var(--ok-soft));
+  --d-failed: var(--failed, var(--fail)); --d-failed-soft: var(--failed-soft, var(--fail-soft)); --d-failed-line: var(--failed-line, var(--fail));
+  --d-warn-line: var(--warn-line, var(--warn));
+  --d-control: var(--control-border, var(--muted)); --d-line-strong: var(--line-strong, var(--line));
+  --d-sunken: var(--sunken, var(--bg)); --d-ink2: var(--ink-2, var(--ink)); --d-faint: var(--faint, var(--muted));
+  --d-accent-line: var(--accent-line, var(--line)); --d-on-accent: var(--on-accent, var(--surface)); --d-focus: var(--focus, var(--accent));
+  --d-stage: var(--stage-bg, var(--bg));
+  display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 12px 16px;
+  background: var(--surface); color: var(--ink); font-size: 13px; line-height: 18px;
+}
+.dwg :focus-visible { outline: 2px solid var(--d-focus); outline-offset: 2px; }
+.dwg-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.dwg-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 16px; }
+.dwg-pad { padding: 12px; }
+.dwg-faint { color: var(--d-faint); }
+.dwg-bad { color: var(--d-failed); }
+.dwg-ok { color: var(--d-proved); }
+.dwg-spacer { flex: 1 1 auto; }
+
+/* The rule: AI reads › Data checks › The engineer decides */
+.dwg-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0; font: 600 12px/1 var(--body); }
+.dwg-rule-step { position: relative; display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid var(--line);
+  border-radius: 3px; white-space: nowrap; }
+.dwg-rule-step + .dwg-rule-step::before { content: "›"; position: absolute; left: -13px; color: var(--muted); font-weight: 600; }
+.dwg-rule-step.st-ai { border-style: dashed; border-color: var(--d-ai); color: var(--d-ai); background: var(--d-ai-soft); }
+.dwg-rule-step.st-confirmed { border-color: var(--d-proved); color: var(--d-proved); background: var(--d-proved-soft); }
+.dwg-rule-step.decided { border-color: var(--accent); background: var(--accent); color: var(--d-on-accent); }
+
+/* Badges (states: glyph + word) and counts */
+.dwg-badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; flex: none; border: 1px solid var(--line);
+  border-radius: 3px; background: transparent; color: var(--d-ink2); font: 600 11px/1 var(--body); white-space: nowrap; }
+.dwg-badge.st-confirmed { border-color: var(--d-proved); color: var(--d-proved); background: var(--d-proved-soft); }
+.dwg-badge.st-ai { border-style: dashed; border-color: var(--d-ai); color: var(--d-ai); background: var(--d-ai-soft); }
+.dwg-badge.st-text { border-style: dotted; border-color: var(--d-control); color: var(--muted); }
+.dwg-badge.mk-missing { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-badge.mk-differs { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
+.dwg-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--d-sunken); color: var(--d-ink2); font: 500 11px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.dwg-count.warn { background: var(--warn-soft); color: var(--warn); }
+.dwg-mk { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 4px; border: 1px solid; border-radius: 3px;
+  font: 600 11px/1 var(--body); vertical-align: middle; }
+.dwg-mk.mk-missing { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-mk.mk-differs { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
+
+/* Notices: errors with Retry, run lines, the AI-only note */
+.dwg-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--d-failed-line);
+  border-radius: 6px; background: var(--d-failed-soft); color: var(--ink); font-size: 13px; }
+.dwg-alert > svg { flex: none; color: var(--d-failed); }
+.dwg-alert > span { flex: 1 1 220px; min-width: 0; }
+.dwg-run { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--line);
+  color: var(--d-ink2); font-size: 12px; }
+.dwg > .dwg-run { border: 1px solid var(--line); border-radius: 6px; }
+.dwg-bar { flex: 1 1 80px; max-width: 220px; height: 4px; border-radius: 999px; background: var(--d-sunken); overflow: hidden; }
+.dwg-bar > i { display: block; height: 100%; background: var(--d-control); transition: width var(--dur-2, 180ms) var(--ease, ease-out); }
+.dwg-run.reading .dwg-bar > i { background: var(--d-ai); }
+.dwg-pulse { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--d-ai); animation: dwg-pulse 1.2s ease-in-out infinite; }
+@keyframes dwg-pulse { 50% { transform: scale(.55); } }
+.dwg-notice { margin: 0; padding: 6px 12px; border-bottom: 1px dashed var(--d-ai); background: var(--d-ai-soft); color: var(--d-ink2); font-size: 12px; }
+.dwg-notice b { color: var(--d-ai); font-weight: 600; }
+.dwg-note { margin: 0; padding: 4px 8px; border: 1px dashed var(--d-ai); border-radius: 3px; background: var(--d-ai-soft); color: var(--d-ai);
+  font-size: 12px; line-height: 16px; }
+
+/* Empty state: the drop zone. Solid, not dashed: dashed means "AI" in this app. */
+.dwg-empty { align-items: stretch; }
+.dwg-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 720px;
+  margin: 24px auto; padding: 40px 24px; border: 1px solid var(--d-line-strong); border-radius: 12px; background: var(--raised);
+  text-align: center; cursor: pointer; }
+.dwg-drop > b { font-size: 16px; line-height: 22px; font-weight: 600; }
+.dwg-drop-how { max-width: 60ch; color: var(--d-ink2); font-size: 13px; line-height: 18px; }
+.dwg-drop-icon { color: var(--muted); }
+.dwg-drop:hover { border-color: var(--d-control); }
+.dwg-drop:focus-within, .dwg-add:focus-within { outline: 2px solid var(--d-focus); outline-offset: 2px; }
+.dwg-drop.off, .dwg-add.off { color: var(--d-faint); cursor: not-allowed; }
+.dwg-drop.off .btn.primary { background: var(--disabled-bg, var(--d-sunken)); border-color: var(--disabled-bg, var(--d-sunken)); color: var(--disabled-ink, var(--muted)); }
+.dwg.drag .dwg-drop, .dwg.drag .dwg-grid { border-color: var(--accent); background: var(--accent-soft); }
+.dwg-add { margin-left: auto; cursor: pointer; }
+
+/* Three columns: sheets · the sheet · readings */
+.dwg-grid { flex: 1 1 auto; min-height: 520px; display: grid; grid-template-columns: 208px minmax(0, 1fr) 392px;
+  border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.dwg-col-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+.dwg-col-head h3 { margin: 0; font-size: 13px; font-weight: 600; min-width: 0; }
+.dwg-view-head h3 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
+.dwg-sheets { min-width: 0; min-height: 0; overflow: auto; border-right: 1px solid var(--line); }
+.dwg-sheets ul { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+.dwg-sheet { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); text-align: left; cursor: pointer; }
+.dwg-sheet:hover { background: var(--raised); }
+.dwg-sheet[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.dwg-sheet:focus-visible { outline-offset: -2px; }
+.dwg-sheet-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.dwg-sheet-title { color: var(--d-ink2); font-size: 12px; line-height: 16px; }
+.dwg-sheet-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; color: var(--muted); font-size: 11.5px; line-height: 16px; }
+
+.dwg-centre { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.dwg-pager { display: inline-flex; align-items: center; gap: 2px; color: var(--d-ink2); font-size: 12px; white-space: nowrap; }
+.dwg-ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink); cursor: pointer; }
+.dwg-ibtn:hover:not(:disabled) { background: var(--raised); }
+.dwg-ibtn:disabled { color: var(--disabled-ink, var(--d-faint)); cursor: default; }
+
+/* The sheet viewer */
+.dwg-viewer { position: relative; flex: 1 1 auto; min-height: 360px; display: flex; flex-direction: column; }
+.dwg-stage { position: relative; flex: 1 1 auto; min-height: 320px; overflow: hidden; background: var(--d-stage); cursor: grab;
+  touch-action: none; user-select: none; }
+.dwg-stage:active { cursor: grabbing; }
+.dwg-stage:focus-visible { outline-offset: -2px; }
+.dwg-svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.dwg-paper { fill: var(--surface); stroke: var(--line); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.dwg-box { fill: transparent; stroke-width: 1.5px; vector-effect: non-scaling-stroke; cursor: pointer; }
+.dwg-box.st-confirmed { stroke: var(--d-proved); }
+.dwg-box.st-ai { stroke: var(--d-ai); stroke-dasharray: 5 3; }
+.dwg-box.st-text { stroke: var(--d-control); stroke-dasharray: 1 3; stroke-linecap: round; }
+.dwg-box:hover { fill-opacity: .45; }
+.dwg-box.st-confirmed:hover { fill: var(--d-proved-soft); }
+.dwg-box.st-ai:hover { fill: var(--d-ai-soft); }
+.dwg-box.st-text:hover { fill: var(--d-sunken); }
+.dwg-box.picked { stroke-width: 2.5px; }
+.dwg-halo { fill: none; stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.dwg-mis { stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; fill-opacity: .35; }
+.dwg-mis.mk-missing { stroke: var(--d-failed); fill: var(--d-failed-soft); }
+.dwg-mis.mk-differs { stroke: var(--warn); fill: var(--warn-soft); }
+.dwg-stage-note { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 6px 10px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; }
+.dwg-stage-note.err { display: flex; align-items: center; gap: 8px; border-color: var(--d-failed-line); color: var(--ink); }
+.dwg-tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-1, var(--shadow)); }
+.dwg-zoom { min-width: 44px; color: var(--d-ink2); font-size: 11px; text-align: center; }
+.dwg-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; padding: 6px 12px; list-style: none;
+  border-top: 1px solid var(--line); color: var(--d-ink2); font-size: 11px; line-height: 16px; }
+.dwg-swatch { display: inline-block; width: 14px; height: 10px; margin-right: 5px; border: 1.5px solid var(--line); vertical-align: -1px; }
+.dwg-swatch.st-confirmed { border-color: var(--d-proved); }
+.dwg-swatch.st-ai { border-style: dashed; border-color: var(--d-ai); }
+.dwg-swatch.st-text { border-style: dotted; border-color: var(--d-control); }
+.dwg-swatch.mk-missing { border-width: 2px; border-color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-swatch.mk-differs { border-width: 2px; border-color: var(--warn); background: var(--warn-soft); }
+
+/* Readings: tabs, filter chips, the items table, the picked item, mismatches */
+.dwg-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); }
+.dwg-tabs { display: flex; flex: none; border-bottom: 1px solid var(--line); }
+.dwg-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0;
+  border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; }
+.dwg-tabs [role="tab"]:hover { color: var(--ink); }
+.dwg-tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.dwg-tabs [role="tab"]:focus-visible { outline-offset: -2px; }
+.dwg-tabpanel { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dwg-tabpanel[hidden] { display: none; }
+.dwg-filter { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.dwg-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--d-ink2); font: 500 12px/1 var(--body); cursor: pointer; }
+.dwg-chip:hover { border-color: var(--d-line-strong); }
+.dwg-chip.st-ai { border-style: dashed; }
+.dwg-chip.st-text { border-style: dotted; }
+.dwg-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--d-accent-line); color: var(--accent-ink); }
+
+.dwg-table-wrap { min-width: 0; }
+.dwg-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dwg-table th { position: sticky; top: 0; z-index: 1; padding: 6px; border-bottom: 1px solid var(--line); background: var(--surface);
+  color: var(--muted); font: 600 11px/16px var(--body); text-align: left; }
+.dwg-table td { height: 32px; padding: 0 6px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.dwg-table td:first-child { max-width: 112px; overflow: hidden; text-overflow: ellipsis; }
+.dwg-table .num { text-align: right; }
+.dwg-table tbody tr { cursor: pointer; }
+.dwg-table tbody tr:hover { background: var(--raised); }
+.dwg-table tbody tr.picked { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.dwg-table tbody tr:focus-visible { outline-offset: -2px; }
+
+.dwg-detail { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.dwg-detail > header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dwg-proof { margin: 0; padding: 0; list-style: none; color: var(--d-ink2); font: 12px/16px var(--mono); }
+.dwg-detail-model { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+
+.dwg-mms { list-style: none; margin: 0; padding: 0; }
+.dwg-mm { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.dwg-mm.mk-missing { box-shadow: inset 2px 0 var(--d-failed); }
+.dwg-mm.mk-differs { box-shadow: inset 2px 0 var(--warn); }
+.dwg-mm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.dwg-mm-head b { overflow-wrap: anywhere; }
+.dwg-mm-vals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: 6px; }
+.dwg-mm-vals > div { padding: 4px 10px; min-width: 0; }
+.dwg-mm-vals > div + div { border-left: 1px solid var(--line); }
+.dwg-mm-vals dt { color: var(--muted); font: 500 11px/16px var(--body); }
+.dwg-mm-vals dd { margin: 2px 0 0; color: var(--ink); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.dwg-mm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+/* 1280 px and down to tablets: readings move under the sheet; phones: one column */
+@media (max-width: 1100px) {
+  .dwg-grid { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(440px, 1fr) auto; }
+  .dwg-side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: 60vh; }
+}
+@media (max-width: 760px) {
+  .dwg { padding: 8px; height: auto; }
+  .dwg-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; min-height: 0; }
+  .dwg-sheets { border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .dwg-sheets ul { flex-direction: row; overflow-x: auto; }
+  .dwg-sheets li { flex: 0 0 220px; }
+  .dwg-viewer { min-height: 0; }
+  .dwg-stage { flex: none; height: 60vh; min-height: 280px; }
+  .dwg-side { max-height: none; }
+  .dwg-view-head { flex-wrap: wrap; }
+  .dwg-drop { margin: 8px 0; padding: 28px 16px; }
+}
+@media (pointer: coarse) {
+  .dwg-ibtn { width: 44px; height: 44px; }
+  .dwg-table td { height: 44px; }
+  .dwg-chip, .dwg-tabs [role="tab"] { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dwg-pulse { animation: none; }
+  .dwg-bar > i { transition: none; }
+}
+@media (forced-colors: active) {
+  .dwg-badge, .dwg-chip, .dwg-rule-step, .dwg-mk { border: 1px solid CanvasText; }
+  .dwg-box, .dwg-mis, .dwg-halo { forced-color-adjust: none; }
+}

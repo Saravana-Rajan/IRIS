@@ -5,6 +5,10 @@
 > re-branded on 2026-11-11; the server's address (`api.ts`, `voice.ts`, `clashImage.ts`, the server's URLs at render
 > time) on 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
 > [docs/views.md](../views.md), [docs/panels.md](../panels.md), [docs/brand-assets.md](../brand-assets.md)
+> re-branded on 2026-11-11; the engineer-workflow files (projects, import rows, model summary, coordination overview,
+> clash header, proposal card) on 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
+> [docs/views.md](../views.md), [docs/panels.md](../panels.md), [docs/brand-assets.md](../brand-assets.md),
+> [docs/engineer-workflow.md](../engineer-workflow.md)
 
 The web app is a single-page React 19 app built with Vite and TypeScript. One component, `App` in `App.tsx`, owns
 almost all of the page's state and every call that changes it; the other components draw what `App` hands them and
@@ -12,7 +16,10 @@ report back through callbacks. A handful of plain modules hold logic that the te
 fix wording, requirements files, uploads, review sign-offs, the chat's turn ownership). The page talks to the server
 only through `api.ts`, mostly as NDJSON streams, and draws the models through the `Viewer` class
 ([13](13-3d-viewer.md)). There is no router, no state library and no CSS framework: `useState`/`useRef`/`useMemo`/
-`useEffect` and one global stylesheet (the landing has its own, `landing/landing.css`).
+`useEffect` and one global stylesheet (the landing has its own, `landing/landing.css`, and the engineer-workflow
+components each import a small one of their own built on its tokens). Pages with an address read it from the hash with
+small pure modules: `#about` (`aboutRoute.ts`) and the projects, `#projects` and `#project/<pid>/<step>`
+(`projectRoute.ts`, below, "Engineer workflow").
 
 ## Every file in `web/src/`
 
@@ -24,9 +31,10 @@ only through `api.ts`, mostly as NDJSON streams, and draws the models through th
 | `api.ts` | Every server call, the NDJSON reader, the wire types, the two request headers, the server's address (`VITE_API_BASE`) | `api`, `ApiError`, `apiUrl`, `wsUrl`, `setOwnerSettings`, `setRequirements`, `requirementsInUse`, ~100 types | everything |
 | `aiNames.ts` | The name of the AI model behind each role (proposal, escalation, triage, image, voice) as the server reports it (`GET /api/models` labels), for every panel's words; App sets them, the defaults until then | `aiName`, `setAiNames`, `DEFAULT_AI_NAMES`, `AiRole`, `AiNames` | `App`, `Activity.tsx`, `pilot.ts`, `PlanPanel.tsx`, `BuiltView.tsx`, `Triage.tsx`, `Insights.tsx`, `ReportDoc.tsx`, `ClashPanel.tsx`, `ReportList.tsx`, `Requirements.tsx`, `Owner.tsx`, `Workings.tsx`, `workingsGraph.ts` |
 | `names.ts` | Model files' names as people read them: no extension, and no prefix the set shares, whatever the project is called | `shortNames`, `sharedPrefix` | `App` |
-| `About.tsx` | The landing in the empty viewer, a page of its own (`landing/`): its header (the wordmark, section links that follow the scroll), the hero with the live replay (`landing/Hero.tsx`) and the resume card, the strip of formats Iris reads and writes by their logos (`Formats`), the problem (`Collide`), the loop as tabs beside one frame playing each step's recorded run (`Loop`), the check to try by hand (`landing/Sandbox.tsx`), the kinds of fix (`landing/FixArt.tsx`), the AI's rule and the five models, everything around the fix (`landing/Bento.tsx`), the two demo cards playing a recorded fix (`DemoCard`, `Clip`), who it is for, what is proven and what is not, words and colours, the close with the "Go deeper" card that opens About Iris, the footer. Its numbers are the measured ones; the one industry figure, rework's cost, links its source `GIRI_STRATEGY` | `About`, `Resume`, `projectName`, `GIRI_STRATEGY` | `App`, `AboutIris.tsx` |
+| `About.tsx` | The landing in the empty viewer, a page of its own (`landing/`): its header (the wordmark, section links that follow the scroll), the hero with the live replay (`landing/Hero.tsx`) and the resume card, the strip of formats Iris reads and writes by their logos (`Formats`), the problem (`Collide`), the loop as tabs beside one frame playing each step's recorded run (`Loop`), the check to try by hand (`landing/Sandbox.tsx`), the kinds of fix (`landing/FixArt.tsx`), the AI's rule and the five models, everything around the fix (`landing/Bento.tsx`), the two demo cards playing a recorded fix (`DemoCard`, `Clip`), who it is for, what is proven and what is not, words and colours, the close with the "Go deeper" card that opens About Iris, the footer. Its numbers are the measured ones; the one industry figure, rework's cost, links its source `GIRI_STRATEGY` | `About`, `Resume`, `projectName`, `GIRI_STRATEGY` | `StartScreen.tsx` (`Resume`, `projectName`), `App` (`projectName`); the page itself is no longer the first screen (`StartScreen.tsx` is) |
 | `AboutIris.tsx` | About Iris: a full page over the app in six tabs (Overview, How it works, The fixes, The AI, Under the hood, Proof and limits), with animated SVG pictures (the Iris loop, the girder clash before and after, each fix kind, the propose-check loop), count-up numbers and sections that fade up as they scroll in; reduced motion shows it all still. Its numbers are the landing's measured ones | `AboutIris` | `App` |
 | `stepClips.ts` | The landing's step clips: an animated WebP's length read from its frames (`webpDuration`), and each clip fetched once (`loadClip`) so the loop (`Loop` in `landing/Story.tsx`) can play it from a fresh object URL, from its first frame, and move on when it ends | `webpDuration`, `loadClip`, `LoadedClip` | `landing/Story.tsx` |
+| `StartScreen.tsx` | The first screen at `/home` (and `/`), light and lean (docs/ui-design.md §10.1): the wordmark, the principle in one line, **Open projects** (a link to `/projects`) and **Try the sample building** (the Northbank sample as a project of this browser's, made once and found again by name, opened on its Clash review; opening and checking call no model), the last session to resume when there is one, the second sample under "More samples", **About Iris**; the Northbank still on wide screens; no motion, no 3D until a model opens. Props only | `StartScreen` | `App` |
 | `landing/Hero.tsx` | The landing's first screen: the hook and the ways in (with `data-tour` `golden` and `blank`), and the live 3D replay of Iris fixing Northbank's three girder clashes: labels hung on the scene each frame, the log (each line tagged with its step: Observe, Resolve, Check, Apply), chapter buttons and pause. It frames the scene in the HUD's empty window wherever the layout puts it, pauses off screen and in a hidden tab, gives a still frame (and still chapters) for less motion, a recorded still of the app without WebGL, and a fresh canvas each mount | `Hero`, `HeroActions` | `About.tsx` |
 | `landing/heroScene.ts` | The hero's three.js scene, apart from the viewer ([13](13-3d-viewer.md)): the girder, the services, their fixes and the context from `landing/northbank.ts`, materials in the viewer's colours with a scan band, a fade beyond the crossings and an idea's lift from its run in their shaders, a camera that eases to the clash being told and fits the window, fog by distance; draws one frame of `landing/timeline.ts` and gives its WebGL context back on dispose | `HeroScene`, `webglAvailable`, `Anchor` | `landing/Hero.tsx` |
 | `landing/timeline.ts` | The replay as a pure function of time (36 s): the check's sweep, the three pins, each run's idea, check, keep and old self, the tray's recorded round (the whole lift failing on the spigots and a core wall, then its offset), the log's lines from Iris's records (the opening as Gemini Pro is told it, the recorded numbers), chapters, the still frame | `heroAt`, `logAt`, `LOG`, `CHAPTERS`, `T`, `LOOP`, `STILL`, `chapterStill`, `ramp`, `HeroFrame` | `landing/Hero.tsx`, `landing/heroScene.ts` |
@@ -39,7 +47,7 @@ only through `api.ts`, mostly as NDJSON streams, and draws the models through th
 | `landing/logos.ts` | The logos of the formats and tools Iris works with (files in `web/public/logos/`: IFC, BCF, Navisworks and MCP are their owners', STEP and PDF drawn for Iris; [docs/brand-assets.md](../brand-assets.md)) and the strip's lines, which way each goes | `LOGO`, `LogoKey`, `FORMATS` | `landing/Bento.tsx` |
 | `landing/motion.ts` | The landing's motion hooks: less motion asked for, seen once, sections fading up as they scroll in (late ones too), the section in view for the header, scroll progress, counting up | `useReducedMotion`, `useSeen`, `useReveal`, `useSpy`, `useScrollProgress`, `useCountUp` | `About.tsx`, `landing/Story.tsx` |
 | `landing/landing.css` | The landing's styles: its tokens, the hero and its HUD, each section, the narrower pages by container query, less motion; and how the app's own chrome looks over it (the notch steps aside, the corner and the compact bar take the night) | (CSS) | `About.tsx` |
-| `aboutRoute.ts` | The About page's tabs and address: `#about` and `#about/<tab>`, pushed when it opens (Back closes it), replaced on a tab change | `ABOUT_TABS`, `AboutTab`, `aboutTabFromHash`, `aboutHash`, `nextTab`, `currentHash`, `showAboutHash` | `App`, `AboutIris.tsx` |
+| `aboutRoute.ts` | The About page's tabs and address: the path `/about` and `/about/<tab>` (`showAboutPath`: pushed when it opens, so Back closes it, replaced on a tab change, and on close the address it was opened from), and the first, hash form `#about` and `#about/<tab>`, still read | `ABOUT_TABS`, `AboutTab`, `aboutTabFromHash`, `aboutHash`, `nextTab`, `currentHash`, `showAboutHash`, `aboutPath`, `aboutTabNow`, `showAboutPath` | `App`, `AboutIris.tsx` |
 | `Activity.tsx` | The Activity panel: the one-line status, then Steps (the table of ideas tried, why each failed) or Workings, with the switch between them, Workings' off button and, when it is off, Turn it on | `Activity`, `ActivityView`, `statusLine`, `Progress` (re-exports `editText`, `KIND_LABEL`) | `App` |
 | `Workings.tsx` | Workings ([docs/workings.md](../workings.md)): the picked run drawn on a canvas that pans, zooms, follows the newest step, marks the step the pilot shows, and replays a finished run (the timeline strip, speeds); a check pointed at or pinned goes to `onPeek`, so its trial shows in the 3D viewer; timers and sizes come from the window the panel is in, so it works floated or in a pop-out window | `Workings`, `curve` | `Activity.tsx` |
 | `workingsGraph.ts` | A run's events as a graph to draw (lanes, columns, steps, edges, timeline bars), one builder per kind of run, as it stood at any moment | `graphOf`, `sec`, `Graph`, `Step`, `Edge`, `Lane`, `Part`, `Peek` | `Workings.tsx`, `App` (`Peek`) |
@@ -61,8 +69,29 @@ only through `api.ts`, mostly as NDJSON streams, and draws the models through th
 | `ElementCard.tsx` | The selected element's card ([docs/panels.md](../panels.md), "Properties"): header, breadcrumbs that open a parent's own properties (with a back arrow; a storey's isolate, hide, filter), the icon bar (A, B, zoom, hide, isolate, section box, links, More for the class), what it is linked to (`Links`), then `PropertySets` (folded under All properties on the card over the model; its editor, `CardActions.editor`, only for the element itself: `api.editProperty`, then the new properties, the drawn revision moved on and the log read again) | `ElementCard`, `CardActions`, `Links` | `App` (`elementCard`, `cardActions`) |
 | `FiltersPanel.tsx` | The Filters panel ([docs/filters.md](../filters.md)): the list of filters (on, colour or action, name, count, up, down, zoom to them, delete; Show colours, The rest: Show · Grey · Hide, Colour by…), and the editor (models, classes and floors with counts, property conditions, Colour / By value / Hide / Isolate, swatches, Invert, the Value / Items / Colour table, the live count); with `check`, each row's What do these hit? and the Check clashes block under the list ([docs/filters.md](../filters.md), "Checks") | `FiltersPanel`, `blankRule`, `FiltersPanelProps` | `App` (the dock's Filters panel, or a sheet without the dock) |
 | `ProjectStart.tsx` | The blank project's drop zone (IFC/STEP models, or a Navisworks report or folder) | `ProjectStart` | `App` |
-| `ReportDoc.tsx` | The coordination report dialog (scope, all kept checks or only the one the list shows, a typed team name per model, build PDF and BCF) and the per-clash review block | `ReportDialog`, `ReviewBlock`, `reviewersOf` | `App` |
-| `ReportList.tsx` | The left pane over a report: Clashes / Insights tabs, impact bar, the report's line (tests, in the model, a "Naming n…" pill while titles land), the check picker (`picker`, from App), the search on its own row and the filters under it, each only when it would change the list (In the model when some clashes are not in the open models; by status once anything is fixed or reviewed: All, To fix, Fixed, Reviewed, also from the header's "N fixed" and "N reviewed" chips; "n shown"), the list with lazy thumbnails, drawing only the rows on screen (below,
+| `projectRoute.ts` | A project's address as a path, pure (as `aboutRoute.ts`; below, "Engineer workflow", "Addresses and steps"): the seven steps in order with their labels, `/projects`, `/projects/<pid>` (Overview), `/projects/<pid>/<step>` (`clashes` for Clash review) and `/projects/<pid>/clashes/<n>` read and written (an unknown step opens on Overview; an id is 1–64 word characters or dashes, never a slash); the first, hash addresses (`#projects`, `#project/<pid>/<step>`) still read, and `legacyPath` turning an old hash (`#about`, `#owner` too) into its path; the step beside one for the step bar's arrow keys (wrapping); `showPath` / `showProjectRoute` (pushed, so Back returns, or replaced; the same address again is not a new entry); `ownClick` (a plain click a link's page handles, not one for a new tab) | `PROJECT_STEPS`, `ProjectStep`, `Step`, `ProjectRoute`, `isProjectStep`, `isProjectId`, `parseProjectPath`, `formatProjectPath`, `projectPath`, `PROJECTS_PATH`, `parseProjectHash`, `formatProjectHash`, `projectHash`, `PROJECTS_HASH`, `legacyPath`, `stepBeside`, `stepLabel`, `currentHash`, `currentPath`, `currentProjectRoute`, `showPath`, `showProjectRoute`, `ownClick` | `App`, `ProjectOverview.tsx`, `ProjectsHome.tsx`, `projectsApi.ts` (type) |
+| `projectsApi.ts` | Projects on the server ([docs/engineer-workflow.md](../engineer-workflow.md), "Server contract"): the `Project` wire types and a typed call per `/api/projects*` route through its own small JSON `request` (a failure is `api.ts`'s `ApiError` with FastAPI's `detail`); listing asks only for the ids this browser keeps (`iris.projects`, most recent first), in batches of `LIST_IDS_MAX` (200), and `pruneProjectIds` forgets the ids the server no longer has; the stable clash key reviews are stored under; and the plain facts the project pages show: relative and full times (server seconds or page milliseconds, `toMs`), sizes, the model mix, the latest saved state, review tallies, which counts to show (`knownCounts`: the open page's live ones, else the project's last known) and the next step (`nextAction`: no models → import; models, no counts → run coordination; open clashes → review; else report) | `listProjects`, `createProject`, `getProject`, `patchProject`, `renameProject`, `attachScene`, `openProject`, `saveProject`, `setReview`, `addReport`, `projectReportUrl`, `projectsApi`, `clashKey`, `myProjectIds`, `rememberProject`, `forgetProject`, `pruneProjectIds`, `PROJECTS_KEY`, `LIST_IDS_MAX`, `toMs`, `whenText`, `fullTime`, `sizeText`, `plural`, `modelMix`, `lastSaved`, `REVIEW_LABEL`, `reviewTally`, `knownCounts`, `nextAction`, `Project`, `CoordCounts`, `Review`, `ActivityItem`, `NextAction`, … | `ProjectsHome.tsx`, `ProjectOverview.tsx` |
+| `ProjectsHome.tsx` | The Projects home (`/projects`): "Iris Engineering · Projects", the projects this browser knows, newest change first, one row each (name and when updated, models with a chip per kind, the last known open / resolved / reviewed of all clashes, else the reviews recorded, else "Not checked"; the last save and its edits; Open), an inline **Create project** form (a name up to 120 characters), an error line, and with no projects the eight steps a project follows (`PROJECT_FLOW`, Import → Report, in words true of Iris as built) and **Open the sample building**. Props only: `projects`, `loading`, `error`, `onCreate(name)`, `onOpen(pid)`, `onDemo`; App fetches, creates and routes | `ProjectsHome`, `PROJECT_FLOW` | `App` |
+| `ProjectOverview.tsx` | One project (`/projects/<pid>/<step>`): `ProjectSteps`, the step bar (a Projects crumb, the six steps with counts: models and reports from the project, open clashes from the counts; left and right arrows move; Save and Open workspace, or Import models, at its right end), then the step's body: Overview (the next step from `nextAction`, the Models, Coordination, Reports and Recent activity cards), Models (files, kind, size, SHA-256, the "2D drawings (PDF) · Not yet supported" line, Import models), Coordination (unresolved against resolved and reviewed as one bar, labelled live or last known, and the review decisions recorded), Clash review (the same tally and Open workspace: the review itself happens in the workspace), Reports (every report kept with the project, each a download from `projectReportUrl`), Activity (the page's activity lines and the saved states). Props only: `project`, `step`, `onStep`, `counts`, `reports`, `activity`, `onImport`, `onOpenWorkspace`, `onSave`, `saving`, `onProjects` | `ProjectOverview`, `ProjectSteps` | `App` |
+| `projects.css` | The Projects home's and the project overview's styles (`.proj-*`, `.pchip`): a small type scale, tabular numbers, status chips, no gradients, colours only from `index.css`'s tokens | (CSS) | `ProjectsHome.tsx`, `ProjectOverview.tsx` |
+| `importRows.ts` | Per-file import rows, pure ([docs/engineer-workflow.md](../engineer-workflow.md), step 2): one row per chosen file (`IFC`, `STEP`, else refused at once with why: a 2D PDF, DWG or DXF drawing "aren't supported yet", Navisworks `.nwd`/`.nwc`/`.nwf`, `.ifczip`), moved through the existing upload stream's events (`applyEvent`: packing, upload bytes split over the files in the order sent, a STEP file's own conversion stages, then opening and measuring, which are the whole batch's and marked `shared`, never a file's own number); `failAll` fails every model row (the server opens the batch all or none) and names the culprit when the reason names one file; `applyDraw` marks files ready as the viewer draws them; `summary` says ready / in progress / failed / not supported and whether **Retry** applies | `importKind`, `extension`, `sendableFiles`, `initRows`, `applyEvent`, `applyDraw`, `drawnUpTo`, `failAll`, `removeRow`, `summary`, `PACK_MIN`, `PDF_REFUSAL`, `ImportRow`, `ImportKind`, `ImportStage`, `ImportSummary` | `ImportPanel.tsx` |
+| `ImportPanel.tsx` | The import as a file table: each row's type, size, stage, progress (indeterminate where nothing is measured; a shared batch figure said so), its error, **Remove**; one batch error said once; **Retry import** (every model file again: the server opens them together, all or none), **Choose files** and an optional drop zone; the formats line (`FORMATS`: IFC, STEP, "2D PDF drawings: not yet supported"). Props only: `rows`, `onRetry`, `onRemove`, `onPick`, `onDrop`, `onClose`, `busy`; the page keeps the rows and the files | `ImportPanel`, `FORMATS`, `fileSize` | `App` |
+| `import.css` | The import table's styles (`.imp-*`), on `index.css`'s tokens | (CSS) | `ImportPanel.tsx` |
+| `modelSummary.ts` | Model understanding, pure (step 3): every element of the filters' index (`api.facets`) counted once under a discipline by its IFC class, with its classes, systems (IFC4 distribution systems and circuits, IFC2X3 systems, building systems; an element in two counts in both) and model files, and each file's mix. Two kinds of grouping, labelled on the page: **existing** (Structure from `domains._FRAME`, Architecture and Site from the report's team classes; walls, slabs, members and plates follow their model's team, `modelTeams`, as `document.guess_team` votes) and **ifc-class**, the HVAC / Plumbing & piping / Electrical split, a new mapping from IFC4 class that the models do not state; IFC2X3's generic flow classes go to "MEP by system" ("MEP (unspecified)" when in no system) | `summarize`, `disciplineOf`, `modelTeams`, `ruleClasses`, `fileMix`, `disciplineLabel`, `disciplineShort`, `mappingOf`, `isSharedFrame`, `RULES`, `ORDER`, `FRAME`, `SHARED_FRAME`, `SYSTEM_KEYS`, `NO_SYSTEM`, `MEP_UNSPECIFIED`, `ModelSummary`, `Discipline`, `DisciplineId`, `Mapping`, … | `ModelSummaryPanel.tsx` |
+| `ModelSummaryPanel.tsx` | "Model understanding": the discipline table (count and share, a "by class" tag on the new mapping, each row opening to its classes, systems and models), the models table (`fileMix`), "How this is grouped" (each rule's classes, existing or new IFC-class mapping); a click on any row isolates what it counts, again shows all. Props: `index` (App's `facetIndex`), `onIsolate(ids, label)`, `onClear`, `isolated`; `SummaryView` is the stateless table for the tests | `ModelSummary`, `SummaryView`, `shareText`, `ModelSummaryProps`, `SummaryViewProps` | `App` |
+| `model-summary.css` | The model summary's styles (`.msum-*`), on `index.css`'s tokens | (CSS) | `ModelSummaryPanel.tsx` |
+| `coordination.ts` | The coordination overview's rules, pure (step 4; the contract's "Classification", "Severity", "Status"): a clash's class from fields the page already holds (`classify`: settled facts, then the triage verdict, then the test and its signed distance; a duplicate test is a modelling error), triage severity (`severityOf`, AI-assessed; high / medium / low / none, no "critical" tier), status (`statusOf`: resolved by the re-run check's `diff.resolved`, else a kept fix awaiting re-check, else reviewed by design or sent to author, else open), the counts with the detector's touching and meant-to-meet pairs as counts only (`overview`), the list filter (`passes`), the clash key (Iris's `kind|gidA|gidB`, an imported one `nw|<report title>|<clash name>`), and distance, limit and location in words | `classify`, `severityOf`, `statusOf`, `resolvedIdsOf`, `overview`, `passes`, `clashKey`, `testKind`, `distanceText`, `limitText`, `locationText`, `CLASSES`, `SEVERITIES`, `STATUSES`, `CLASS_INFO`, `SEVERITY_LABEL`, `STATUS_INFO`, `ClashClass`, `Severity`, `ClashStatus`, `CoordinationFilter`, `CoordinationSummary`, `StatusInputs` | `CoordinationOverview.tsx`, `ClashHeader.tsx` |
+| `CoordinationOverview.tsx` | The coordination overview card: how many kept checks it counts (or "Imported report: no checks run by Iris"), totals (clashes, open, actual, triaged), the clashes by class, by severity (badged "AI-assessed (triage)", with **Triage all** or "Triage the n not read") and by status, each number a filter on the list (`onFilter`); touching and meant-to-meet pairs as counts with no rows; **Run checks again** (or **Run checks**). Props only: `summary` (`coordination.overview`), `onFilter`, `onRunChecks`, `onTriage`, `triaged` | `CoordinationOverview` | `App` |
+| `ClashHeader.tsx` | The investigation header for one clash (step 5): #N, its id (stable across runs for Iris's own) and Navisworks ref, previous and next, the class, severity ("AI-assessed", or "by rule" when a rule settled it) and status chips, A and B as the report gives them (class, name, file, level, system, a GlobalId to copy), the signed distance (overlap, gap, touching) against the test's limit (required clearance or tolerance), the level and grid, **Focus in 3D**; a field the clash does not hold is left out. Props: `clash`, `triage`, `status` (`statusOf`), `onFocus`, `onPrev`, `onNext` | `ClashHeader` | `App` |
+| `coordination.css` | The overview's and the clash header's styles (`.coord-*`, `.clash-head-*`), on `index.css`'s tokens, `.chip`, `.btn`, `.ibtn` and `.sw` | (CSS) | `CoordinationOverview.tsx`, `ClashHeader.tsx` |
+| `proposalState.ts` | A proposal's state and words, pure (steps 6, 7 and 9; below, "Proposal states"): `stateOf` decides AI-proposed / Geometry-validated / Failed validation / Unverified from the item's shape alone, never from anything the model wrote; `safeState` lets a caller lower a validated state, never raise one; `describe` gives the card's rows (element and joined parts, direction and distance in mm on east / north / up, the edit, the reason labelled AI-drafted, constraints considered, expected outcome and evidence only from geometry numbers, a failed check's reason and hits); `toDecision` builds the journal's `Decision` and throws on accepting anything not geometry-validated; `decisionWords` says who, when and why | `stateOf`, `safeState`, `describe`, `toDecision`, `decisionWords`, `moveParts`, `directionWords`, `STATE_LABEL`, `STATE_MEANING`, `EXPECTED_NONE`, `ProposalState`, `DecisionKind`, `Decision`, `ProposalItem`, `Described`, `ClashRef`, … | `ProposalCard.tsx`, `api.ts` (the `Decision` type) |
+| `ProposalCard.tsx` | One proposal for the engineer: the state chip and what it means, kind and model, element to move, direction, distance, edit, reason (AI-drafted), constraints considered, expected outcome, evidence or the failed check; **Accept** (enabled only when geometry-validated; the server checks again on keep), **Reject** (a reason is required), **Modify** (the edit tool, this fix as the start), **Request another**, **Before / after**; once decided, "Accepted by … · time · Why". Props only: `item`, `state`, `names`, `requiredClearanceMm`, `onAccept`, `onReject(reason)`, `onModify`, `onAnother`, `onShowBeforeAfter`, `busy`, `decided` | `ProposalCard`, `ProposalCardProps` | `App` |
+| `proposal.css` | The proposal card's styles (`.pcard-*`): a rule down the left in the state's colour (dashed for Unverified), on `index.css`'s tokens, no gradients | (CSS) | `ProposalCard.tsx` |
+| `drawingsApi.ts` | The 2D drawing reader's calls and facts, pure ([docs/drawings.md](../drawings.md)): upload PDFs to the open scene (with progress), list them, a page's picture, read one with AI (NDJSON events, its cost), its items, the comparison with the models; the status and mismatch words and styles, kinds, sizes, cost, text-layer label, page numbers, the viewer's zoom maths | `uploadDrawings`, `listDrawings`, `pageUrl`, `readDrawing`, `drawingItems`, `compareDrawings`, `drawingsApi`, `Drawing`, `Item`, `Comparison`, `Mismatch`, `ReadEvent`, `ReadResult`, `STATUS_STYLE`, `MISMATCH_STYLE`, `fitWidth`, `zoomAt`, `centreOn`, … | `App`, `DrawingsPanel.tsx` |
+| `DrawingsPanel.tsx` | The Drawings step: the sheets of the open models' scene, a page viewer (zoom, fit, pan) with each item read boxed by status (confirmed by the text layer, AI only, text only), the items and the mismatches with the models (missing in the model or the drawing, size or type differs), **Read with AI** (live progress and cost), upload (drop or choose; non-PDFs listed and skipped), an element shown in 3D. "AI reads, data checks, the engineer decides." Props only: `sceneId`, `drawings`, `items`, `compare`, `busy`, `names`, `error`, `onRetry`, `onUpload`, `onRead`, `onFocusElement`, `onSelectItem` | `DrawingsPanel`, `DrawingsPanelProps`, `ReadState` | `App` |
+| `drawings.css` | The Drawings step's styles (`.dwg-*`), light, on `index.css`'s tokens | (CSS) | `DrawingsPanel.tsx` |
+| `ReportDoc.tsx` | The coordination report dialog (scope, all kept checks or only the one the list shows, a typed team name per model, build PDF and BCF; for a project, `projectId` and `projectName` put its name on the cover and `onBuilt` hands the built report on to be kept with it) and the per-clash review block | `ReportDialog`, `ReviewBlock`, `reviewersOf` | `App` |
+| `ReportList.tsx` | The left pane over a report: Clashes / Insights tabs, impact bar, the report's line (tests, in the model, a "Naming n…" pill while titles land), the check picker (`picker`, from App), the search on its own row and the filters under it (with `coord`, the coordination overview's filter, a class, severity or status applied by the page, as a chip that shows every clash again), each only when it would change the list (In the model when some clashes are not in the open models; by status once anything is fixed or reviewed: All, To fix, Fixed, Reviewed, also from the header's "N fixed" and "N reviewed" chips; "n shown"), the list with lazy thumbnails, drawing only the rows on screen (below,
 "The clash list draws what is on screen"; `rowWindow`, `reveal` scrolls to a clash not drawn yet), each row's proposal (Proposing… while it runs, then "N fixes ready" or "No fix found", with View when it is not on screen: `proposing`, `ready`, `panel`, `onViewProposal`), and each row's quick actions on hover, keyboard focus or the selected row (`RowActions`: Isolate the clashing elements, pressed on the clash isolated now (`isolating`, `onIsolate`); Propose fixes when both elements are in the model and it may need one, Mark as not a clash, and its same-element clashes with their count, narrowing the list to the clashes sharing either element, `sameElements`, through `onFocus`) | `ReportList`, `sameElements`, `clashLabel`, `mm`, `linkState`, `Review`, `rowWindow`, `FIRST_ROWS`, `OVERSCAN` | `App`, `ClashPanel.tsx`, `ContextPlan.tsx`, `PlanPanel.tsx`, `ReportDoc.tsx` |
 | `Requirements.tsx` | The requirements dialog: level cards, strictness, the check matrix, who moves, the kind of project (building or machine) and what is fixed in place, rules and Gemini's audit, openings | `RequirementsDialog` | `App` |
 | `Sheet.tsx` | The phone's bottom sheet bar: handle, drag and flick, snap heights | `SheetBar` | `App` |
@@ -657,9 +686,116 @@ choosing which pane shows), what floats over the model, popovers as sheets, full
 matrix as a list, the left pane's tabs, and the blank project. Near the top, one rule hides the header buttons'
 `.lbl` text below 1280 px (About Iris, Tour, Requirements, the agent button), leaving their icons.
 
+The engineer-workflow components import their own stylesheets (`projects.css`, `import.css`, `model-summary.css`,
+`coordination.css`, `proposal.css`), each built only on the tokens above, so a theme that redefines them restyles
+those pages too.
+
+## Engineer workflow
+
+Iris Engineering's project workflow, **Import → Understand → Detect → Investigate → Propose → Validate → Review →
+Report**, organised around a saved **project** ("AI proposes. Geometry proves. The engineer decides."). The contract
+the slices build to, server and web, is [docs/engineer-workflow.md](../engineer-workflow.md); the journey is in
+[01](01-product-and-journeys.md), "An MEP engineer runs a coordination round in a project", and the flows in [03](03-end-to-end-flows.md).
+Iris VisionBench (the Track 2 benchmark) is a separate pipeline and never appears here.
+
+**Where it stands at HEAD:** wired into `App` (Nov 22). The first screen is `StartScreen` (`/home`); `/projects` is
+`ProjectsHome`; a project's Overview, Drawings, Reports and Activity are `ProjectOverview` pages over the workspace
+(`.proj-shell`, fixed; the workspace and its 3D view stay mounted beneath), and Models, Coordination and Clash review
+are the workspace itself with `ProjectSteps` as a row of the page's grid above it (`.app.projected`; a step picker in
+the header on a phone or tablet). Opening a project (`openProject`) adopts its scene as a resumed session is, then
+runs the checks when it holds no list; importing into a project is the upload (or the sample) and then `attachScene`;
+**Save** is `saveProject`; the coordination numbers go to the project (`patchProject` `counts`, a second after they
+change). The Models step's left pane is `ImportPanel` (every upload, with Retry: the same files again), the models open
+(show, hide, remove) and `ModelSummary` (click to isolate); Coordination puts `CoordinationOverview` at the head of the
+Clashes tab (elsewhere at the head of Insights), its numbers filtering the list (`ReportList` `coord`, through
+`coordination.passes`); the Clash panel has `ClashHeader` over `ClashPanel`, a `ProposalCard` per option (Show in 3D
+over each; Accept on the chosen one carries the tour's `data-tour="accept"`), the attempts geometry refused under
+"What was tried", the idea being checked as AI-proposed, and a recommendation as Unverified. Who decides is a name kept
+in this browser (`iris.reviewer`, "Your name" above the options), sent with every keep and decision; **Accept** sends
+it with the keep and reads the `accepted` decision from the reply (never posting one of its own), **Reject** (with
+its reason), **Modify** (the Edit tool; the hand edit kept for that clash records `modified`) and **Request another**
+(a second, longer look when there is one, else a new try) post theirs. Server times are seconds (`toMs`). A report
+built while the project is open carries `project_id` and is kept with it (`addReport`). The tests:
+`web/tests/engineer-workflow.test.mjs` (routes, the step bar, opening a project, accept and reject decisions).
+
+### Addresses and steps
+
+`projectRoute.ts` reads and writes the path with the History API (`pushState`, `popstate`): no router, no App
+state. Every address is a real link (`<a href>`: a new tab opens it; a plain click is handled in the page). The server
+serves the app for any page path it has no file for (`app._WebApp`), and Firebase rewrites every path to it, so a
+reload or a shared link opens the same page. An old hash address is replaced by its path on load (`legacyPath`).
+
+| Path | Shows |
+|---|---|
+| `/` , `/home` | `StartScreen` (`/` is replaced by `/home`) |
+| `/workspace` | The open session without a project (the address the page takes once models or a report open outside one) |
+| `/projects` | `ProjectsHome`: the projects this browser knows (ids in `iris.projects`), Create project, the sample building |
+| `/projects/<pid>` | That project's Overview (`ProjectOverview`, `ProjectSteps` above it) |
+| `/projects/<pid>/<step>` | `models`, `drawings`, `coordination`, `clashes` (Clash review), `reports`, `activity`; an unknown step opens Overview |
+| `/projects/<pid>/clashes/<n>` | Clash review with clash #n open: written as clashes are picked, opened from the address once the list has it |
+| `/about`, `/about/<tab>` | About Iris (`AboutIris.tsx`) |
+| `/settings` | The owner's settings opened (`Owner.tsx`, as `#owner` was) |
+
+Each step is a page of the project's own facts, and a way to the workspace panel that already does that work (the
+workspace keeps its viewer, dock panels and clash panel as they are; the step bar sits over it):
+
+| Step (`ProjectStep`) | The project page shows (`ProjectOverview`) | The workspace panel that does the work |
+|---|---|---|
+| `overview` · Overview | The next step (`nextAction`), then the Models, Coordination, Reports (newest five) and Recent activity (newest six) cards | — |
+| `models` · Models | Each file's type, size and SHA-256; **Import models** | The import table (`ImportPanel` over `importRows`: per-file rows, Retry) and the model summary (`ModelSummary`: disciplines and systems from the facet index, click to isolate) |
+| `drawings` · Drawings | `DrawingsPanel` over the open models (PDF sheets uploaded here or from the import; read with AI, checked against each PDF's text layer, compared with the models; a mismatch's element shown in 3D on Models) | — |
+| `coordination` · Coordination | Unresolved against resolved and reviewed, live from the open page or the project's last known (`knownCounts`), and the review decisions recorded | The clash list with `CoordinationOverview` over it (`coordination.overview`; each number filters the list), the Detect and Triage cards |
+| `clash` · Clash review | The same tally and **Open workspace** | The Clash panel with `ClashHeader` over it, a `ProposalCard` per proposal, Before / After in 3D |
+| `reports` · Reports | Every report kept with the project, a download each (`projectReportUrl`) | The report dialog (`ReportDialog`: PDF and BCF) |
+| `activity` · Activity | The activity lines the page keeps (imports, checks, decisions, saves: `ActivityItem`) and the saved states | The Edits panel (`EditPanel`: the edit log) and the Activity panel |
+
+**Save** (at the step bar's right end) keeps the open scene's edited models, edit log and decisions as the project's
+next saved state (`saveProject`); opening the project again starts from the newest one (`openProject`).
+
+### Proposal states
+
+Every proposal shown or recorded is in exactly one of four states, decided by `proposalState.stateOf` from the item's
+shape:
+
+| State | Chip | When | Accept |
+|---|---|---|---|
+| `ai_proposed` | AI-proposed | An idea the model put forward that geometry has not checked yet (an `ideas` candidate, a `checking` event, a trial in place) | Off |
+| `geometry_validated` | Geometry-validated ✓ | An option from a proposal's `options` (it carries `moved` and `min_clearance_m`: nothing reaches that list without passing `verify.check`), an attempt the check passed, or a plan item whose option is one | On; the server tries it again before it keeps it (`plans.apply`, 409 with why when it no longer passes) |
+| `failed_validation` | Failed validation ✕ | An attempt the check refused, or anything whose `check.passed` is false; the card shows the reason and what it hit | Off; kept for the record |
+| `unverified` | Unverified | Never tried on the model: a plan item "as designed" (`check.geometry === false`), a recommendation for the designer (`blocked_by`), or nothing recognisable | Off |
+
+- **`geometry_validated` is never derived from model text.** Only the geometry gate's own fields decide it; the title,
+  rationale, advice and anything else the model wrote are never read. The reason is shown labelled "AI-drafted", and
+  the expected outcome and evidence come only from the check's numbers (clash gone, minimum clearance against the
+  required one, how many elements it was checked against).
+- **A caller cannot raise a state.** `safeState` lets the page lower a validated one (say, the model changed under
+  it), never raise one or hide a failed check; `toDecision` records no more than that and throws on accepting
+  anything not geometry-validated. The card's Accept is disabled to match, and the server stamps an `accepted`
+  decision `geometry_validated` only for a fix that has just passed its re-check on keep.
+- **Decisions are recorded on the server** with the reviewer and the reason: **Accept** goes through the keep routes
+  (`fix/apply`, `plan/apply` with `reviewer`, `reason`, `clash_key`, `number`), which append the `accepted` decision
+  themselves; **Reject** (a reason required), **Modify** and **Request another** post `toDecision(…)` to
+  `POST /api/scenes/{sid}/decisions`. The journal returns them in `GET /api/scenes/{sid}/edits` (`decisions`), a
+  project save keeps them, and the PDF lists them. Sequences: [03](03-end-to-end-flows.md), "Accept or reject a
+  proposal, with the decision recorded".
+
+### What the other pieces decide
+
+- **Import (`importRows.ts`):** what is measured, and so what a row may claim. Upload bytes are split over the files
+  in the order sent; a STEP file's conversion is its own; opening and measuring are the whole batch's and say so. The
+  server opens the batch all or none, so one failure fails every model row and **Retry import** sends them all again.
+  A 2D drawing (PDF, DWG, DXF) is refused at once with "not supported yet", never simulated.
+- **Understand (`modelSummary.ts`):** Structure, Architecture and Site are Iris's existing class lists; the HVAC /
+  Plumbing & piping / Electrical split is a new IFC-class mapping, tagged "by class" on the page and explained under
+  "How this is grouped".
+- **Detect (`coordination.ts`):** classes, severity and status are read from fields the page already holds (the
+  contract's "Classification"); nothing is measured or asked anew. Severity is triage's, labelled AI-assessed; there
+  is no "critical" tier. The detector's touching and meant-to-meet pairs are counts only, with no rows.
+- **Investigate (`ClashHeader.tsx`):** every value is one the clash or its triage holds; a missing one is left out.
+
 ## Browser storage
 
-Everything is `localStorage`, read and written inside `try` (a private window just loses it). Keys keep the old
+Everything but one key (below the table) is `localStorage`, read and written inside `try` (a private window just loses it). Keys keep the old
 `iris.` prefix on purpose. What they mean as state: [05](05-domain-model-and-state.md).
 
 | Key | Written by | Holds |
@@ -682,8 +818,10 @@ Everything is `localStorage`, read and written inside `try` (a private window ju
 | `iris.filters.<project>` | `App` (`filtersKey`) | `FilterState`: the filters for this set of models (`filters.migrate` reads it back) |
 | `iris.measure.snap` | `App` | Snapping while measuring, on or off (default on) |
 | `iris.measure.at` | `App` | Where the Measure panel was dragged to (`{x, y}` in the stage) |
+| `iris.projects` | `projectsApi.ts` (`rememberProject`, `forgetProject`, `pruneProjectIds`; `PROJECTS_KEY`) | The ids of the projects this browser created or opened, most recent first: projects are private by unguessable id, not by login, and `#projects` lists only these |
 
-No `sessionStorage` or IndexedDB is used.
+`sessionStorage` holds one key, `iris.edit.carry` (`EditTool.tsx`): **Take joined parts along**, kept for the visit. No
+IndexedDB is used.
 
 ## Build, assets and tests
 
@@ -748,6 +886,9 @@ No `sessionStorage` or IndexedDB is used.
   `uploads.ts`, `signoffs.ts`, `reqFile.ts`, `fixKinds.ts`, and `Viewer.load` / `viewer/patch.ts` with real three.js
   batches. `built-view.test.mjs` and `workings.test.mjs` map `./api` to the compiled `api.ts` (for `apiUrl`). More in
   [18](18-testing-and-evals.md).
+  batches. The engineer-workflow modules have their own: `project-route.test.mjs`, `projects-api.test.mjs`,
+  `import-rows.test.mjs`, `model-summary.test.mjs` (which also keeps `FRAME` equal to the server's `domains._FRAME`),
+  `coordination.test.mjs` and `proposal-state.test.mjs`. More in [18](18-testing-and-evals.md).
 
 ## When to update this doc
 
@@ -759,6 +900,10 @@ No `sessionStorage` or IndexedDB is used.
 - A new `api.ts` function group, request header, retry rule or transport, or a server call or server URL that does
   not go through `apiUrl` / `wsUrl` / `apiFetch`.
 - A new `localStorage` key.
+- A project step, a project address (`projectRoute.ts`), a proposal state or what decides it (`proposalState.ts`), a
+  coordination class, severity or status rule (`coordination.ts`), a discipline rule (`modelSummary.ts`), or `App`
+  starting to mount the engineer-workflow components ("Engineer workflow"; also
+  [docs/engineer-workflow.md](../engineer-workflow.md)).
 - A change to the breakpoints, `follow()`, the sheet's snaps, or the Responsive CSS's structure.
 - A new or renamed panel, a change to the default layout, the side bars' buttons, what is saved, or how `setTab` and
   the dock follow each other (also [docs/panels.md](../panels.md)).

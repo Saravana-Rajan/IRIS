@@ -2,6 +2,7 @@ import type { Action, Condition, FacetIndex, Rule } from "./filters";
 import type { Graph } from "./links";
 import type { ElementMesh } from "./viewer/patch";
 import type { Datums } from "./viewer/views";
+import type { Decision } from "./proposalState";
 
 /** Where the server is: empty when it serves this page (local dev through Vite's proxy, or Cloud Run), else its origin
  *  from `VITE_API_BASE` at build time (the page on Firebase Hosting). `?.`: tests run this in Node, without the env. */
@@ -20,7 +21,7 @@ export function wsUrl(path: string): string {
 }
 
 /** fetch at the server. On another origin the owner cookie goes too; on this one the request is as it always was. */
-const apiFetch = (path: string, init?: RequestInit) => fetch(apiUrl(path), API_BASE ? { credentials: "include", ...init } : init);
+export const apiFetch = (path: string, init?: RequestInit) => fetch(apiUrl(path), API_BASE ? { credentials: "include", ...init } : init);
 
 export interface Hit { other: string; other_class: string; kind: string; distance_m: number }
 export interface Verdict {
@@ -204,13 +205,22 @@ export interface JournalEntry {
   actor: string | null; elements: string[]; created: string[]; removed: string[]; names: Record<string, string>;
   files: number[]; revision: number; clashes: { id: string | null; pair: string[] }[]; follows: string[];
   check: { verified?: boolean; cleared?: unknown[]; new?: { kind?: string }[]; worse?: { kind?: string }[]; accepted_clashes?: number;
-    min_clearance_m?: number | null; open_joints?: { element: string; name: string }[] } | null;
+    min_clearance_m?: number | null; open_joints?: { element: string; name: string }[];
+    /** How many elements the keep's re-check tried it against (an accepted fix; docs/engineer-workflow.md). */
+    checked_against?: number | null } | null;
   warnings: { rule: string; text: string; review: string | null }[]; status: { clash: string | null; resolved: boolean;
     depth_m: number | null } | null; state: "kept" | "undone"; has_picture: boolean; params: Record<string, unknown>;
   /** The model it changed was taken out of the scene (its name): it stays in the log and is never undone or redone. */
   model_removed?: string | null;
 }
-export interface Journal { entries: JournalEntry[]; can_undo: boolean; can_redo: boolean; undo: string | null; redo: string | null }
+/** The edit log, with the reviewers' decisions about proposals (docs/engineer-workflow.md, "Decisions (journal)"):
+ * `at` is the server's clock in seconds (projectsApi.toMs reads it). */
+export interface Journal { entries: JournalEntry[]; can_undo: boolean; can_redo: boolean; undo: string | null; redo: string | null;
+  decisions?: Decision[] }
+/** Who accepts a fix and why, sent with a keep: the edit log's actor, and the "accepted" decision the server records
+ * (never posted by the page as well). `clash_key` and `number` only matter where the server cannot work them out (an
+ * imported Navisworks clash). */
+export interface KeepReview { reviewer?: string | null; reason?: string | null; clash_key?: string | null; number?: number | null }
 /** A face of an element as the server reads a pick (faces.py): its kind, its name in words, what it allows. */
 export interface EditFace {
   element: string; id: string; kind: "cap" | "side" | "radial" | "flank" | "edge" | "plane" | "clip" | "other"; name: string;
@@ -573,6 +583,8 @@ export interface PlanItem {
   recommended?: boolean;  // the requirements allow no edit here: a recommendation, no second try
 }
 export interface PlanCheck {
+  /** false: nothing was tried on the geometry (a root cause read "as designed"): never shown as geometry-validated. */
+  geometry?: boolean;
   passed: boolean; items: Record<string, { passed: boolean; reason: string; min_clearance_m: number | null }>;
   conflicts: { a: string; b: string; detail: string }[];
 }
@@ -766,7 +778,25 @@ export type LinkEvent =
   | { type: "ui"; action: "follow_triage" }
   | ChatEvent;
 
+/** A keep's reviewer fields as the server takes them: only those given, an empty name or reason left out. */
+function reviewBody(r?: { reviewer?: string | null; reason?: string | null; clash_key?: string | null; number?: number | null;
+  clash_keys?: (string | null)[]; numbers?: (number | null)[] }): Record<string, unknown> {
+  if (!r) return {};
+  const out: Record<string, unknown> = {};
+  if (r.reviewer?.trim()) out.reviewer = r.reviewer.trim().slice(0, 120);
+  if (r.reason?.trim()) out.reason = r.reason.trim().slice(0, 2000);
+  if (r.clash_key) out.clash_key = r.clash_key;
+  if (r.number != null && r.number >= 1) out.number = r.number;
+  if (r.clash_keys?.some(Boolean)) out.clash_keys = r.clash_keys;
+  if (r.numbers?.some((n) => n != null)) out.numbers = r.numbers;
+  return out;
+}
+
 export const api = {
+  /** Wake the server (Cloud Run scales to zero): a request nothing waits for. A server without /api/health answers
+   *  404, awake; the samples are asked then. */
+  wake: () => apiFetch("/api/health", { cache: "no-store" })
+    .then((r) => (r.status === 404 ? apiFetch("/api/samples", { cache: "no-store" }) : r)).catch(() => undefined),
   createLink: (ctx: LinkContext) => call<AgentLink>("/links", { method: "POST", body: JSON.stringify(ctx) }),
   /** A link's state; `applied`: the fixes its agent applied (clash id → title), for a page that resumes later. */
   linkState: (token: string) => call<Omit<AgentLink, "token" | "mcp_url"> & { applied: Record<string, string> }>(`/links/${encodeURIComponent(token)}`),
@@ -825,7 +855,7 @@ export const api = {
   document: (reportId: string, body: { scene_id: string | null; scope: "combined" | "team" | "model"; teams: Record<string, Team>;
                                       bcf: boolean; evidence: Record<string, Evidence>; reviews: Record<string, Signoff[]>;
                                       marks: Record<string, string>; triage: Record<string, Omit<TriageVerdict, "reasoning">>;
-                                      check?: string | null }, onEvent: (e: DocEvent) => void) =>
+                                      check?: string | null; project_id?: string | null }, onEvent: (e: DocEvent) => void) =>
     ndjson<DocEvent>(`/reports/${reportId}/document/stream`, body, (e) => { onEvent(e); return e.type !== "progress"; }),
   triage: (reportId: string, sceneId: string | null) =>
     call<TriageState>(`/reports/${reportId}/triage${sceneId ? `?scene_id=${sceneId}` : ""}`),
@@ -856,8 +886,12 @@ export const api = {
     if (!plan) throw new Error("The server stopped before the plan was ready. Try again.");
     return plan;
   },
-  applyPlan: (sceneId: string, options: Option[], clashIds: (string | null)[] = []) =>
-    call<{ files: number[]; pieces: string[][]; groups?: string[][][]; not_cut?: { index: number; blocked_by: string }[] } & Patch>(`/scenes/${sceneId}/plan/apply`, { method: "POST", body: JSON.stringify({ options, clash_ids: clashIds }) }),
+  /** Keep a plan's fixes, all or none. `review`: who accepts them and why (the server records one "accepted" decision per
+   * fix kept and returns them in `decisions`); `clash_keys` / `numbers` per option, for imported clashes. */
+  applyPlan: (sceneId: string, options: Option[], clashIds: (string | null)[] = [],
+              review?: { reviewer?: string | null; reason?: string | null; clash_keys?: (string | null)[]; numbers?: (number | null)[] }) =>
+    call<{ files: number[]; pieces: string[][]; groups?: string[][][]; not_cut?: { index: number; blocked_by: string }[]; decisions?: Decision[] } & Patch>(`/scenes/${sceneId}/plan/apply`, { method: "POST",
+      body: JSON.stringify({ options, clash_ids: clashIds, ...reviewBody(review) }) }),
   chat: (body: { message: string; session_id: string | null; scene_id: string | null; report_id: string | null;
                  clash_id: string | null; fixed: string[]; filters?: SharedFilter[]; filter_view?: FilterView; check?: string | null;
                  selected?: { element: string; face: string | null; pick?: { point: number[]; normal: number[] } } | null },
@@ -947,9 +981,15 @@ export const api = {
    *  from the option itself (its meshes are not needed there): the server tries it again against the clash it names
    *  (`pair`: the option's own, else the clash on screen) and answers 409 with why when it no longer passes. A
    *  penetration whose host the requirements lock comes back `cut: false`: only its provision for void was written. */
-  accept: (id: string, o: Option, pair: string[] | null, clashId: string | null = null) =>
-    call<Kept>(`/scenes/${id}/fix/apply`, { method: "POST",
-      body: JSON.stringify({ option: { ...o, pair: o.pair ?? pair, preview: null, before: null }, clash_id: clashId }) }),
+  accept: (id: string, o: Option, pair: string[] | null, clashId: string | null = null, review?: KeepReview) =>
+    call<Kept & { decisions?: Decision[] }>(`/scenes/${id}/fix/apply`, { method: "POST",
+      body: JSON.stringify({ option: { ...o, pair: o.pair ?? pair, preview: null, before: null }, clash_id: clashId, ...reviewBody(review) }) }),
+  /** Record a reviewer's decision that is not a keep (rejected, modified, requested another); the server stamps `at`
+   * (seconds) and answers with every decision so far. Accepting goes through `accept` / `applyPlan` only. */
+  decide: (id: string, d: Decision) => {
+    const { at: _at, ...body } = d;
+    return call<{ decision: Decision; decisions: Decision[] }>(`/scenes/${id}/decisions`, { method: "POST", body: JSON.stringify(body) });
+  },
   /** The face of an element under a pick (IFC axes): its name, and what the Edit tool can do with it. */
   editFace: (id: string, element: string, point: number[], normal: number[]) =>
     call<EditFace>(`/scenes/${id}/edit/face`, { method: "POST", body: JSON.stringify({ element, point, normal }) }),

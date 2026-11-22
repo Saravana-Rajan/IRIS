@@ -6,6 +6,12 @@
 > from each module below ([detection](../detection.md), [edits](../edits.md), [escalation](../escalation.md),
 > [mcp](../mcp.md), [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md),
 > [uploads](../uploads.md), [voice](../voice.md))
+> **Covers:** `server/iris/*.py` (47 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
+> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings; re-branded on
+> 2026-11-11) · **Deeper design:** the feature docs linked
+> from each module below ([detection](../detection.md), [edits](../edits.md), [engineer-workflow](../engineer-workflow.md),
+> [escalation](../escalation.md), [mcp](../mcp.md), [requirements](../requirements.md),
+> [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [voice](../voice.md))
 
 The server is one Python package, `iris` (the internal name, kept on purpose; the product is Iris). It is a
 FastAPI app and an MCP server over one shared `Workspace`, which holds the open models and clash reports in memory
@@ -25,7 +31,7 @@ imports made inside functions, which are drawn dotted below).
 | Layer | Modules | What the layer does |
 |---|---|---|
 | Entry points | `app.py`, `mcp_server.py`, `voice_live.py`, `agents.py` | HTTP routes and NDJSON streams, the MCP server, the live voice relay, pairing links for MCP agents |
-| Workflows over the Workspace | `plans.py`, `chat.py`, `context_planner.py` | Several clashes at once, root causes and patterns; the chat's tool loop; the bounded wider-fix search |
+| Workflows over the Workspace | `plans.py`, `chat.py`, `context_planner.py`, `projects.py` | Several clashes at once, root causes and patterns; the chat's tool loop; the bounded wider-fix search; projects kept on disk across restarts |
 | Operations | `service.py`, `checks.py` | `Workspace`: scenes, reports, detection (each scene's kept checks in a `checks.Register`), every check and keep of a fix, export. Shared by the API and MCP |
 | Per-clash fix agent | `agent.py`, `escalation.py`, `hosts.py` | Propose → verify → retry → rank for one clash; the second try on the escalation model; which hosts may take an opening |
 | Report jobs | `triage.py`, `titles.py`, `built.py` | Bulk verdicts, model-written titles, Show it built pictures: work over a whole report or one picture, no scene edits |
@@ -38,7 +44,7 @@ imports made inside functions, which are drawn dotted below).
 ```mermaid
 flowchart TB
     entry["Entry points: app, mcp_server, voice_live, agents"]
-    flows["Workflows: plans, chat, context_planner"]
+    flows["Workflows: plans, chat, context_planner, projects"]
     ops["Operations: service (Workspace)"]
     fixer["Fix agent: agent, escalation, hosts"]
     jobs["Report jobs: triage, titles, built"]
@@ -108,6 +114,7 @@ Three edges go "up" and are worth knowing before you add an import:
 | `connections.py` | Geometry | Joints (connected ports, STEP flow parts face to face), element classes, runs, `plan_move` (moves that keep their joints: carry fittings, stretch segments, or are refused) and the connection graph |
 | `parametric.py` | Geometry | After a hand edit, inside its transaction: what the model says besides the shape follows the body (`snapshot` before, `sync` after): a layered element's layers (the layer on the pushed face, the reference line held), a profile set's section, the `Axis` (fitted to each piece of a split, given to a piece made without one), base quantities, path joins (handed to the piece that holds the end, else left open with the joints); shared sets copied for the edited element alone (`own_usage`: its own type "… (Iris)", or its own set) ([docs/editing-parity.md](../editing-parity.md)) |
 | `quantities.py` | Geometry | Base quantities worked out again from the body: only the `Qto_*BaseQuantities` already there, only what the body settles (lengths, widths, heights, volumes and the areas that follow); the rest named and left ([docs/editing-parity.md](../editing-parity.md)) |
+| `drawing_compare.py` | Geometry | Drawing ↔ model comparison, model data only, never AI ([docs/drawings.md](../drawings.md)): `model_index` (each MEP element's family, Tag, property-set identifiers, Name, systems, section in mm from its body profile, storey; its own `tag` when no other element shares it) and `compare` (an item's tag matched exactly once normalised, else as whole words of a Name; `missing_in_model`, `missing_in_drawing` on the drawing's storey and families, `size_differs` beyond max(5 mm, 2 %), `type_differs`; an `ai_only` item's results marked `unconfirmed`) |
 | `consistency.py` | Geometry | Model consistency: what an edit must keep true besides the shape (material layer and profile sets, `Axis`, path joins, a type's maps, base quantities), read per element and rule (`measure`) and compared before and after an edit (`compare`): what the edit made worse blocks or warns; a model already inconsistent never blocks ([docs/editing-parity.md](../editing-parity.md)) |
 | `context_eval.py` | Geometry | Whole-arrangement geometry and connection checks on a scene snapshot (wider fixes) |
 | `context_planner.py` | Workflows | The bounded, revision-pinned wider-fix search, and its accept |
@@ -115,12 +122,14 @@ Three edges go "up" and are worth knowing before you add an import:
 | `demos.py` | Policy | The demo projects in one place: their sample files, start labels, tours, default requirements (`demos/*.json`), and what only the demo models need (their property set, their Navisworks smart tags) |
 | `domains.py` | Policy | Which domain a scene is in (`of`: the effective requirements' `domain`, else opened wholly from STEP is `machines`), the classes that stay in place by default (`STAYS`), who reviews a seat (`SEAT_REVIEW`), voice words, and the shared prompts in that domain's voice (`prompt` fills `{role}`, `{meeting}`, `{teams}`, `{examples}`) |
 | `document.py` | Documents | Coordination reports: PDF (combined, per team, per model) and BCF 2.1, team guessing, who acts and reviews |
+| `drawing_reader.py` | Inputs | The 2D drawing reader ([docs/drawings.md](../drawings.md)): `read_drawing` streams `page`, `item`, `done`; `GeminiReader` sends each sheet (and on a large one its four overlapping quarters, `tiles`, boxes mapped back by `to_page`) to the fast model with `domain_packs/drawing_reader.md` and a strict schema; `reconcile` (no AI) checks each item's tag and size against the page's text layer: `confirmed`, `ai_only`, `text_only`; replies cached on disk by file hash, page, model and prompt hash; charged to the day's budget (`ReadRefused`); `FakeReader` for offline tests |
+| `drawings.py` | Inputs | 2D PDF drawings in ([docs/drawings.md](../drawings.md)): `ingest` (sha256, each page rendered to PNG with pypdfium2 at 150 dpi, the exact text layer read with pdfplumber as words with pixel boxes, `has_text_layer`, the title block's SHEET / SCALE / TITLE / DRAWING NO. as printed in the bottom-right quarter), `Word` / `Page` / `Drawing`; `STORE` holds each open scene's drawings and their last read items, its files deleted with the scene; `compare_scene` runs `drawing_compare.compare` drawing by drawing with the level from each title block (`storey_of`) |
 | `edits.py` | Geometry | Model edits: offsets with bends, routes, resizes, trims, penetrations; trial and keep transactions; meshes |
 | `escalation.py` | Fix agent | The brief a second try on the escalation model reads (first try, neighbourhood, blockers) |
 | `fixtures.py` | Test support | Synthetic IFC models: clash, run, joint, context, detection, route, penetration, resize, edit and parametric fixtures |
 | `faces.py` | Geometry | The faces of an element's body as a person points at them: a pick (point and normal) resolved to a cap, a rectangle's side, a round face, an I-section's flank or an outline's edge, named in words ("east end", "north face", "top"), with what each allows ([docs/manual-edits.md](../manual-edits.md)) |
 | `hosts.py` | Fix agent | Which hosts may take an opening: hard rules, requirements, the model's reading by kind, hole limits |
-| `journal.py` | State | The edit log: one `Entry` per kept edit (agent fixes, plans, wider fixes, hand edits), who and which clash, the fix a hand edit follows, undo and redo over each file's transactions ([docs/manual-edits.md](../manual-edits.md)) |
+| `journal.py` | State | The edit log: one `Entry` per kept edit (agent fixes, plans, wider fixes, hand edits), who and which clash, the fix a hand edit follows, undo and redo over each file's transactions ([docs/manual-edits.md](../manual-edits.md)); beside it the reviewers' decisions on proposals (`decisions`, `add_decision`, checked against `DECISION_STATES` and `DECISIONS`) and a saved project state's entries (`earlier`, read only) ([docs/engineer-workflow.md](../engineer-workflow.md)) |
 | `limits.py` | Policy | `ProposeLimit`: rolling per-visitor and per-day caps; `client_id` |
 | `manual.py` | Operations | Hand edits as ops (push/pull, align, move, and the rest as they are built): `resolve`, the requirements' `gate`, Iris's rules as warnings, `check` in a trial (cleared, new, worse, nearest), `apply` checked again and kept through the edit log, the clash measured again ([docs/manual-edits.md](../manual-edits.md)) |
 | `mcp_server.py` | Entry points | Iris as an MCP server: remote at `/mcp` by link token, or local over stdio |
@@ -128,6 +137,7 @@ Three edges go "up" and are worth knowing before you add an import:
 | `origins.py` | Policy | The other origins whose pages may call the API from a browser (`IRIS_ALLOWED_ORIGINS`): `allowed`, `allows`; read by the CORS middleware, the owner cookie and the voice socket's Origin check |
 | `owner.py` | Policy | The owner token, signed cookie (`set_cookie`, `clear_cookie`), owner settings in context variables, `spawn` / `submit` that carry them |
 | `plans.py` | Workflows | Fix together, root causes, patterns; the plan check; `KEEP` and `apply` for every kept fix |
+| `projects.py` | Workflows | Projects kept on disk across restarts ([docs/engineer-workflow.md](../engineer-workflow.md)): a name, the original models, saved states (each model as it is now, the edit log, decisions, clash memory), clash reviews and reports, one folder each under `IRIS_PROJECTS_DIR`; opening one makes an ordinary scene with its clash numbers and titles seeded |
 | `reports.py` | Inputs | Navisworks XML reports: `Report`, `ReportClash`, `ReportElement`, numbering, image sets |
 | `requirements.py` | Policy | The `iris-requirements/1` file: parse, ids, registry, what it compiles into, policies, prompt lines |
 | `scene.py` | Geometry | `IfcScene`: the federated IFC models, element facts, cached boxes, moves, revisions, files added and removed (`layout`), writing |
@@ -151,6 +161,7 @@ flowchart LR
     chatPy["chat.py"]
     plansPy["plans.py"]
     ctxPy["context_planner.py"]
+    projPy["projects.py"]
     servicePy["service.py"]
     fixer["agent, escalation"]
     geo["detect, edits, step, verify, context_eval"]
@@ -161,6 +172,7 @@ flowchart LR
     appPy --> chatPy
     appPy --> plansPy
     appPy --> ctxPy
+    appPy --> projPy
     appPy --> servicePy
     appPy --> mcpPy
     appPy --> voicePy
@@ -189,6 +201,9 @@ flowchart LR
     plansPy -->|"edits, verify"| geo
     plansPy -->|"owner, requirements"| policy
     ctxPy -->|"context_eval, edits, verify"| geo
+    projPy --> servicePy
+    projPy -->|"detect, step"| geo
+    projPy -->|"limits"| policy
     voicePy --> client
     voicePy -->|"origins"| policy
 ```
@@ -216,13 +231,23 @@ naming the service, `/docs` and `/api/health`.
   `document.py`, `domains.py`, `edits.py`, `escalation.py`, `faces.py`, `journal.py`, `limits.py`, `manual.py`,
   `mcp_server.py`, `model_client.py`, `origins.py`, `owner.py`, `plans.py`, `property_edits.py`, `requirements.py`,
   `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
+  `UPLOADS`; `_receive_models` / `_unpack` (gzipped uploads); `_optional` (a module this build may not have: the
+  drawing reader and comparison) and `_drawing` (a drawing by id, 404 when no open scene holds it).
+- **Imports:** `agents.py`, `built.py`, `chat.py`, `context_planner.py`, `detect.py`, `document.py`, `domains.py`,
+  `drawings.py` (and, when present, `drawing_reader.py` and `drawing_compare.py`, through `_optional`), `edits.py`, `escalation.py`, `limits.py`, `mcp_server.py`, `model_client.py`, `owner.py`, `plans.py`, `projects.py`,
+  `requirements.py`, `service.py`, `settings.py`, `spend.py`, `step.py`, `titles.py`, `triage.py`, `voice_live.py`.
   **Imported by:** `mcp_server.py` (lazily, for the stdio entry point).
 - **Rules:** `.env` is already loaded when it runs (the package's `__init__.py`), and its caps and sizes are read with
   `limits.env_int` / `env_float`; it calls `origins.allowed()` once at import, so a malformed `IRIS_ALLOWED_ORIGINS`
   stops the server at start; `ws.keep = links.kept` so live links' scenes and reports are evicted last; a kept
   fix goes through `_with_patch`, which holds `ws.lock` from the revision read to the
   patch so another tab's edit cannot land in between; blocking work runs in threads (`run_in_threadpool`,
-  `owner.spawn`) so the event loop stays free.
+  `owner.spawn`) so the event loop stays free; a keep through `fix/apply` or `plan/apply` records the `reviewer` as
+  the entry's `actor` and appends one `accepted` decision per kept fix to the scene's journal; the project routes
+  turn `projects.NotFound` into 404, `projects.Full` into 409 and a `ValueError` into a 400 with its words (`_project`);
+  the drawing routes sweep the drawings of scenes no longer open first (`drawings.STORE.prune`), answer 501 while the
+  reader or the comparison is not in the build, and run the reader up to its first event before the stream starts, so
+  a read the budget refuses is a plain 429.
 
 ### `mcp_server.py`: Iris for agents
 
@@ -285,7 +310,10 @@ Fix together (`build_batch`), root causes (`root_causes`, `build_root_cause`), p
 - **Rules:** item agents run four at a time (`ThreadPoolExecutor(max_workers=4)` with `owner.submit`), each with
   `lock=ws.lock`, so model calls overlap and geometry trials take turns; `verify_together` holds `ws.lock` and makes
   every fix in one `edits.trial_files`, then undoes them; `apply` refuses a kind not in `KEEP`; one failing item never
-  sinks the plan.
+  sinks the plan; the entry `apply` keeps carries `check = {verified, min_clearance_m, checked_against}`
+  (`checked_against`: the largest count among the fixes kept); an "as designed" root-cause plan edits nothing, so its
+  check is `{passed: false, geometry: false, items: {}, conflicts: []}` and it is never shown or reported as
+  geometry-validated.
 
 ### `chat.py`: chat through tools
 
@@ -316,6 +344,31 @@ lower by `IRIS_CONTEXT_*`) over complete arrangements of up to three edit groups
   `context_eval.commit_candidate` on a fresh private snapshot before swapping it in. Model output never grants
   acceptance.
 
+### `projects.py`: projects kept on disk
+
+Projects that outlive the process: the engineer-first workflow's home ([docs/engineer-workflow.md](../engineer-workflow.md)).
+Each is one folder under `IRIS_PROJECTS_DIR`: `project.json`, `models/` (the original files), `saved/<n>/` (a saved
+state), `reports/` and `drawings/` (the scene's PDF drawings and their last read items). Opening one makes an
+ordinary scene, with its drawings ingested again; the rest of the server never knows it came from a project. The folder layout is in [14](14-files-in-and-out.md), the objects in [05](05-domain-model-and-state.md).
+
+- **Main symbols:** `create(name)`, `list_projects(ids | None)`, `get(pid)`, `patch(pid, name=, counts=)`,
+  `attach(ws, pid, scene_id)`, `open_project(ws, pid, classify_with=)`, `save(ws, pid, scene_id)`,
+  `set_review(pid, key, status, note, by, number, title)`, `add_report(pid, doc_id, name, kind, data)`,
+  `report_file(pid, doc_id)`, `clash_key(kind, a, b)`, `parse_key`, `projects_dir` and `max_projects` (read each
+  call); errors `NotFound` (404) and `Full` (409, at `IRIS_PROJECTS_MAX`); a bad value is a `ValueError` with the
+  reason (400); `STATUSES`, `REPORT_KINDS`, `REVIEWS_MAX` (5,000 per project), `REPORTS_MAX` (100 per project, the
+  oldest file goes), `NAME_MAX`.
+- **Imports:** `detect.py` (`clash_id`), `drawings.py` (`STORE`, `ingest`: drawings kept on attach and save, back
+  on open), `limits.py` (`env_int`), `service.py` (`Workspace`), `step.py` (the STEP suffixes). **Imported by:**
+  `app.py`.
+- **Rules:** writes are atomic per file (a temp file and `os.replace`; a saved state's files go straight into
+  `saved/<n>/` with `state.json` last, and no folder is ever renamed, which Cloud Storage FUSE refuses on a flat
+  bucket; `project.json` last of all, so it never names a file not yet written) under a per-project lock, which is
+  process-local (the service runs one instance); an id that is not 24 hex characters is a 404 before any path is
+  built; project files are never registered in a scene's temp roots: opening copies them into a fresh folder under
+  `iris-models` that the scene owns, so eviction never deletes a project's files; a saved state is the new baseline
+  (undo history does not cross a reopen).
+
 ## Operations
 
 ### `service.py`: the Workspace
@@ -337,14 +390,18 @@ plus the STEP export helpers.
     `save_capture`, `report_image`, `list_report_samples`;
   - detection: `detect_tests`, `detect`, `detect_all`, `_run_check`, `_register`, `_union`, `union_report`,
     `checks_info`, `remove_check`, `requirements_info`;
-  - files: `file`, `export`.
+  - files: `file`, `export`;
+  - projects ([docs/engineer-workflow.md](../engineer-workflow.md)): `original_paths` (each model as first given: an
+    IFC as opened, a STEP model's original STEP), `clash_memory` (the register's ids with kind, pair, test, name,
+    number and title; titles from the current list first), `seed_clashes` (fills a new scene's `Register.ids`,
+    `numbers` and `titles`, so detection gives a pair found again with the same kind its old id and number).
 
   Module level: `StaleLayout` (a model named by a position that no longer holds it: 409), `step_changes`, `_spec`,
   `SAMPLES`, `MODELS`, `MODEL_SUFFIXES`, `MAX_SCENES`, `MAX_REPORTS`,
   `SCENE_BUDGET_MB`, `LAST_KEPT` (200), `SAMPLE_EXCLUDE`, `HOSTS_TIMEOUT_S`.
 - **Imports:** `agent.py`, `detect.py`, `domains.py`, `edits.py`, `escalation.py`, `facets.py`, `hosts.py`, `limits.py`,
   `model_client.py`, `reports.py`, `requirements.py`, `scene.py`, `settings.py`, `spend.py`, `step.py`, `verify.py`.
-  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`, `plans.py`.
+  **Imported by:** `app.py`, `chat.py`, `mcp_server.py`, `plans.py`, `projects.py`.
 - **Rules:** `Workspace.lock` (an RLock) is held by everything that touches a scene's geometry; every kept edit calls
   `IfcScene.mark_edited` and `IfcScene.bump`; trials never do; a second try's brief (`last_try`) is read only while
   the scene revision and requirements id it was made under still hold; `escalate` holds its cost estimate
@@ -555,7 +612,7 @@ Iris reads unchanged. Deeper design: [docs/detection.md](../detection.md).
   `DUPLICATE_M`, `FAR_M`, `CAP`.
 - **Imports:** `facets.py` (filter sides), `limits.py`, `reports.py`, `requirements.py` (teams per file), `scene.py`,
   `verify.py`; lazily `edits.py`.
-  **Imported by:** `app.py`, `requirements.py` (lazily), `service.py`.
+  **Imported by:** `app.py`, `projects.py` (`clash_id`), `requirements.py` (lazily), `service.py`.
 
 ### `step.py`: STEP models
 
@@ -566,7 +623,7 @@ STEP → IFC on open (cached by file hash) and the fixes written back to STEP on
   `StepError`, `SUFFIXES`, `CLASSES`, `MAX_PARTS` (`IRIS_STEP_MAX_PARTS`), `MAX_TRIANGLES`
   (`IRIS_STEP_MAX_TRIANGLES`), `NAMESPACE`.
 - **Imports:** `limits.py` (`env_int`), `scene.py` (`STEP_PSET`); `cadquery-ocp` (OCP) inside functions.
-  **Imported by:** `app.py`, `service.py`.
+  **Imported by:** `app.py`, `projects.py` (the suffixes), `service.py`.
 - **Rules:** GlobalIds come from the file hash and the part's label path, so a file converts to the same ids every
   time; only a classified conversion is cached; shapes are placed with `BRepBuilderAPI_Transform`, never `.Moved()`.
 
@@ -675,6 +732,28 @@ every other module reads; detection builds the same objects. Imports nothing fro
 - **Imported by:** `detect.py`, `document.py`, `service.py`, `titles.py`, `triage.py`.
 - **Rules:** XML goes through `defusedxml`; image links must resolve inside the report's folder; the same result
   exported twice is kept once.
+
+### `drawings.py`: PDF drawings in
+
+The 2D drawing reader's input ([docs/drawings.md](../drawings.md)). `ingest(pdf_bytes, name, root)` takes one PDF:
+its sha256, each page rendered with pypdfium2 to `root/<id>/page-<index>.png` at `DPI` (150; a page over
+`MAX_PAGE_PIXELS`, 50 MP, at a lower dpi recorded in its `Page.dpi`), the text layer read with pdfplumber as `Word`s
+in pixels on that image (origin top-left, the crop box mapped onto the rendered size), `has_text_layer` (False for a
+scan: the reader then confirms nothing), and the title block (`title_block`: SHEET / SCALE / TITLE / DRAWING NO.
+labels at the start of a text run in the bottom-right quarter, the value beside or under the label; nothing guessed).
+The PDF is kept as `source.pdf`. `Page.index` is 0-based.
+
+- **Main symbols:** `Word`, `Page`, `Drawing` (`to_dict`; a `folder` attribute that is not a field), `ingest`,
+  `title_block`, `page_path`, `folder_of`, `storey_of`, `compare_scene`, `merge_items`, `plain`, `Store` / `STORE`, errors
+  `DrawingError` (400) and `TooBig` (413); `max_pages()` (`IRIS_DRAWING_MAX_PAGES`, 40) and `max_mb()`
+  (`IRIS_DRAWING_MAX_MB`, 50), read each call; `MAX_FILES` (10 a request), `MAX_PER_SCENE` (30).
+- **Imports:** `limits.py`; pypdfium2, pdfplumber (never PyMuPDF: AGPL). **Imported by:** `app.py`, `projects.py`,
+  `drawing_reader.py` (lazily, `STORE.folder`).
+- **Rules:** a refused file leaves nothing on disk; a password-protected PDF is refused (one with only owner
+  restrictions opens); a text layer pdfminer cannot parse is logged and treated as none. `STORE` keeps files under
+  `iris-drawings/<scene id>/<drawing id>/`: `watch` deletes a scene's folder when its scene object is garbage (an
+  eviction), and every call first forgets such scenes (a finalizer never takes the store's lock); `prune(live)` drops
+  any scene not open.
 
 ### `document.py`: PDF and BCF
 
@@ -787,7 +866,7 @@ Imports nothing from the package.
 - **Main symbols:** `ProposeLimit` (`from_env`, `escalate_from_env`, `chat_from_env`, `take`, `take_many`,
   `take_all`, `refusal`), `client_id` (the peer, or with `IRIS_TRUST_FORWARDED=N` the N-th `X-Forwarded-For`
   entry from the right), `trusted_hops`, `env_int`, `env_float`.
-- **Imported by:** `app.py`, `context_planner.py`, `scene.py`, `service.py`, `step.py`.
+- **Imported by:** `app.py`, `context_planner.py`, `projects.py`, `scene.py`, `service.py`, `step.py`.
 - **Rules:** `take_many` and `take_all` count all or nothing; correct only with one server process (the Cloud Run
   service runs one instance); a number setting is read with `env_int` / `env_float`, so unset or empty is its default and
   anything else that is not a number raises. Every cap and its meaning: [16](16-security-caps-and-cost.md).
@@ -846,13 +925,15 @@ for, is in [08](08-ai-models-prompts-and-spend.md).
 
 **`server/pyproject.toml`** names the project `iris-server` (0.1.0, Python 3.13 or later). Runtime dependencies:
 `cadquery-ocp` (pinned 8.0.1.1.0), `defusedxml`, `fastapi`, `httpx`, `ifcopenshell` (0.9 or later), `mcp`,
-`numpy`, `pydantic`, `python-multipart`, `uvicorn[standard]` (which brings `websockets`, used by `voice_live.py`),
+`numpy`, `pdfplumber` and `pypdfium2` (`drawings.py`), `pydantic`, `python-multipart`, `reportlab` (sample drawings
+and tests), `uvicorn[standard]` (which brings `websockets`, used by `voice_live.py`),
 `weasyprint` (which brings Pillow, used by `built.py`); dev: `pytest`. The settings store is a JSON file (`IRIS_SETTINGS_FILE`), on the Cloud Storage mount when deployed on Cloud Run
 (see [17](17-deployment-and-operations.md)). There are no console scripts: the server runs as `uv run uvicorn iris.app:app` and the
 local MCP server as `python -m iris.mcp_server`. Pytest runs from `server/` with `pythonpath = ["."]` and
 `testpaths = ["tests"]`.
 
 **`server/tests/`** has 63 test files plus `conftest.py`, which gives every test its own settings store (so no test
+**`server/tests/`** has 68 test files plus `conftest.py`, which gives every test its own settings store (so no test
 reads the developer's `server/.iris-settings.json`). Most build their models with `fixtures.py`.
 `test_docs_map.py` reads this doc and fails when a module in `server/iris/` is not named here. Run them with
 `cd server && uv run pytest -q`; the suites, evals and the delivery checklist are in

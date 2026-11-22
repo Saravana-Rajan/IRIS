@@ -145,6 +145,14 @@ class Row:
     mark: str | None = None       # the session marked it "by_design" or "author"
     ai: dict | None = None        # the model's explanation for its page
     edits: list[dict] = field(default_factory=list)   # the edit log's entries for this clash, oldest first (journal.py)
+    # The engineer-first workflow (docs/engineer-workflow.md): the reviewers' decisions on this clash's proposals
+    # (`Journal.decisions`, oldest first), the GlobalIds of A and B (matched in the open scene, else the report's), the
+    # names of the elements a fix or a decision moves ("IfcDuctSegment 'SA-MAIN'"), and the clearance a fix of this pair
+    # must keep (the requirements', else the 25 mm default; None when it can't be said for the fix kept).
+    decisions: list[dict] = field(default_factory=list)
+    gids: tuple = (None, None)
+    names: dict[str, str] = field(default_factory=dict)
+    required_m: float | None = None
 
 
 def teams_for(team_a: str, team_b: str, moved_side: str | None, responsible: str | None,
@@ -165,15 +173,21 @@ def teams_for(team_a: str, team_b: str, moved_side: str | None, responsible: str
 
 def build_rows(report: Report, verdicts: dict[str, dict], model_teams: dict[str, str], matches: dict | None,
                scene, evidence: dict, reviews: dict, marks: dict, guesses: dict[str, str] | None = None,
-               journal=None) -> list[Row]:
+               journal=None, decisions: list | None = None) -> list[Row]:
     """`model_teams`: the team the user typed for each model file; `guesses`: Iris's guess per file (`guess_teams`),
-    the names triage's "responsible" uses, which are translated to the typed ones."""
+    the names triage's "responsible" uses, which are translated to the typed ones. `decisions`: the reviewers'
+    decisions (`Journal.decisions`, docs/engineer-workflow.md), each tied to its clash by id, else by clash key; a clash
+    with decisions gets a page for its proposal history. A clash with no fix kept in this session takes its kept
+    entries from a reopened project's saved history (`Journal.earlier`, `earlier_for`), marked as such."""
     guesses = guesses or {}
     typed = {f: model_teams.get(f) or g for f, g in guesses.items()}
     discipline = {t: guesses[f] for f, t in typed.items()}
     as_typed = {}
     for f, g in guesses.items():
         as_typed.setdefault(g, typed[f])
+    decs = [_plain(d) for d in decisions or []]
+    ids = {c.id for c in report.clashes}
+    need = _Required(scene)
     rows = []
     for c in report.clashes:
         m = (matches or {}).get(c.id, {})
@@ -193,6 +207,8 @@ def build_rows(report: Report, verdicts: dict[str, dict], model_teams: dict[str,
         ev = evidence.get(c.id)
         pair = [m["a"], m["b"]] if m.get("a") and m.get("b") else None
         logged = [e.to_dict(picture=True) for e in journal.for_clash(c.id, pair)] if journal is not None else []
+        if journal is not None and not any(not is_hand(e) for e in logged):
+            logged = [*earlier_for(journal, c.id, pair), *logged]   # older than anything this session kept
         moved_side = None
         if ev and ev.get("moved"):
             moved = set(ev["moved"])
@@ -203,7 +219,9 @@ def build_rows(report: Report, verdicts: dict[str, dict], model_teams: dict[str,
         acting, reviewers = teams_for(ta, tb, moved_side, as_typed.get(responsible, responsible), discipline)
         mark = marks.get(c.id)
         verdict = reading.get("verdict")
-        if ev or logged:
+        key = clash_key(c, report.title)
+        mine = sorted((d for d in decs if _decision_is_for(d, c.id, key, ids)), key=lambda d: _epoch(d.get("at")) or 0)
+        if ev or logged or mine:
             section = "page"
         elif mark == "by_design":
             section = "noise"
@@ -213,9 +231,116 @@ def build_rows(report: Report, verdicts: dict[str, dict], model_teams: dict[str,
             section = "page"
         else:
             section = "noise"
-        rows.append(Row(c, ma, mb, ta, tb, acting, reviewers, verdict, reading, section, ev,
-                        list(reviews.get(c.id, [])), mark, edits=logged))
+        row = Row(c, ma, mb, ta, tb, acting, reviewers, verdict, reading, section, ev,
+                  list(reviews.get(c.id, [])), mark, edits=logged, decisions=mine,
+                  gids=(m.get("a") or c.a.global_id, m.get("b") or c.b.global_id))
+        fix = kept_fix(row) if section == "page" else None
+        if section == "page" and (ev or fix or mine):
+            row.names = _moved_names(row, scene)
+            # The clearance the fix kept was checked for: only said when the requirements are still the ones it was
+            # kept under (the edit log records their id).
+            if fix is None or fix[0].get("requirements") == need.current_id:
+                row.required_m = need(*row.gids)
+        rows.append(row)
     return rows
+
+
+def clash_key(c: ReportClash, report_title: str = "") -> str:
+    """The key a project keeps a clash's reviews and decisions under, stable across re-detection (the web's
+    `coordination.clashKey`, `projects.clash_key`, docs/engineer-workflow.md): `<test type>|<GlobalId>|<GlobalId>`
+    (sorted) for a clash Iris found, `nw|<report title>|<Navisworks' name>` for an imported one (as `app._clash_ref`
+    makes it)."""
+    if c.source != "iris":
+        return f"nw|{report_title}|{c.ref or c.name}"
+    return f"{c.test_type or 'hard'}|" + "|".join(sorted([c.a.global_id or "", c.b.global_id or ""]))
+
+
+def _plain(d) -> dict:
+    """A decision as a dict, whether the journal holds dicts or dataclasses."""
+    if isinstance(d, dict):
+        return d
+    if hasattr(d, "to_dict"):
+        return d.to_dict()
+    return {k: v for k, v in getattr(d, "__dict__", {}).items() if not k.startswith("_")}
+
+
+def _decision_is_for(d: dict, clash_id: str, key: str, ids: set[str]) -> bool:
+    """By the clash's id while the report is open; by its key when the id is not one of this report's (a project
+    reopened, a detection run again)."""
+    if d.get("clash_id") == clash_id:
+        return True
+    if d.get("clash_id") in ids:
+        return False
+    return bool(d.get("clash_key")) and d.get("clash_key") == key
+
+
+def _epoch(at) -> float | None:
+    """A decision's time as epoch seconds: the journal's seconds, a page's milliseconds, or an ISO string."""
+    if isinstance(at, (int, float)) and not isinstance(at, bool):
+        return at / 1000 if at > 1e11 else float(at)
+    if isinstance(at, str) and at:
+        try:
+            t = dt.datetime.fromisoformat(at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return (t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)).timestamp()
+    return None
+
+
+def _when(at) -> str:
+    t = _epoch(at)
+    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC") if t is not None else "—"
+
+
+class _Required:
+    """The clearance a fix of a pair must keep, as the keep's re-check takes it (`Workspace.fix_settings`): the
+    requirements' for the pair (their fix clearance, or the pair's clearance check if larger), else the 25 mm default.
+    None when there are requirements but no open scene to place the pair in them."""
+
+    def __init__(self, scene):
+        from . import requirements
+        self.scene, self.doc, self.current_id = scene, requirements.current(), requirements.current_id()
+        self._matcher = None
+
+    def __call__(self, a: str | None, b: str | None) -> float | None:
+        from . import requirements
+        if self.doc is None:
+            return requirements.DEFAULT_CLEARANCE_M
+        if self.scene is None or not a or not b:
+            return None
+        try:
+            if self._matcher is None:
+                self._matcher = requirements.Matcher(self.scene, self.doc)
+            return requirements.fix_clearance(self.doc, self._matcher, a, b)
+        except Exception:   # an element no longer in the scene: say nothing rather than guess
+            return None
+
+
+def _moved_names(r: Row, scene) -> dict[str, str]:
+    """"IfcClass 'Name'" for each element the page's fix, the kept fix or a decision moves: the edit log's names
+    first, then the open scene, then the report's own names for A and B."""
+    names: dict[str, str] = {}
+    for e in r.edits:
+        names.update(e.get("names") or {})
+    fix = kept_fix(r)
+    want = [*((r.evidence or {}).get("moved") or []), *(((fix[1] or {}).get("moved") or []) if fix else []),
+            *(g for d in r.decisions for g in ((d.get("option") or {}).get("moved") or []))]
+    sides = {g: el for g, el in zip(r.gids, (r.clash.a, r.clash.b)) if g}
+    sides.update({el.global_id: el for el in (r.clash.a, r.clash.b) if el.global_id})
+    for g in dict.fromkeys(x for x in want if isinstance(x, str)):
+        if g in names:
+            continue
+        if scene is not None:
+            try:
+                ent = scene.entity(g)
+                names[g] = f"{ent.is_a()} '{getattr(ent, 'Name', None) or ent.is_a()[3:]}'"
+                continue
+            except (KeyError, RuntimeError):
+                pass
+        if g in sides and (sides[g].name or sides[g].ifc_class):
+            el = sides[g]
+            names[g] = f"{el.ifc_class or 'Element'} '{el.name}'" if el.name else el.ifc_class
+    return names
 
 
 # ------------------------------------------------------------------------------------------------- the edit log
@@ -229,14 +354,48 @@ def is_hand(e: dict) -> bool:
     return "op" in (e.get("params") or {})
 
 
+def earlier_for(journal, clash_id: str | None, pair: list[str] | None = None) -> list[dict]:
+    """The kept entries of a reopened project's saved history (`Journal.earlier`, projects.py) for this clash, by its
+    id or its pair (as `Journal.for_clash`), oldest first, each marked `earlier`. E-ids start again in every session,
+    so these are told apart from this session's by that marker and their session (`entry_key`), never by E-id alone."""
+    p = sorted(pair) if pair else None
+    out, seen = [], set()
+    for e in list(getattr(journal, "earlier", None) or []):
+        if not isinstance(e, dict) or e.get("state", "kept") != "kept":
+            continue
+        if not any((clash_id and c.get("id") == clash_id) or (p and c.get("pair") and sorted(c["pair"]) == p)
+                   for c in e.get("clashes") or [] if isinstance(c, dict)):
+            continue
+        e = {**e, "earlier": True}
+        if entry_key(e) not in seen:
+            seen.add(entry_key(e))
+            out.append(e)
+    return out
+
+
+def entry_key(e: dict) -> tuple:
+    """An entry's identity across sessions: its E-id, whether it is saved history, the session that kept it (the
+    scene's id, stamped when a project is saved) and, for history saved before entries carried one, when it was kept."""
+    earlier = bool(e.get("earlier"))
+    return e.get("id"), earlier, e.get("session") if earlier else None, e.get("at") if earlier else None
+
+
+def entry_ref(e: dict) -> str:
+    """"E3", or "E3 (earlier session)" for an entry of a reopened project's saved history."""
+    return f"{e.get('id')}{' (earlier session)' if e.get('earlier') else ''}"
+
+
 def _hhmm(e: dict) -> str:
     return (e.get("when") or "")[11:16] + " UTC" if e.get("when") else ""
 
 
 def check_words(e: dict) -> str:
     c = e.get("check") or {}
+    if c.get("geometry") is False:   # "as designed": nothing was tried on the geometry
+        return "not geometry-checked"
     if c.get("verified"):
-        return "verified by geometry" + (f", nearest {_mm(c['min_clearance_m'])}" if c.get("min_clearance_m") is not None else "")
+        return ("verified by geometry" + (f", nearest {_mm(c['min_clearance_m'])}" if c.get("min_clearance_m") is not None else "")
+                + (f", against {_count(c['checked_against'], 'element')}" if isinstance(c.get("checked_against"), int) else ""))
     n = c.get("accepted_clashes") or 0
     words = f"checked, kept with {n} clash{'es' if n > 1 else ''}" if n else "checked, clear"
     if not n and c.get("min_clearance_m") is not None:
@@ -269,7 +428,7 @@ def timeline_html(r: Row) -> str:
         warn = "".join(f"<br><span class='warn'>{_e(w.get('text'))}{' · review: ' + _e(w['review']) if w.get('review') else ''}</span>"
                        for w in e.get("warnings") or [])
         follows = f" · after {', '.join(e['follows'])}" if e.get("follows") else ""
-        items.append(f"<li><b>{_e(e.get('id'))}</b> <span class='when'>{_e(_hhmm(e))} · {_e(who)}{follows}</span><br>"
+        items.append(f"<li><b>{_e(entry_ref(e))}</b> <span class='when'>{_e(_hhmm(e))} · {_e(who)}{follows}</span><br>"
                      f"{_e(e.get('summary') or e.get('title'))} <span class='tag'>{_e(check_words(e))}</span>{warn}</li>")
     pic = next((e.get("picture") for e in reversed(r.edits) if _data_url_ok(e.get("picture"))), None)
     fig = f"<figure><img src='{_e(pic)}'/><figcaption>After the edits</figcaption></figure>" if pic else ""
@@ -297,6 +456,310 @@ def changes_html(changes: list[dict], numbers: dict[str, int]) -> str:
             f"<th>Review</th></tr>{''.join(rows)}</table></section>")
 
 
+# ------------------------------------------------------------------------------------------------- proposals and decisions
+# AI proposes, geometry proves, the engineer decides (docs/engineer-workflow.md). What backs a fix is said from the
+# strongest record there is: the edit log's own check at keep, then the reviewers' decisions, then the page's word.
+# Only the edit log's check makes a fix "Geometry-validated at keep"; the page's word never makes one verified.
+
+STATE_LABEL = {"ai_proposed": "AI-proposed", "geometry_validated": "Geometry-validated",
+               "failed_validation": "Failed validation", "unverified": "Unverified"}
+DECISION_LABEL = {"accepted": "Accepted", "rejected": "Rejected", "modified": "Modified",
+                  "requested_another": "Requested another"}
+EVIDENCE_LABEL = {
+    "kept": "Geometry-validated at keep",              # the edit log's check at keep passed (check.verified)
+    "kept_earlier": "Geometry-validated at keep (earlier session)",   # the same, from a reopened project's history
+    "kept_unrecorded": "Kept · no check recorded at keep",   # kept (a wider fix), the log holds no check for it
+    "proposed": "Verified when proposed, not kept",     # passed when proposed; never kept, so never checked again
+    "failed": "Failed validation",                      # a decision records that geometry refused it
+    "unchecked": "Not geometry-checked",                # "as designed", unverified or only the model's idea
+    "unrecorded": "No geometry record in this session",  # the page says applied; the edit log has no keep for it
+}
+EVIDENCE_CLASS = {"kept": "verified", "kept_earlier": "verified", "failed": "failed"}
+NO_CLEARANCE = {"trim": "butt joint", "seat": "bears on it"}   # kinds that leave no gap to measure (fixKinds.clearanceText)
+
+
+def _count(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def _gap(m: float | None) -> str:
+    return "—" if m is None else f"{round(m * 1000)} mm"
+
+
+def _move_words(delta_m) -> str:
+    """A move in words on the model's axes, "east 100 mm, up 400 mm" (`connections.move_words`, the web's `moveWords`)."""
+    from .connections import move_words
+    return move_words(delta_m)
+
+
+def _direction(delta_m) -> tuple[str, str] | None:
+    """(direction, distance) in words, as the proposal card says them (`proposalState.directionWords`): ("up",
+    "400 mm"); ("west and up", "412 mm (100 mm west, 400 mm up)"). None for no move."""
+    if not isinstance(delta_m, (list, tuple)):
+        return None
+    axes = (("east", "west"), ("north", "south"), ("up", "down"))
+    parts = [(axes[k][0 if v > 0 else 1], abs(round(v * 1000))) for k, v in enumerate(delta_m[:3])
+             if isinstance(v, (int, float)) and abs(v) >= 0.0005]
+    if not parts:
+        return None
+    words = [w for w, _ in parts]
+    direction = words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+    if len(parts) == 1:
+        return direction, f"{parts[0][1]} mm"
+    total = round(sum(mm * mm for _, mm in parts) ** 0.5)
+    return direction, f"{total} mm ({', '.join(f'{mm} mm {w}' for w, mm in parts)})"
+
+
+def _edit_words(o: dict) -> str | None:
+    """The edit an option makes, in a few words, from its own parameters (the web's `editText`); None when they don't
+    say it."""
+    edit = o.get("edit") if isinstance(o.get("edit"), dict) else {}
+    if edit.get("summary"):
+        return edit["summary"]
+    kind = o.get("kind") or "move"
+    trim = o.get("trim") if isinstance(o.get("trim"), dict) else None
+    if kind == "trim" and trim and trim.get("by_m") is not None:
+        return f"trim the {trim.get('end') or 'one'} end {round(trim['by_m'] * 1000)} mm"
+    if not _direction(o.get("delta_m")):
+        return None
+    if kind == "offset":
+        split = o.get("split_m")
+        where = f" between {split[0]:.2f} and {split[1]:.2f} m along it" if isinstance(split, list) and len(split) == 2 else ""
+        return f"offset the middle piece {_move_words(o['delta_m'])}{where}"
+    return f"move {_move_words(o['delta_m'])}" if kind == "move" else None
+
+
+def _is_this(c: dict, r: Row) -> bool:
+    pair = c.get("pair")
+    return bool((c.get("id") and c.get("id") == r.clash.id)
+                or (pair and all(r.gids) and sorted(pair) == sorted(r.gids)))
+
+
+def kept_fix(r: Row) -> tuple[dict, dict | None] | None:
+    """The newest fix kept for this clash in the edit log (an accepted fix, plan or wider fix: not a hand edit), with
+    its option for this clash when the entry holds one: `plans.apply` keeps the options as re-checked at keep in
+    `params.options`, in the order of the entry's clashes."""
+    for e in reversed(r.edits):
+        if is_hand(e):
+            continue
+        opts = [o for o in (e.get("params") or {}).get("options") or [] if isinstance(o, dict)]
+        k = next((i for i, c in enumerate(e.get("clashes") or []) if _is_this(c, r)), None)
+        if k is not None and k < len(opts):
+            return e, opts[k]
+        return e, (opts[0] if len(opts) == 1 else None)
+    return None
+
+
+def _never_checked(x: dict) -> bool:
+    """An "as designed" answer or anything that says it was never tried on the geometry."""
+    check = x.get("check") if isinstance(x.get("check"), dict) else {}
+    return check.get("geometry") is False or x.get("kind") == "as_designed" or x.get("strategy") == "as_designed"
+
+
+def decision_state(d: dict) -> str:
+    """A decision's proposal state, never more than its own check supports: "as designed" is never validated, and a
+    check that did not pass never reads as validated."""
+    state = d.get("state") if d.get("state") in STATE_LABEL else "unverified"
+    check = d.get("check") if isinstance(d.get("check"), dict) else {}
+    if _never_checked(d) or _never_checked(d.get("option") or {}):
+        return "unverified"
+    if state == "geometry_validated" and check and not check.get("verified"):
+        return "unverified"
+    return state
+
+
+def _decision_on(r: Row, title: str | None) -> dict | None:
+    """The newest decision on the option with this title, else the newest on the clash."""
+    same = [d for d in r.decisions if title and (d.get("option") or {}).get("title") == title]
+    return (same or r.decisions or [None])[-1]
+
+
+def evidence_state(r: Row) -> str | None:
+    """What backs the fix on a clash's page (`EVIDENCE_LABEL`), or None when there is no fix (or only a
+    recommendation, which its own box says was not edited)."""
+    ev = r.evidence or {}
+    if ev.get("status") == "recommended":
+        return None
+    fix = kept_fix(r)
+    if fix is not None:
+        e, opt = fix
+        if _never_checked(e) or _never_checked(opt or {}):
+            return "unchecked"
+        if not (e.get("check") or {}).get("verified"):
+            return "kept_unrecorded"
+        return "kept_earlier" if e.get("earlier") else "kept"
+    if not ev:
+        return None
+    if _never_checked(ev):
+        return "unchecked"
+    d = _decision_on(r, ev.get("title"))
+    if d is not None:
+        state = decision_state(d)
+        if state == "failed_validation":
+            return "failed"
+        if state != "geometry_validated":
+            return "unchecked"
+    return "unrecorded" if ev.get("status") == "accepted" else "proposed"
+
+
+def _element_words(gid: str, r: Row) -> str:
+    name = r.names.get(gid)
+    return f"{name} · GlobalId {gid}" if name else f"GlobalId {gid}"
+
+
+def fix_html(r: Row) -> str:
+    """The fix box: the kept fix (from the edit log, as re-checked at keep) or the page's fix, with what backs it.
+    Every line comes from a record; a line whose data is missing is left out."""
+    ev = r.evidence or {}
+    fix = kept_fix(r)
+    e, o = (fix[0], fix[1] or {}) if fix else (None, {})
+    if not ev and e is None:
+        return ""
+    state = evidence_state(r)
+    kind = o.get("kind") or ev.get("kind") or (e or {}).get("kind") or "move"
+    title = o.get("title") or (e or {}).get("title") or ev.get("title")
+    applied = e is not None or ev.get("status") == "accepted"
+    check = (e or {}).get("check") or {}
+    # Numbers measured at keep are this clash's option's; the entry's own check only when it kept one fix (a plan's
+    # check is the least over all its fixes). Numbers from the page are the proposal's, never the keep's.
+    single = e is not None and len((e.get("params") or {}).get("options") or []) <= 1
+
+    def at_keep(k: str):
+        return o.get(k) if o.get(k) is not None else (check.get(k) if single else None)
+
+    rows: list[tuple[str, str]] = []
+    edit = (_edit_words(o) if o else None) or ev.get("edit") or (e or {}).get("summary")
+    if edit:
+        rows.append(("Edit", _e(edit)))
+    delta = o.get("delta_m") if o else (ev.get("delta_m") if e is None else None)
+    move = _direction(delta) if kind in ("move", "offset") else None
+    if move:
+        rows += [("Direction", _e(move[0])), ("Distance", _e(move[1]))]
+    moved = [g for g in ((o.get("moved") if o else None) or ev.get("moved") or []) if isinstance(g, str)]
+    if moved:
+        label = ("Moved element" if kind in ("move", "offset") else "Changed element") + ("s" if len(moved) > 1 else "")
+        rows.append((label, "<br>".join(_e(_element_words(g, r)) for g in moved)))
+    rationale = o.get("rationale") or ev.get("rationale")
+    if rationale:
+        rows.append(("Rationale", f"<span class='ai-tag'>AI-drafted</span> {_e(rationale)}"))
+    when = "at keep" if e is not None else "when proposed"
+    if kind in NO_CLEARANCE:
+        rows.append(("Clearance", _e(NO_CLEARANCE[kind])))
+    else:
+        if r.required_m is not None:
+            rows.append(("Required clearance", _e(_gap(r.required_m))))
+        least = at_keep("min_clearance_m") if e is not None else ev.get("clearance_m")
+        if state in ("failed", "unchecked"):
+            pass   # nothing measured backs it
+        elif isinstance(least, (int, float)) and not isinstance(least, bool):
+            rows.append(("Measured clearance", _e(f"{_gap(least)} minimum, {when}")))
+        elif e is None and ev.get("clearance"):
+            rows.append(("Clearance", _e(ev["clearance"])))
+    d = _decision_on(r, title)
+    candidates = ((at_keep("checked_against"),) if e is not None else
+                  (ev.get("checked_against"), ((d or {}).get("check") or {}).get("checked_against")))
+    against = next((x for x in candidates if isinstance(x, int) and not isinstance(x, bool)), None)
+    if against is not None and state in ("kept", "kept_earlier", "proposed", "unrecorded"):
+        rows.append(("Checked against", _e(f"{_count(against, 'element')}, {when}")))
+    if state in ("kept", "kept_earlier"):
+        rows.append(("Re-check", _e(f"Passed again when kept ({entry_ref(e)}{', ' + _hhmm(e) if _hhmm(e) else ''})")))
+    elif state == "kept_unrecorded":
+        rows.append(("Re-check", _e(f"Kept as {entry_ref(e)}; the edit log holds no check for it")))
+    elif state == "proposed":
+        rows.append(("Re-check", "Not run: the fix was not kept"))
+    elif state == "unrecorded":
+        rows.append(("Re-check", "No keep of it in this session's edit log"))
+    meets = o.get("meets") if isinstance(o.get("meets"), list) and o.get("meets") else ev.get("meets")
+    if isinstance(meets, list) and meets:
+        rows.append(("Meets", _e("; ".join(str(x) for x in meets))))
+    rows.append(("Also needs", _e(o.get("also_needs") or ev.get("also_needs") or "nothing noted")))
+    tag = (f" <span class='tag {EVIDENCE_CLASS.get(state, 'unverified')}'>{_e(EVIDENCE_LABEL[state])}</span>"
+           if state else "")
+    status = "Applied to the model" if applied else "Proposed, not applied"
+    return (f"<div class='fix'><h4>Fix: {_e(title)}{tag} <span class='tag'>{status}</span></h4><dl>"
+            + "".join(f"<dt>{_e(k)}</dt><dd>{v}</dd>" for k, v in rows) + "</dl></div>")
+
+
+def _decision_check(d: dict) -> str:
+    check = d.get("check") if isinstance(d.get("check"), dict) else {}
+    bits = []
+    if decision_state(d) == "geometry_validated":
+        if isinstance(check.get("min_clearance_m"), (int, float)):
+            bits.append(f"{_gap(check['min_clearance_m'])} minimum")
+        if isinstance(check.get("checked_against"), int) and not isinstance(check.get("checked_against"), bool):
+            bits.append(f"against {_count(check['checked_against'], 'element')}")
+    if check.get("reason") and decision_state(d) != "geometry_validated":
+        bits.append(str(check["reason"]))
+    return ", ".join(bits)
+
+
+def decision_words(d: dict) -> str:
+    """One decision in a line, for BCF and the model: "Accepted 'Raise the duct' (move up 400 mm): Geometry-validated,
+    50 mm minimum, against 120 elements. Reason: clear of the girder web"."""
+    opt = d.get("option") or {}
+    edit = _edit_words(opt)
+    check = _decision_check(d)
+    out = (f"{DECISION_LABEL.get(d.get('decision'), d.get('decision') or 'Decided')} '{opt.get('title') or 'option'}'"
+           f"{f' ({edit})' if edit else ''}: {STATE_LABEL[decision_state(d)]}{', ' + check if check else ''}.")
+    return out + (f" Reason: {d['reason']}" if d.get("reason") else "")
+
+
+def decisions_html(r: Row) -> str:
+    """Proposal history: every decision recorded on this clash's proposals, oldest first."""
+    if not r.decisions:
+        return ""
+    body = []
+    for d in r.decisions:
+        opt = d.get("option") or {}
+        edit = _edit_words(opt)
+        check = _decision_check(d)
+        dec = d.get("decision") or ""
+        body.append(f"<tr><td>{_e(opt.get('title') or '—')}{f'<br><span class=sub>{_e(edit)}</span>' if edit else ''}</td>"
+                    f"<td>{_e(STATE_LABEL[decision_state(d)])}{f'<br><span class=sub>{_e(check)}</span>' if check else ''}</td>"
+                    f"<td class='dec {_e(dec)}'>{_e(DECISION_LABEL.get(dec, dec or '—'))}</td>"
+                    f"<td>{_e(d.get('reviewer') or '—')}</td><td>{_e(_when(d.get('at')))}</td>"
+                    f"<td>{_e(d.get('reason') or '—')}</td></tr>")
+    return ("<h4>Proposal history</h4><table class='review history'><thead><tr><th>Option</th><th>State</th>"
+            "<th>Decision</th><th>Reviewer</th><th>When</th><th>Reason</th></tr></thead><tbody>"
+            + "".join(body) + "</tbody></table>")
+
+
+# ------------------------------------------------------------------------------------------------- the models
+
+def model_info(files: list[str], teams: dict[str, str], scene=None) -> list[dict]:
+    """[{file, team, schema?, elements?}] per model, for the cover. The schema ("IFC4", "IFC2X3") and the element count
+    come only from the open scene; a model the scene does not hold has neither."""
+    names = [p.name for p in scene.paths] if scene is not None else []
+    out = []
+    for f in files:
+        if not f or f == "unknown model":
+            continue
+        info = {"file": f, "team": teams.get(f)}
+        if f in names:
+            m = scene.models[names.index(f)]
+            try:
+                info["schema"] = str(m.schema) if getattr(m, "schema", None) else None
+                info["elements"] = len(m.by_type("IfcElement"))
+            except Exception:   # a model the kernel can't list: say nothing rather than guess
+                pass
+        out.append(info)
+    return out
+
+
+def models_html(models: list[dict] | None) -> str:
+    if not models:
+        return ""
+    schema = any(m.get("schema") for m in models)
+    count = any(isinstance(m.get("elements"), int) for m in models)
+    head = ("<th>Model</th><th>Team</th>" + ("<th>Schema</th>" if schema else "") + ("<th>Elements</th>" if count else ""))
+    body = "".join(
+        f"<tr><td>{_e(m['file'])}</td><td>{_e(m.get('team') or '—')}</td>"
+        + (f"<td>{_e(m.get('schema') or '—')}</td>" if schema else "")
+        + (f"<td>{m['elements'] if isinstance(m.get('elements'), int) else '—'}</td>" if count else "") + "</tr>"
+        for m in models)
+    return f"<h3>Models</h3><table class='list models'><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+
+
 # ------------------------------------------------------------------------------------------------- the model's explanations
 
 def _facts(r: Row) -> str:
@@ -306,8 +769,10 @@ def _facts(r: Row) -> str:
     if r.reading:
         lines.append(f"Triage: {r.reading.get('verdict')} ({r.reading.get('severity')}): {r.reading.get('understanding', '')}")
     ev = r.evidence
+    backed = EVIDENCE_LABEL.get(evidence_state(r) or "")
     if ev:
-        state = "applied to the model and verified" if ev.get("status") == "accepted" else "proposed and verified, not applied yet"
+        state = ("applied to the model" if ev.get("status") == "accepted" or kept_fix(r) else "proposed, not applied yet") + (
+            f"; {backed}" if backed else "")
         lines.append(f"Fix ({state}): {ev.get('title')}. Edit: {ev.get('edit')}. "
                      f"{'Nearest clearance ' + str(round(ev['clearance_m'] * 1000)) + ' mm. ' if ev.get('clearance_m') is not None else ''}"
                      f"Rationale: {ev.get('rationale') or '-'}. Also needs: {ev.get('also_needs') or '-'}.")
@@ -315,8 +780,10 @@ def _facts(r: Row) -> str:
         lines.append(f"Triage's hint: {r.reading['fix_hint']}")
     if r.edits:
         lines.append(f"What was done ({edit_state(r)}): " + " | ".join(
-            f"{e.get('id')} ({SOURCE_WORDS.get(e.get('source'), e.get('source'))}): {e.get('summary') or e.get('title')}, "
+            f"{entry_ref(e)} ({SOURCE_WORDS.get(e.get('source'), e.get('source'))}): {e.get('summary') or e.get('title')}, "
             f"{check_words(e)}" for e in r.edits))
+    if r.decisions:
+        lines.append("Reviewers' decisions: " + " | ".join(decision_words(d) for d in r.decisions))
     return "\n".join(lines)
 
 
@@ -469,14 +936,10 @@ def _page(r: Row, n: int) -> str:
                f"<dt>Why not edited</dt><dd>{_e(ev.get('blocked_by') or 'the coordination requirements allow no edit')}</dd>"
                f"<dt>Change</dt><dd>{_e(ev.get('edit'))}</dd>"
                f"<dt>Also needs</dt><dd>{_e(ev.get('also_needs') or 'nothing noted')}</dd></dl></div>")
-    elif ev:
-        status = "Applied to the model" if ev.get("status") == "accepted" else "Proposed, not applied"
-        fix = (f"<div class='fix'><h4>Fix: {_e(ev.get('title'))} <span class='tag verified'>verified by geometry</span>"
-               f" <span class='tag'>{status}</span></h4><dl>"
-               f"<dt>Edit</dt><dd>{_e(ev.get('edit'))}</dd>"
-               f"<dt>Clearance</dt><dd>{_e(ev.get('clearance'))}</dd>"
-               + (f"<dt>Meets</dt><dd>{_e('; '.join(ev['meets']))}</dd>" if isinstance(ev.get("meets"), list) and ev["meets"] else "")
-               + f"<dt>Also needs</dt><dd>{_e(ev.get('also_needs') or 'nothing noted')}</dd></dl></div>")
+    else:   # the kept fix (edit log) or the page's, with what backs it
+        fix = fix_html(r)
+    ga, gb = r.gids
+    gid = lambda g: f"<br><span class='gid'>GlobalId {_e(g)}</span>" if g else ""
     explanation = ai.get("explanation") or r.reading.get("understanding") or "No explanation available."
     action = ai.get("recommended_action") or r.reading.get("fix_hint") or ev.get("advice") or ""
     points = "".join(f"<li><b>{_e(p.get('team'))}:</b> {_e(p.get('point'))}</li>" for p in ai.get("review_points", []))
@@ -485,8 +948,8 @@ def _page(r: Row, n: int) -> str:
 <section class='clash'>
   <h2><span class='num'>#{c.number}</span> {_e(c.title or c.name)} <span class='test'>{_e(c.test)}{' · Navisworks ' + _e(c.ref) if c.ref else ''}</span></h2>
   <table class='facts'>
-    <tr><th>{label_a}</th><td>{_e(c.a.ifc_class)} · {_e(c.a.name)}</td><td>{_e(r.model_a)} · {_e(r.team_a)}</td></tr>
-    <tr><th>{label_b}</th><td>{_e(c.b.ifc_class)} · {_e(c.b.name)}</td><td>{_e(r.model_b)} · {_e(r.team_b)}</td></tr>
+    <tr><th>{label_a}</th><td>{_e(c.a.ifc_class)} · {_e(c.a.name)}{gid(ga)}</td><td>{_e(r.model_a)} · {_e(r.team_a)}</td></tr>
+    <tr><th>{label_b}</th><td>{_e(c.b.ifc_class)} · {_e(c.b.name)}{gid(gb)}</td><td>{_e(r.model_b)} · {_e(r.team_b)}</td></tr>
     <tr><th>Distance</th><td>{found_by} {_mm(c.distance_m)}{' · tolerance ' + _mm(c.tolerance_m) if c.tolerance_m else ''}</td>
         <td>{_e(c.a.level or c.b.level or 'Level unknown')}{' · grid ' + _e(c.grid) if c.grid else ''}</td></tr>
     <tr><th>Triage</th><td>{_e(VERDICT_LABEL.get(r.verdict, r.verdict))}{' · ' + _e(r.reading.get('severity')) if r.reading.get('severity') not in (None, 'none') else ''}</td>
@@ -499,6 +962,7 @@ def _page(r: Row, n: int) -> str:
     {f"<ul>{points}</ul>" if points else ""}
   </div>
   {fix}
+  {decisions_html(r)}
   {timeline_html(r)}
   <h4>Review</h4>
   {_review_table(r)}
@@ -558,6 +1022,11 @@ table { border-collapse: collapse; width: 100%; } .facts th { text-align: left; 
 .fix dt { color: #5d6a7a; } .fix dd { margin: 0 0 2pt; }
 .tag { font-size: 7pt; border: .5pt solid #8aa0b8; border-radius: 6pt; padding: 0 5pt; font-weight: normal; color: #2f5d8a; }
 .tag.verified { border-color: #1d7f47; color: #1d7f47; }
+.tag.unverified { border-color: #9a6100; color: #9a6100; } .tag.failed { border-color: #b8352a; color: #b8352a; }
+.gid { font-family: monospace; font-size: 7.5pt; color: #5d6a7a; }
+.cover .project { font-size: 13pt; font-weight: bold; color: #2f5d8a; margin: 4pt 0 6pt; }
+.history .sub { color: #5d6a7a; font-size: 7.5pt; }
+.dec.accepted { color: #1d7f47; font-weight: bold; } .dec.rejected { color: #b8352a; font-weight: bold; }
 .review { page-break-inside: avoid; }
 .review th, .review td { border: .5pt solid #c9d2dc; padding: 5pt; text-align: left; vertical-align: top; }
 .review th { background: #f2f4f7; font-size: 8pt; } .review tr.blank td { height: 16pt; color: #9aa7b4; }
@@ -613,9 +1082,11 @@ def triage_by(info: dict | None) -> str:
 
 
 def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, context: dict, requirements_doc=None,
-                triage_info: dict | None = None, changes: list[dict] | None = None) -> str:
+                triage_info: dict | None = None, changes: list[dict] | None = None, project_name: str | None = None,
+                models: list[dict] | None = None) -> str:
     """`triage_info`: the model the triage ran on (`model_client.triage_model_info`'s shape), named in "How this report
-    was made"; by default the one triage would run on now."""
+    was made"; by default the one triage would run on now. `project_name`: the project's name on the cover (none: no
+    line); `models`: the cover's models table (`model_info`)."""
     pages = [r for r in rows if r.section == "page"]
     author = [r for r in rows if r.section == "author"]
     noise = [r for r in rows if r.section == "noise"]
@@ -672,11 +1143,13 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
 <section class='cover'>
   {LOCKUP}
   <div class='eyebrow'>Iris · design coordination</div>
+  {f"<div class='project'>Project: {_e(project_name)}</div>" if project_name else ""}
   <h1>{_e(title)}</h1>
   <div style='font-size:12pt;color:#5d6a7a'>{_e(subtitle)}</div>
   <span class='draft-mark'>{'' if final else 'DRAFT · requires review'}</span>
   {stamp}
   <table class='meta'>{meta}</table>
+  {models_html(models)}
   <div class='counts'>
     <div class='count'><b>{len(rows)}</b>results</div>
     <div class='count'><b>{len(pages)}</b>need action</div>
@@ -685,8 +1158,10 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
   </div>
   <p style='color:#5d6a7a;font-size:8.5pt'>Text marked AI-drafted was written by {_e(proposal_name())} (Google) from the clash data,
   the clash pictures and Iris's geometry checks, and must be reviewed by the teams named before anyone acts on it.
-  Fixes marked verified were checked against the whole federated model: the clash is gone, at least {clear_mm} mm clear, and
-  nothing new is hit. They are not structural, cost or site approvals.</p>
+  A fix marked "Geometry-validated at keep" was checked again by Iris's geometry engine when it was kept, against the
+  whole federated model: the clash is gone, at least {clear_mm} mm clear (or the pair's own requirement), and nothing new
+  is hit. "Verified when proposed, not kept" passed that check when proposed and was not checked again; "Not
+  geometry-checked" has no geometry check behind it. None of them is a structural, cost or site approval.</p>
 </section>
 <section class='section-break'>
   <h2>Summary</h2>
@@ -746,10 +1221,29 @@ def _xyz(tag: str, v) -> str:
     return f"<{tag}><X>{v[0]:.4f}</X><Y>{v[1]:.4f}</Y><Z>{v[2]:.4f}</Z></{tag}>"
 
 
+def _bcf_fix(r: Row) -> str:
+    """The fix in the topic's description, with what backs it (`EVIDENCE_LABEL`, never the page's word alone)."""
+    ev, fix = r.evidence or {}, kept_fix(r)
+    if not ev and fix is None:
+        return ""
+    title = ((fix[1] or {}).get("title") or fix[0].get("title")) if fix else ev.get("title")
+    status = "kept" if fix else ev.get("status") or "proposed"
+    backed = EVIDENCE_LABEL.get(evidence_state(r) or "")
+    ids = ", ".join(f"{r.names.get(g) or 'element'} {g}" for g in ((fix[1] or {}).get("moved") if fix else ev.get("moved")) or []
+                    if isinstance(g, str))
+    return f"Fix: {title} ({status}{'; ' + backed if backed else ''}){'; changes ' + ids if ids else ''}."
+
+
+def _bcf_date(at) -> str | None:
+    t = _epoch(at)
+    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t is not None else None
+
+
 def bcf_zip(rows: list[Row], matches: dict | None, scene, author: str = "Iris", checked_against: str = "",
             changes: list[dict] | None = None) -> bytes:
-    """BCF 2.1: one topic per clash that needs action, assigned to its acting team, with the AI explanation and the
-    recorded reviews as comments, the pair selected and coloured in a viewpoint, and a snapshot."""
+    """BCF 2.1: one topic per clash that needs action, assigned to its acting team, with the AI explanation, the
+    recorded reviews, the edit log and the reviewers' decisions (dated when made) as comments, the pair selected and
+    coloured in a viewpoint, and a snapshot."""
     from PIL import Image
     buf = io.BytesIO()
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -762,17 +1256,20 @@ def bcf_zip(rows: list[Row], matches: dict | None, scene, author: str = "Iris", 
             ga, gb = m.get("a") or r.clash.a.global_id, m.get("b") or r.clash.b.global_id
             ai = r.ai or {}
             desc = " ".join(filter(None, [ai.get("explanation") or r.reading.get("understanding"),
-                                          ai.get("recommended_action"),
-                                          f"Fix: {r.evidence.get('title')} ({r.evidence.get('status')}, verified by geometry)." if r.evidence else ""]))
-            comments = [(author + " (AI-drafted, to be reviewed)", desc)]
+                                          ai.get("recommended_action"), _bcf_fix(r)]))
+            comments: list[tuple[str, str, str | None]] = [(author + " (AI-drafted, to be reviewed)", desc, None)]
             if checked_against:
-                comments.append((author, f"Checked against coordination requirements {checked_against}."))
-            comments += [(f"{v.get('name')} ({v.get('team')})", f"{v.get('decision')}: {v.get('note') or ''}".strip(": "))
+                comments.append((author, f"Checked against coordination requirements {checked_against}.", None))
+            comments += [(f"{v.get('name')} ({v.get('team')})", f"{v.get('decision')}: {v.get('note') or ''}".strip(": "), None)
                          for v in r.reviews]
-            comments += [(f"{author} edit log", f"{e.get('id')} ({SOURCE_WORDS.get(e.get('source'), e.get('source'))}, "
+            comments += [(f"{author} edit log", f"{entry_ref(e)} ({SOURCE_WORDS.get(e.get('source'), e.get('source'))}, "
                           f"{_hhmm(e)}): {e.get('summary') or e.get('title')}; {check_words(e)}"
-                          + "".join(f"; review ({w.get('review')}): {w.get('text')}" for w in e.get("warnings") or [] if w.get("review")))
+                          + "".join(f"; review ({w.get('review')}): {w.get('text')}" for w in e.get("warnings") or [] if w.get("review")),
+                          None)
                          for e in r.edits]
+            # The reviewers' decisions on the proposals, each dated when it was made.
+            comments += [(f"{d.get('reviewer') or 'Reviewer not named'} (decision)", decision_words(d), _bcf_date(d.get("at")))
+                         for d in r.decisions]
             priority = {"high": "Critical", "medium": "Major", "low": "Minor"}.get(r.reading.get("severity"), "Normal")
             markup = ['<?xml version="1.0" encoding="UTF-8"?>\n<Markup xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
                       f'<Topic Guid="{topic}" TopicType="Clash" TopicStatus="Open">',
@@ -782,8 +1279,8 @@ def bcf_zip(rows: list[Row], matches: dict | None, scene, author: str = "Iris", 
                       f"<CreationDate>{now}</CreationDate><CreationAuthor>{_e(author)}</CreationAuthor>",
                       f"<AssignedTo>{_e(r.acting)}</AssignedTo>",
                       f"<Description>{_e(desc)}</Description></Topic>"]
-            for who, text in comments:
-                markup.append(f'<Comment Guid="{uuid.uuid4()}"><Date>{now}</Date><Author>{_e(who)}</Author>'
+            for who, text, date in comments:
+                markup.append(f'<Comment Guid="{uuid.uuid4()}"><Date>{date or now}</Date><Author>{_e(who)}</Author>'
                               f'<Comment>{_e(text)}</Comment><Viewpoint Guid="{view}"/></Comment>')
             snap = _data_url_ok((r.evidence or {}).get("after_img")) or (
                 _zone_crop(r.clash.images[0][1]) if r.clash.images else None)
@@ -835,14 +1332,19 @@ def bcf_zip(rows: list[Row], matches: dict | None, scene, author: str = "Iris", 
 def generate(report: Report, verdicts: dict[str, dict], model: ChatModel, *, scope: str, model_teams: dict[str, str],
              matches: dict | None, scene, evidence: dict, reviews: dict, marks: dict, include_bcf: bool,
              emit: Callable[[dict], None] = lambda e: None, triage_info: dict | None = None,
-             domain: str = domains.CONSTRUCTION, journal=None) -> tuple[bytes, str, str]:
+             domain: str = domains.CONSTRUCTION, journal=None, project_name: str | None = None,
+             decisions: list | None = None) -> tuple[bytes, str, str]:
     """Build the report(s). Returns (bytes, file name, media type): one PDF for a combined report without BCF, else a zip
     of the PDFs (one per team or per model) and the BCF. `triage_info`: the model the verdicts came from (a triage
     run's `info`), else the one triage would run on now. `domain`: the scene's (`domains.of`), whose voice the
-    explanations and the summary take."""
+    explanations and the summary take. `project_name`: the project's name for the cover. `decisions`: the reviewers'
+    decisions (docs/engineer-workflow.md); by default the scene's edit log's (`Journal.decisions`)."""
     triage_info = triage_info or triage_model_info()
     guesses = {g["file"]: g["guess"] for g in guess_teams(report, scene, domain)}
-    rows = build_rows(report, verdicts, model_teams, matches, scene, evidence, reviews, marks, guesses, journal)
+    if decisions is None:
+        decisions = list(getattr(journal, "decisions", None) or [])
+    rows = build_rows(report, verdicts, model_teams, matches, scene, evidence, reviews, marks, guesses, journal,
+                      decisions)
     changes = [e.to_dict() for e in journal.kept()] if journal is not None else []
     emit({"type": "progress", "step": "explaining", "done": 0, "total": sum(r.section == "page" for r in rows)})
     explain(model, rows, emit, domain=domain)
@@ -850,7 +1352,12 @@ def generate(report: Report, verdicts: dict[str, dict], model: ChatModel, *, sco
     summary = summarise(model, rows, domain)
     stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     models = sorted({r.model_a for r in rows} | {r.model_b for r in rows})
-    base_ctx = {"Clashes from": "Iris's check of the models" if report.origin == "iris" else f"Navisworks report {report.title}", "Models": ", ".join(f"{m} ({model_teams.get(m, '?')})" for m in models),
+    # The cover's models table: the team each page uses for a model, else the typed or guessed one.
+    team_of = {f: model_teams.get(f) or g for f, g in guesses.items()}
+    for r in rows:
+        team_of[r.model_a], team_of[r.model_b] = r.team_a, r.team_b
+    in_scene = [p.name for p in scene.paths] if scene is not None else []
+    base_ctx = {"Clashes from": "Iris's check of the models" if report.origin == "iris" else f"Navisworks report {report.title}",
                 "Generated": stamp, "Scope": {"combined": "All clashes", "team": "Per team", "model": "Per model"}[scope]}
     from . import requirements
     req_doc = requirements.current()
@@ -873,8 +1380,12 @@ def generate(report: Report, verdicts: dict[str, dict], model: ChatModel, *, sco
     for i, (key, items) in enumerate(groups.items()):
         title = "Design coordination report" + (f": {key}" if key else "")
         sub = f"{report.title} · {len(items)} results" + (f" involving {label.lower()} {key}" if key else "")
+        # A combined report lists every open model (context models too); a team's or a model's, the ones its clashes name.
+        files_here = (list(dict.fromkeys([*models, *in_scene])) if not key else
+                      sorted({r.model_a for r in items} | {r.model_b for r in items}))
         html_text = render_html(title, sub, items, summary, {**base_ctx, **({label: key} if key else {})}, req_doc,
-                                triage_info, changes if not key else [e for e in changes if _concerns(e, items)])
+                                triage_info, changes if not key else [e for e in changes if _concerns(e, items)],
+                                project_name=project_name, models=model_info(files_here, team_of, scene))
         files.append((f"iris-report{('-' + _slug(key)) if key else ''}.pdf", to_pdf(html_text)))
         emit({"type": "progress", "step": "rendering", "done": i + 1, "total": len(groups)})
     if include_bcf:
@@ -892,7 +1403,8 @@ def generate(report: Report, verdicts: dict[str, dict], model: ChatModel, *, sco
 def _concerns(e: dict, rows: list[Row]) -> bool:
     """Whether an edit belongs in a per-team or per-model report: it is for one of its clashes."""
     ids = {r.clash.id for r in rows}
-    return any(c.get("id") in ids for c in e.get("clashes") or []) or any(e.get("id") == x.get("id") for r in rows for x in r.edits)
+    key = entry_key(e)   # an E-id alone would match a reopened project's earlier entry of the same number
+    return any(c.get("id") in ids for c in e.get("clashes") or []) or any(entry_key(x) == key for r in rows for x in r.edits)
 
 
 def _slug(s: str) -> str:

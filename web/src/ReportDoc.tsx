@@ -69,7 +69,8 @@ const STEP: Record<string, () => string> = {
 };
 
 /** Build a coordination report: scope, which team owns each model, BCF, then progress and the download. */
-export function ReportDialog({ report, sceneId, triage, triageDone, triageRunning, teams, onTeams, evidence, signoffs, reviewed, onRunTriage, onClose, onReady, prepare, check = null }: {
+export function ReportDialog({ report, sceneId, triage, triageDone, triageRunning, teams, onTeams, evidence, signoffs, reviewed, onRunTriage, onClose, onReady, prepare, check = null,
+  projectId = null, projectName = null, onBuilt }: {
   report: Report; sceneId: string | null; triage: Record<string, TriageVerdict>; triageDone: boolean; triageRunning: boolean;
   /** The kept check the list shows (Iris's checks): the report can hold only its clashes. */
   check?: CheckSummary | null;
@@ -78,6 +79,10 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
   /** Before the PDF: the built views still missing or being drawn (Show it built), and the evidence with them. */
   prepare?: (onStep: (done: number, total: number) => void) => Promise<Record<string, Evidence>>;
   onRunTriage: () => void; onClose: () => void; onReady?: () => void;
+  /** The project the report is for (docs/engineer-workflow.md, step 10): its name goes on the cover, and a built report
+   * is kept with it (`onBuilt`). */
+  projectId?: string | null; projectName?: string | null;
+  onBuilt?: (doc: { url: string; name: string; bytes: number; bcf: boolean }) => void;
 }) {
   const [models, setModels] = useState<ModelTeam[] | null>(null);
   const [scope, setScope] = useState<Scope>("combined");
@@ -113,8 +118,9 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
         // The verdicts on screen, without the model's reasoning (kept in the browser; not needed for the report).
         triage: Object.fromEntries(Object.entries(triage).map(([id, { reasoning: _r, ...v }]) => [id, v])),
         check: only && check ? check.key : null,
+        ...(projectId ? { project_id: projectId } : {}),
       }, (e) => {
-        if (e.type === "ready") { setReady(e); onReady?.(); }
+        if (e.type === "ready") { setReady(e); onReady?.(); onBuilt?.({ url: e.url, name: e.name, bytes: e.bytes, bcf }); }
         else if (e.type === "error") setError(e.message);
         else setStep(e);
       });
@@ -126,6 +132,8 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
       <div className="report-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="row"><h2><FileText size={18} aria-hidden /> Coordination report</h2>
           <button className="ibtn" aria-label="Close" onClick={onClose}><X size={16} aria-hidden /></button></div>
+        {projectId && <p className="hint">For the project <b>{projectName || "Untitled project"}</b>: its name goes on the cover, and the
+          report is kept with the project once built.</p>}
         <p className="hint">A PDF for the design teams: every real clash and every fix on its own page, with {aiName("proposal")}'s explanation,
           the original and the fix side by side, and a review block for each team involved. Model errors go in a table for the
           models' authors; noise in a summary by clash test. BCF issues open in Revit, Navisworks, Solibri or BIMcollab.</p>

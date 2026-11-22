@@ -41,10 +41,10 @@ test("choosing another option replaces manual state and deselecting cannot resur
   const host = await appHost(); await completed(host);
   const work = host.button("Check this move").props.onClick();
   host.verifyRequests[0].resolve({ passed: true, hits: [], min_clearance_m: .05 }); await work; host.render();
-  host.button("Single fix").props.onClick(); host.render();
+  host.button("Show in 3D").props.onClick(); host.render();
   assert.equal(host.state.manual, null); assert.equal(host.state.manualPreview, null);
   assert.equal(host.actions.at(-1)[0], "showOption");
-  host.button("Single fix").props.onClick(); host.render();
+  host.button("Shown in 3D").props.onClick(); host.render();
   assert.deepEqual(host.actions.at(-1), ["preview", []]); host.unmount();
 });
 
@@ -63,7 +63,7 @@ test("returning to a completed wider plan replaces manual ownership instead of r
 test("an actual accept invalidates a pending manual result before API completion", async () => {
   const host = await appHost(); await completed(host);
   const manual = host.button("Check this move").props.onClick(); host.render();
-  await host.button("Accept this fix").props.onClick(); host.render();
+  await host.component("ProposalCard").props.onAccept(); host.render();
   host.verifyRequests[0].resolve({ passed: true, hits: [], min_clearance_m: .05 }); await manual; host.render();
   assert.equal(host.state.manual, null); assert.equal(host.state.manualPreview, null); assert.equal(host.state.chosen, null);
   assert.equal(host.state.evidence.clash.status, "accepted"); host.unmount();
@@ -89,7 +89,7 @@ test("wider acceptance retires direct pending single and batch callbacks and rem
     await work; await host.settle();
     assert.equal(host.state.proposal, null); assert.equal(host.state.plan, null); assert.equal(host.state.planRun, null);
     assert.equal(host.state.progress?.phase === "done" || host.state.progress === null, true);
-    assert.equal(host.button("Accept this fix"), undefined);
+    assert.equal(host.component("ProposalCard"), undefined);
     host.unmount();
   }
 });
@@ -131,11 +131,11 @@ test("a failed wider accept ends pending single work without claiming a commit o
 
 test("wider commit removes completed single accept options while preserving historical timing", async () => {
   const host = await appHost(); await wider(host); await completed(host);
-  assert.equal(host.button("Accept this fix").props.disabled, false);
+  assert.equal(host.component("ProposalCard").props.busy, false);
   const progress = host.state.progress;
   await host.component("ContextPlan").props.onAccept(); host.render();
   assert.equal(host.state.progress, progress); assert.equal(host.state.proposal, null); assert.equal(host.state.chosen, null);
-  assert.equal(host.button("Accept this fix"), undefined); host.unmount();
+  assert.equal(host.component("ProposalCard"), undefined); host.unmount();
 });
 
 test("retired direct wider search aborts its signal and ignores buffered events on chat takeover and unmount", async () => {

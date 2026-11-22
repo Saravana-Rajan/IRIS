@@ -253,7 +253,7 @@ function runPage({ workingUntil = 0, optionsAt = null, options = 1 }) {
   const t0 = Date.now(), at = () => Date.now() - t0;
   const locator = (selector, opts = {}) => ({
     count: async () => selector === 'button[data-tour="propose"]' && opts.hasText === "Working" ? (at() < workingUntil ? 1 : 0)
-      : selector === ".card-body.option" ? (optionsAt != null && at() >= optionsAt ? options : 0) : 0,
+      : selector === ".pcard-show" ? (optionsAt != null && at() >= optionsAt ? options : 0) : 0,
   });
   return { page: { locator }, at };
 }

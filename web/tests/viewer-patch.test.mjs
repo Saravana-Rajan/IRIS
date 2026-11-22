@@ -112,7 +112,7 @@ test("accepting patches the model in place at this page's revision, and reloads 
     host.refs.sceneRevision.current = known;
     const work = host.button("Propose fixes").props.onClick(); host.render();
     host.requests.at(-1).resolve({ understanding: "A fix", options: [option], attempts: [] }); await work; host.render();
-    await host.button("Accept this fix").props.onClick(); host.render();
+    await host.component("ProposalCard").props.onAccept(); host.render();
     assert.equal(calls.length, patched, `revision ${known}`); assert.equal(fetched, downloads, `revision ${known}`);
     if (patched) assert.equal(calls[0].origin.get("duct-2"), "duct");
     assert.equal(host.refs.sceneRevision.current, 4);
@@ -134,7 +134,7 @@ test("an opening the host's team must cut is recorded as requested, and the clas
       edit: { service: "duct", host: "beam", summary: "Ø170 mm opening through Wall 'W1'", key: "beam|Ø170 mm" }, review: "architecture" };
     const work = host.button("Propose fixes").props.onClick(); host.render();
     host.requests.at(-1).resolve({ understanding: "An opening", options: [opening], attempts: [] }); await work; host.render();
-    await host.button("Accept this fix").props.onClick(); host.render();
+    await host.component("ProposalCard").props.onAccept(); host.render();
     assert.equal(sent.kind, "penetration");
     assert.deepEqual(pair, ["duct", "beam"]);   // the clash on screen: the server tries the fix again against it
     const ev = host.state.evidence.clash;

@@ -12,4 +12,5 @@
 web/dist
 web/public/wasm
 server/.iris-settings.json
+server/.iris-projects
 evals/runs

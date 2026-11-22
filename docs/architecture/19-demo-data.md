@@ -232,6 +232,7 @@ cp "$run"/sampled-clashes.xml "$dest"/
 | `reports/northbank-navisworks/` | The imported-report path; images for `answer_key.py`; `not_a_clash.py`, `detection_navisworks.py` |
 | `PC-03-Palletising-Cell-RevA.ifc` | Optional: `penetration_hosts.py` |
 | `fixture-clash.ifc` | Optional: a small model for local work |
+| `drawings/Northbank-M-201*.pdf`, `*.truth.json` | The 2D drawing reader's sample sheets and their answer key ([below](#sample-drawings-samplesdrawings)); `server/tests/test_make_drawings.py` |
 
 ### How the app finds them
 
@@ -267,6 +268,32 @@ flowchart LR
   app -->|"recorded runs"| tour["web/public/tour"]
   app -->|"capture-demos.cjs, capture-proposals.cjs --landing"| pics["web/public/demos"]
 ```
+
+## Sample drawings (`samples/drawings/`)
+
+No public set of MEP drawings exists ([docs/drawings.md](../drawings.md), "Sample data"), so `evals/make_drawings.py`
+draws one from Northbank (Structure, MEP and Grids from `samples/`): sheet **M-201, "Level 02 — Mechanical services"**,
+A1 landscape at 1:50 (the largest standard scale that fits), vector PDF with a real text layer (reportlab, standard
+fonts). It shows the grid with bubbles and dimensions, the Level 02 structure as a grey background (beams dashed, the
+transfer girder heavier, columns solid), and every MEP element on the level in plan: ducts as double lines (round ones
+with a centreline), risers crossed, pipes as single centrelines (cold solid, hot dashed, soil and waste dash-dot),
+trays hatched, diffusers and grilles as symbols, dampers, valves, fittings and sanitaryware untagged. Labels are the
+model's own Tag over its size (`600x300`; `DN54` and `D250` drawn `Ø54`, `Ø250`); short pieces of one run share a label
+with one tag per line; placement avoids collisions and uses leaders. A north arrow, scale bar, legend, notes and a
+title block (project "Northbank (sample)", sheet, scale, date, level "Level 02", "Iris by Techjays — generated
+sample") complete it.
+
+| File | What it is |
+|---|---|
+| `Northbank-M-201.pdf` | The sheet as the model says: 123 labelled items (67 ducts, 34 pipes, 5 cable carriers, 16 terminals by size only, 1 board) |
+| `Northbank-M-201-mismatch.pdf` | The same sheet with `PLANTED` differences: `SA-MAIN-L02-12` sized 600x250 (`size_differs`), `SA-BR-L02-N2-2` left out (`missing_in_drawing`), an extra tray `LV-TRAY-L02-2` (`missing_in_model`), the pipe `HW-MAIN-L02-6` drawn as a 150x100 duct (`type_differs`) |
+| `*.truth.json` | Per sheet: every item (tag, kind, size, size_mm, `box` in page pixels at 150 dpi with origin top left, GlobalId, tag and size text boxes, leader), `scope` (the GlobalIds the sheet must show), the model-to-pixel transform, title block fields, source model hashes and the planted `mismatches` |
+
+Regenerate after a model or generator change (`cd server && uv run python ../evals/make_drawings.py`, about 2 s; the
+same models give the same bytes). `server/tests/test_make_drawings.py` builds into a temporary folder and checks that
+the text layer holds every tag and size inside its box (pdfplumber, both word modes), that the clean sheet is the
+model and `drawing_compare.compare` finds nothing on it and exactly the planted list on the other, that output is
+deterministic, and that `samples/drawings/` is up to date. `.gitignore` allows the folder; `.dockerignore` lets its PDFs and JSON into the image.
 
 ## Tour recordings (`web/public/tour/`)
 
@@ -377,6 +404,7 @@ small synthetic models with `iris.fixtures` in temporary folders.
 | `evals/step_cell.py` | `$DEMO_MODELS/palletising-cell/STEP/` Rev A and B, and its `Code/` answer key |
 | `evals/escalation.py` | The cell's Rev A STEP and `Code/`, and `$DEMO_MODELS/northbank/IFC` |
 | `evals/big_models.py`, `big_models_browser.cjs` | Synthetic IFC files of a given size, written by the script |
+| `evals/make_drawings.py` | Northbank Structure, MEP and Grids from `samples/`; writes `samples/drawings/` |
 
 ## When to update this doc
 
@@ -387,3 +415,4 @@ small synthetic models with `iris.fixtures` in temporary folders.
 - A new eval that reads demo data, or a change to where an eval reads it (`DEMO_MODELS`).
 - New measured results on the demo sets (detection counts, fix kinds per planted problem).
 - A change to what the deploy copies from `samples/` (`deploy/deploy.sh`).
+- A change to the sample drawings (`evals/make_drawings.py`: sheet, labelling rule, `PLANTED`, truth format).

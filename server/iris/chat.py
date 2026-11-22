@@ -1031,16 +1031,22 @@ class Chat:
                     else plans.build_batch(ws, self._scene(ctx), self._report(ctx).id, list(args["clash_ids"]), forward))
             data = json.loads(plans.to_json(plan))
             emit({"type": "plan", **data})
+            # "As designed": nothing was edited, so nothing was checked. Never "verified", never "not verified" either.
+            as_designed = plan.check.get("geometry") is False or plan.strategy == "as_designed"
             summary = {"title": plan.title, "root_cause": plan.root_cause, "strategy": plan.strategy,
-                       "verified_together": plan.check.get("passed"),
+                       "verified_together": None if as_designed else plan.check.get("passed"),
+                       "geometry_checked": not as_designed,
                        "fixes": [{"pair": it.label, "fix": it.option["title"] if it.option else None, "error": it.error,
                                   "in_report": it.in_report} for it in plan.items],
                        "note": "The plan is in the user's Plan tab to preview and accept; you cannot accept it."}
             # Counted in clashes, as the plan's title is: one fix can clear several (plans.merge_shared).
             n = plans.clashes_covered(plan.items)
+            checked = ("accepted as designed — no geometry check" if as_designed
+                       else "verified together" if plan.check.get("passed") else "not all verified")
+            if as_designed and not plan.items:   # no fixes to count
+                return summary, f"nothing edited, {checked}", []
             return summary, (f"{plans.clashes_covered([it for it in plan.items if it.option])} of {n} "
-                             f"clash{'es' if n != 1 else ''} fixed, "
-                             f"{'verified together' if plan.check.get('passed') else 'not all verified'}"), []
+                             f"clash{'es' if n != 1 else ''} fixed, {checked}"), []
         if name == "show_clash":
             c = self._report(ctx).clash(args["clash_id"])
             emit({"type": "ui", "action": "select_clash", "clash_id": c.id})

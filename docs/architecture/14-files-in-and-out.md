@@ -4,14 +4,17 @@
 > `server/iris/document.py`, the file parts of `server/iris/service.py` (`Workspace.open`, `open_paths`,
 > `add_models`, `remove_model`, `export`, `file`, `step_changes`, `open_report_sample`, `open_report_folder`, `save_capture`, `match`) and of
 > `server/iris/app.py` (`_receive_models`, `_unpack`, `upload_report`, `export`, `_build_document`,
-> `_tidy_exports`), `server/iris/built.py` (its cache), `web/src/uploads.ts`, `web/src/reqFile.ts` (the file
-> side) · **Checked against code:** re-branded on 2026-11-11 · **Deeper design:** [docs/step.md](../step.md),
-> [docs/uploads.md](../uploads.md)
+> `_tidy_exports`), `server/iris/built.py` (its cache), `server/iris/projects.py` (the project folders),
+> `server/iris/drawings.py` (PDF drawings in),
+> `web/src/uploads.ts`, `web/src/reqFile.ts` (the file side) · **Checked against code:** 2026-11-22 (project folders,
+> PDF drawings; re-branded on 2026-11-11) · **Deeper design:** [docs/step.md](../step.md), [docs/uploads.md](../uploads.md),
+> [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
 Iris reads models (IFC, or STEP converted to IFC), clash reports (Navisworks XML with its pictures), pictures the
-page takes of a clash, and a coordination requirements file. It writes edited models (IFC, and STEP back for a
+page takes of a clash, a coordination requirements file, and 2D PDF drawings (rendered pages and their text layer). It writes edited models (IFC, and STEP back for a
 model that came from STEP), a coordination report (PDF) with BCF issues, and built-view pictures. Everything lives
-in memory or in temporary folders on the one server process, so this doc also says where each file lands on disk
+in memory or in temporary folders on the one server process, except projects, which keep their models, saved states
+and reports in a folder of their own; this doc also says where each file lands on disk
 and how long it stays. Routes are only named here; their full contract is in [10](10-http-api-and-streams.md).
 
 ## Every way in and out
@@ -24,12 +27,15 @@ flowchart LR
         navis["Navisworks XML and pictures"]
         shots["A, B, C views captured by the page"]
         reqIn["Requirements JSON"]
+        pdfIn["PDF drawings"]
     end
     subgraph server["Server (one process)"]
         stepConv["step.convert: STEP to IFC4 plus manifest"]
         scene["IfcScene: federated models in memory"]
         report["reports.Report: clashes and image paths"]
         reqReg["requirements registry"]
+        projectDir["Project folder: models, saved states, reports, drawings"]
+        drawingStore["drawings.STORE: page PNGs, words, items"]
     end
     subgraph outputs["Out"]
         files["Model files to the viewer"]
@@ -52,6 +58,11 @@ flowchart LR
     scene --> pdf
     scene --> built
     reqIn -->|"the page downloads its own copy"| reqOut
+    scene -->|"attach, save"| projectDir
+    projectDir -->|"open: copied to a temp folder"| scene
+    pdf -->|"kept with the project"| projectDir
+    pdfIn -->|"drawings.ingest"| drawingStore
+    drawingStore -->|"attach, save; open ingests again"| projectDir
 ```
 
 ## In: IFC models
@@ -203,6 +214,30 @@ flowchart TB
 - **Events** (to the upload stream): `reading`, `classifying` (parts), `classify_failed`, `meshing`, `converted`
   (`cached`, or parts and seconds).
 
+## In: PDF drawings
+
+`server/iris/drawings.py` takes 2D drawings in for the drawing reader ([docs/drawings.md](../drawings.md)), through
+`POST /api/scenes/{scene_id}/drawings` (multipart `files`, as models; the page does not gzip them).
+
+- **Checks first.** The route needs a `Content-Length` (411) no bigger than ten files at the cap; each part must be
+  named `.pdf`, no name twice, at most 10 a request and 30 a scene; one model upload is charged; each file is read up
+  to `IRIS_DRAWING_MAX_MB` (default 50; 413). `ingest` then needs `%PDF-` in the first kilobyte, a file PDFium opens
+  without a password, at least one page and at most `IRIS_DRAWING_MAX_PAGES` (default 40); otherwise a 400 in words,
+  and none of the upload is kept.
+- **Pages.** pypdfium2 renders each page's crop box (rotation applied) to `page-<index>.png` at 150 dpi; a page over
+  50 MP at that dpi renders at the dpi that fits, recorded in `Page.dpi`.
+- **Text layer.** pdfplumber's words taken in text flow (the order the PDF draws them; `drawings._words_of`), each
+  direction of text on its own so turned labels read whole: grouping by line height ran dense labels' lines together
+  and split tags. They are mapped from the crop box in points to the PNG's pixels,
+  origin top-left; words outside the visible sheet are left out. A page with no words (a scan, or text drawn as
+  outlines) has `has_text_layer` False; a text layer pdfminer cannot parse is logged and counted as none.
+- **Title block.** In each sheet's bottom-right quarter, a text run starting with SHEET (NO.), SCALE, TITLE / DRAWING
+  TITLE / SHEET TITLE or DRAWING NO. / DWG NO. takes the rest of its run, else the next run on its line, else the run
+  under it; the first sheet with any is the drawing's `title`. Nothing is guessed.
+- **Where.** `$TMP/iris-drawings/<scene id>/<drawing id>/`: `source.pdf` and the PNGs, deleted with the scene.
+- **Libraries.** pypdfium2 (Apache-2.0 / BSD-3) and pdfplumber (MIT); reportlab (BSD) writes the sample and test
+  PDFs. Never PyMuPDF (AGPL).
+
 ## In: Navisworks clash reports
 
 `server/iris/reports.py` reads Navisworks XML clash reports
@@ -310,7 +345,11 @@ what it compiles into and how pages send it: [15](15-requirements-settings-and-c
 - **The edit log goes with them** ([docs/manual-edits.md](../manual-edits.md)): every element a kept entry changed or
   made carries an `Iris_Edit` pset (EntryIds, Ops, Summary, Source, When, Clashes) in the written IFC, written inside
   `edits.scratch` around the write (the live models never hold it, so the log's undo is untouched); a zip also holds
-  `iris-edits.json` and `iris-edits.csv` (a single file stays a bare IFC). From STEP, a part a hand edit deleted is
+  `iris-edits.json` and `iris-edits.csv` (a single file stays a bare IFC). The CSV (`Workspace.edits_csv`, also
+  `GET /api/scenes/{sid}/edits?format=csv`) has one row per entry: id, when, source, kind, title, summary, clashes,
+  follows, changed, created, removed, warnings, state, then who kept it and what its check at keep found: `actor`
+  (the reviewer, an agent's name), `check` (`document.check_words`), `verified` (true / false), `min_clearance_mm`
+  and `checked_against` (each blank when the check does not say). From STEP, a part a hand edit deleted is
   taken out of its assembly with its own shape (`step.export(remove=)`, `service.step_removed`), and a box or cylinder
   whose side or radius was pushed is written with its new profile (`step_changes` compares profiles too).
 - **What the IFC says besides the shape is written true** ([docs/editing-parity.md](../editing-parity.md)): a hand
@@ -361,6 +400,13 @@ flowchart TB
   edit, clearance, `meets`, and `before_img` / `after_img` pictures the browser captured with `Viewer.capture`,
   plus `built_img` / `built_note`), `reviews` (team, name, decision, note, date: kept per report in the browser),
   `marks` (by design or for the author) and the user-confirmed `teams` per model file. Costs one proposal.
+  From the server: the scene's edit log (`generate(journal=)`) and the reviewers' **decisions**
+  ([docs/engineer-workflow.md](../engineer-workflow.md), "Decisions (journal)"): `generate(decisions=)`, else the
+  log's `Journal.decisions` (read with `getattr`, none when absent). Each decision is tied to its clash by `clash_id`,
+  else by `clash_key` (`document.clash_key`, the same key as the web's `coordination.clashKey`).
+  `generate(project_name=)` names the project on the cover: the route's `project_id` (`projects.get`, 404 "No such
+  project."); with no live edit log for the scene (none open, or the server restarted) the route passes the
+  decisions of the project's newest saved state (`projects.saved_decisions`, `saved/<n>/state.json`).
 - **Team per model:** the user types each model's team in the report dialog (any name; a cleared field goes back to
   the guess; a list suggests the names in use). Nothing fixes the names. Iris's first guess (`document.guess_team`,
   `GET /api/reports/{rid}/teams`, which returns the guesses as suggestions): for a building, a score per discipline from
@@ -373,21 +419,51 @@ flowchart TB
   translated to the name typed for that model), else one team when both sides are the same team, else the one whose
   guessed discipline is later in `STAYS_FIRST` (Structure, Architecture, Site, MEP: structure stays, services move);
   typed names map to their model's guess for this.
-- **Sections** (`build_rows`): a clash with evidence, or a real clash, gets a **page**; a model error or "for the
-  author" mark goes in the authors' table; everything else (by design, not physical, touching) is **noise**,
-  grouped by test.
-- **A page** (`document._page`): number, title, the test and Navisworks ref; both elements with model and team;
-  distance (by whoever found it), level and grid; the triage reading; pictures (the first clash picture cropped by
-  colour to where red A and green B meet, `_zone_crop`, the same reading as `clashImage.ts`; the model as it is; with
-  the fix; and "As it could look built" when there is a built view, else "No built view: …"); Gemini Pro's
-  explanation, recommended action and review points, marked AI-drafted (or the triage reading when the call
-  failed); the fix box ("verified by geometry", applied or proposed; "Opening requested" for an uncut penetration;
-  "Recommended for the designer · not edited" under requirements that allow no edit); and the review table.
+- **Sections** (`build_rows`): a clash with evidence, kept edits or decisions, or a real clash, gets a **page**; a
+  model error or "for the author" mark goes in the authors' table; everything else (by design, not physical,
+  touching) is **noise**, grouped by test.
+- **A page** (`document._page`): number, title, the test and Navisworks ref; both elements with model, team and
+  GlobalId (matched in the open scene, else the report's; `Row.gids`); distance (by whoever found it), level and grid;
+  the triage reading; pictures (the first clash picture cropped by colour to where red A and green B meet,
+  `_zone_crop`, the same reading as `clashImage.ts`; the model as it is; with the fix; and "As it could look built"
+  when there is a built view, else "No built view: …"); Gemini Pro's explanation, recommended action and review
+  points, marked AI-drafted (or the triage reading when the call failed); the fix box; **Proposal history**; the
+  edit log's timeline; and the review table.
+- **The fix box** (`document.fix_html`): the kept fix as the edit log re-checked it (`kept_fix`: the newest entry
+  for the clash that is not a hand edit, and its option from `params.options`, which `plans.apply` records as tried
+  again at keep), else the page's fix. Lines: the edit; direction and distance in words for a move or offset
+  (`_direction`, as the proposal card's `directionWords`); the moved element's name and GlobalId (`Row.names`: the
+  log's names, else the scene, else the report); the model's rationale, marked AI-drafted; the required clearance
+  (`_Required`: the requirements' `fix_clearance` for the pair, else the 25 mm default, the one the keep's re-check
+  uses; left out when the requirements changed since the keep, or there are requirements and no open scene); the
+  measured minimum clearance and "checked against N elements" (at keep: the clash's own option, the entry's check only
+  when it kept one fix; else when proposed); "butt joint" / "bears on it" for a trim or a seat; meets and also
+  needs. A line whose data is missing is left out. "Opening requested" for an uncut penetration and "Recommended
+  for the designer · not edited" under requirements that allow no edit keep their own boxes.
+- **What backs a fix** (`document.evidence_state`, `EVIDENCE_LABEL`), from the strongest record: **Geometry-validated
+  at keep** only when the edit log's check at keep passed (`check.verified`); **Geometry-validated at keep (earlier
+  session)** for a fix a reopened project kept before (its saved entry's check: `Journal.earlier`, read by
+  `earlier_for` only when this session kept no fix for the clash, by clash id or pair; saved entries are told apart
+  from this session's by session and E-id, `entry_key`, and shown as "E3 (earlier session)"); "Kept · no check recorded at keep" (a
+  wider fix, whose entry has no check); "Failed validation" or "Not geometry-checked" when a decision says so;
+  **Verified when proposed, not kept** for the page's proposed fix; "No geometry record in this session" when the
+  page says applied and the log holds no keep; **Not geometry-checked** for "as designed" (`check.geometry` false,
+  or kind / strategy `as_designed`), never shown as validated. The page's word alone never prints "verified by
+  geometry"; `check_words` says "not geometry-checked" for an entry with `geometry: false`, and adds "against N
+  elements" when the check has the count.
+- **Proposal history** (`document.decisions_html`): one row per decision on the clash, oldest first: option (title
+  and the edit in words), state (`decision_state`: the decision's state, never more than its own check: "as
+  designed" or a check that did not pass is Unverified; a validated one carries its minimum clearance and count),
+  decision, reviewer, when (UTC) and reason.
 - **The DRAFT rule** (`render_html`): a page counts as reviewed when every reviewing team has at least one review on
   it. Only when every page is reviewed (and there is at least one page) does the cover say "REVIEWED · n of n";
   otherwise the cover's stamp says "DRAFT · AI-assisted · k of n reviewed" and every page's header "DRAFT · requires
   review".
-- **Also in the PDF:** cover with the Iris lockup (`LOCKUP`), counts and the clearance sentence (the requirements' fix clearance, else 25 mm);
+- **Also in the PDF:** cover with the Iris lockup (`LOCKUP`), "Project: <name>" when `project_name` is given, a
+  **Models** table (`model_info` / `models_html`: file and team for each model, plus its IFC schema and element count
+  only for a model open in the scene; a combined report lists every open model, a team's or a model's report the
+  models its clashes name), counts and the clearance sentence (the requirements' fix clearance, else 25 mm, and what
+  each evidence label means);
   summary and actions by team (AI-drafted); the authors' table; noise by test; "How this report was made" (fixed
   text naming the triage model that ran, `document.triage_by`: the fast model's label and "(Google)", such as "Gemini Flash (Google)", from the triage run's `info`, else `model_client.triage_model_info()` when no run is held, as after a
   restart); and, under
@@ -397,8 +473,10 @@ flowchart TB
   pango, harfbuzz and `fonts-dejavu-core` for it ([17](17-deployment-and-operations.md)).
 - **BCF 2.1** (`document.bcf_zip`): `bcf.version`, then per page a topic folder with `markup.bcf` (TopicType "Clash",
   status Open, title = the clash label, priority from triage severity: high Critical, medium Major, low Minor, else
-  Normal; Labels = the acting team then the reviewers; AssignedTo = the acting team; comments = the AI-drafted
-  explanation, "Checked against coordination requirements …" when there are some, and each recorded review),
+  Normal; Labels = the acting team then the reviewers; AssignedTo = the acting team; the description's fix line says
+  what backs it (`_bcf_fix`: "Fix: … (kept; Geometry-validated at keep); changes <name> <GlobalId>"); comments = the
+  AI-drafted explanation, "Checked against coordination requirements …" when there are some, each recorded review,
+  each edit-log entry, and each decision (`decision_words`, authored "<reviewer> (decision)", dated when it was made)),
   `viewpoint.bcfv` (the pair selected and coloured, A `FFD0342C` red and B `FF1F9D3A` green, a perspective camera
   from `_bcf_camera` looking at where the two boxes meet, else at the clash point) and `snapshot.png` (the
   fix's true capture, else the cropped clash picture; none when there is neither).
@@ -425,10 +503,33 @@ version. `GET /api/built/{name}` serves them (`built.path_of` takes only that na
 `Cache-Control: private, max-age=86400`. The PDF embeds a fix's picture from the cache as a data URL
 (`document._built_img`); the BCF keeps the true capture.
 
+## Kept: project folders
+
+`projects.py` keeps each project in a folder of its own under `IRIS_PROJECTS_DIR` (default `server/.iris-projects`,
+gitignored; on Cloud Run `/mnt/iris/projects` when a bucket is mounted) ([docs/engineer-workflow.md](../engineer-workflow.md);
+the objects in [05](05-domain-model-and-state.md), the routes in [10](10-http-api-and-streams.md)).
+
+| Path in `<IRIS_PROJECTS_DIR>/<id>/` | Written by | Holds |
+|---|---|---|
+| `project.json` | every change | The project; written last, so it never names a file not yet written |
+| `models/` | `attach` | The scene's original files (`Workspace.original_paths`): an IFC as opened, a STEP model's original STEP, each with its sha256. A new attach replaces the list; files of the old one are deleted once `project.json` no longer names them |
+| `saved/<n>/` | `save` | Each model as it is now (`Workspace.file`): a STEP model edited is saved as its exported STEP, unedited as its original. Plus `state.json`: the edit-log entries (earlier sessions' first), the decisions and the clash memory (`clashes`: clash id → `{kind, a, b, test, name, number, title, key}`) |
+| `reports/` | `add_report` | `<doc id>-<name>`: PDF or BCF bytes copied from the in-memory document store (`app._documents`), so a report outlives its 24-document window. At most 100 per project; the oldest file goes |
+| `drawings/` | `attach`, `save` | The scene's PDF drawings as `<sha256>.pdf` and the items of each one's last read as `<sha256>.items.json`, named in `project.json`'s `drawings` (`[{name, sha256, size, pages, items}]`). Only when the scene holds drawings (a scene with none leaves the project's); files no longer named are deleted after `project.json` is written. `open_project` ingests them again into the new scene with their items; one missing or past the caps is logged and left out |
+
+- **Writes are atomic per file.** Each file goes through a temp file and `os.replace`, all under a per-project lock.
+  A saved state's models are written out in a local scratch folder (`$TMP/iris-models/project-save-*`) and copied
+  into `saved/<n>/`, `state.json` last; `project.json` names the state only after that, and a failed save deletes its
+  folder. No folder is ever renamed: Cloud Storage FUSE refuses directory renames on a flat bucket.
+- **Opening reads copies.** `open_project` copies the newest saved state whose file list equals the project's files
+  (else `models/`) into a fresh folder `$TMP/iris-models/project-*/`, which the new scene owns and deletes on eviction.
+  Project files are never one of a scene's own folders, so eviction never deletes them.
+
 ## Where each file lands, and how long it lives
 
 `$TMP` is `tempfile.gettempdir()` (`/tmp` on Cloud Run). Nothing here survives a container restart except what is
-under `samples/`, the settings store and a built cache placed outside `$TMP`.
+under `samples/`, the settings store, the projects folder (on Cloud Run, only with a bucket) and a built cache placed
+outside `$TMP`.
 
 | What | Where | Lives until |
 |---|---|---|
@@ -445,6 +546,9 @@ under `samples/`, the settings store and a built cache placed outside `$TMP`.
 | PDF / BCF | Memory `_documents`, copy in `$TMP/iris-exports/` | The 24 newest in memory; the copy an hour |
 | Built-view pictures | `IRIS_BUILT_CACHE` (default `$TMP/iris-built/`) | Never deleted by the server |
 | Requirements | Memory registry (500 newest), the browser's `localStorage`, the visitor's downloaded file | Registry: restart or eviction (the page re-registers) |
+| Projects: original models, saved states, kept reports | `IRIS_PROJECTS_DIR/<id>/` (default `server/.iris-projects/`; Cloud Run with a bucket `/mnt/iris/projects/`) | Kept across restarts; on Cloud Run without a bucket, until the instance goes. At most `IRIS_PROJECTS_MAX` (50) projects |
+| A project's files, opened | `$TMP/iris-models/project-*/` (a copy) | The scene is dropped |
+| PDF drawings: the PDF and each page's PNG | `$TMP/iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`) | The scene is dropped (when its scene object is let go, or on the next drawing call) |
 
 - **"An hour"** is `EXPORTS_KEEP_S` (3,600 s): `app._tidy_exports` deletes anything in `iris-exports` older
   than that, but it runs only when someone fetches a model file or an export, not on a timer.
@@ -459,5 +563,10 @@ under `samples/`, the settings store and a built cache placed outside `$TMP`.
   `built.CACHE`, `Workspace._evict` / `_keep`).
 - A change to the upload path (`_receive_models`, `_unpack`, size or count caps, the page's packing in `api.ts`), or
   to adding models to an open scene or removing one (`Workspace.add_models`, `remove_model`).
-- A change to how teams, acting team, sections or the DRAFT rule are decided in `document.py`.
+- A change to how teams, acting team, sections or the DRAFT rule are decided in `document.py`, or to what backs a
+  fix in the report (`evidence_state`, `EVIDENCE_LABEL`) or the decision shape it reads.
 - A change to `service.step_changes` or `step.export` (what is moved, replaced or added).
+- A change to PDF drawing intake (`drawings.py`: the checks, caps, dpi, text-layer mapping, title-block rule, where
+  the files go).
+- A change to the project folder (`projects.py`: `project.json`, `models/`, `saved/<n>/` and its `state.json`,
+  `reports/`, `drawings/`), to what a saved state writes for a model, or to how opening copies the files.

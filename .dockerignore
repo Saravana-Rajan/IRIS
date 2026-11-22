@@ -32,6 +32,7 @@ samples/**
 !samples/**/*.stp
 !samples/**/*.STP
 !samples/**/*.json
+!samples/drawings/*.pdf
 !samples/**/*.xml
 !samples/**/*.png
 !samples/**/*.jpg

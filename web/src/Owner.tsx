@@ -29,7 +29,7 @@ export function OwnerSettingsMenu({ onChange, onEveryone, note }: { onChange: (s
   const [settings, setSettings] = useState<OwnerSettings>(stored);
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const asked = typeof location !== "undefined" && location.hash.includes("owner");
+  const asked = typeof location !== "undefined" && (location.hash.includes("owner") || location.pathname === "/settings");
   const [scope, setScope] = useState<"me" | "everyone">("me");
   const [everyone, setEveryone] = useState<SettingsState | null>(null);
   const [saved, setSaved] = useState<string | null>(null);

@@ -35,6 +35,7 @@ export function About({ start, onAbout }: {
   start?: { label: string; details: ReactNode; disabled: boolean; onStart: () => void; onTour?: () => void; onGolden?: () => void;
     onCell?: () => void; onCellTour?: () => void;  // the second demo: the palletising cell from STEP
     onBlank?: () => void;  // a blank project: the visitor's own models
+    onProjects?: () => void;  // the projects home (#projects): models, decisions and reports kept together
     resume?: Resume };  // this browser's last session, still on the server
   onAbout?: () => void;  // opens About Iris (AboutIris.tsx), the longer story in tabs
 }) {
@@ -70,9 +71,9 @@ export function About({ start, onAbout }: {
             onClick={(e) => { e.preventDefault(); page.current?.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" }); }}>
             <Wordmark height={20} /><span>by Techjays</span></a>
           <nav aria-label="On this page">
-            {link("how", "How it works")}{link("try", "Try the check")}{link("fixes", "Fixes")}{link("platform", "Platform")}
-            {start && link("demos", "Demos")}{link("proof", "Proof")}
+            {link("how", "How it works")}{start && link("demos", "Demos")}{link("proof", "Proof")}
           </nav>
+          {start?.onProjects && <button type="button" className="lp-btn glass small lp-nav-projects" onClick={start.onProjects}>Projects</button>}
         </header>
       )}
 
@@ -82,6 +83,136 @@ export function About({ start, onAbout }: {
 
       <Formats />
 
+      <section className="lp-sec lp-how" id="how" aria-labelledby="lp-how-h">
+        <div className="lp-wrap">
+          <Head id="lp-how-h" kicker="How it works" title={<>Observe. Resolve. Check. <span className="lp-teal">Apply.</span></>}>
+            One loop, from a pile of clashes to an edited model you can hand back. Each step plays a recording of the real
+            app working on Northbank, sped up.
+          </Head>
+          <Loop steps={LOOP_STEPS} reduce={reduce} />
+        </div>
+      </section>
+
+      <section className="lp-sec lp-ai" id="ai" data-tone="dark" aria-labelledby="lp-ai-h">
+        <div className="lp-wrap">
+          <Head id="lp-ai-h" kicker="The rule Iris is built on" title="The model proposes. Geometry decides." center>
+            No model output is ever trusted to accept a fix or set a clearance number: only the server's geometry supplies
+            those. Gemini does what geometry can't: read a clash in context, think of the right edit, explain it in plain words.
+          </Head>
+          <div className="lp-rule lp-reveal" aria-label="Gemini proposes, geometry measures, you see only what passed">
+            <div className="lp-rule-node ai"><Sparkles size={22} aria-hidden /><b>Gemini</b><span>ideas, words, judgement</span></div>
+            <div className="lp-rule-link" aria-hidden><span>1–3 real edits</span><i /></div>
+            <div className="lp-rule-node geo"><ShieldCheck size={22} aria-hidden /><b>Geometry</b><span>measures every idea in the model</span></div>
+            <div className="lp-rule-link" aria-hidden><span>only what passed</span><i /></div>
+            <div className="lp-rule-node you"><Check size={22} aria-hidden /><b>You</b><span>review, accept, hand back</span></div>
+          </div>
+          <div className="lp-models">
+            <Model name="Gemini Pro" role="The coordinator" icon={<Sparkles size={18} aria-hidden />} tone="spark">
+              Reads each clash from three pictures and the model's own data, proposes the edits, and runs chat, root causes,
+              plans and the report's words. Its reasoning streams while it thinks.
+            </Model>
+            <Model name="Gemini Flash" role="Bulk reading" icon={<ListFilter size={18} aria-hidden />} tone="open">
+              The faster, lower-cost model on Vertex AI: triage of hundreds of clashes, their titles, names for a STEP file's parts, and live voice.
+            </Model>
+            <Model name="Gemini Pro (deep think)" role="The second opinion" icon={<Wand2 size={18} aria-hidden />} tone="wonder">
+              A longer try on a larger model when nothing passed, or to beat the options, briefed with everything the first
+              try learnt.
+            </Model>
+            <Model name="Gemini Image" role="Show it built" icon={<Image size={18} aria-hidden />} tone="image">
+              Paints Iris's own view of a verified fix as a picture of what will be built, checked against the model before
+              anyone sees it.
+            </Model>
+          </div>
+          <ul className="lp-guards lp-reveal">
+            <li><ShieldCheck size={16} aria-hidden />Keys stay on the server: the browser never sees one.</li>
+            <li><Cpu size={16} aria-hidden />Caps on every paid call, per visitor and per day.</li>
+            <li><FileText size={16} aria-hidden />AI text is marked in the report, which stays DRAFT until every team has reviewed it.</li>
+          </ul>
+        </div>
+      </section>
+
+      {start && (
+        <section className="lp-sec lp-demos" id="demos" aria-labelledby="lp-demos-h">
+          <div className="lp-wrap">
+            <Head id="lp-demos-h" kicker="Proven on buildings and machines" title="Two demos, two kinds of model">
+              Both open in a few seconds, with nothing to install. Each card shows its demo in Iris's viewer.
+            </Head>
+            <div className={`lp-demo-grid${start.onCell ? "" : " one"}`}>
+              <DemoCard picture="/demos/northbank.webp" eyebrow="Building · 4 IFC models" title="Northbank, a riverside office site"
+                alt="The Northbank demo in Iris's viewer: an office building among its neighbours, with streets, trees and the river."
+                blurb={<>Structure, building services, architecture and site, modelled by four teams. On Level 02 a transfer
+                  girder is hit by a duct, a cable tray and a water main.</>}
+                shows={[<>Every pair of models checked: <b>464 clashes in 1,732 elements, in 4 s</b></>,
+                  <>Triage sorts the real problems from the noise</>,
+                  <>The duct raised through the girder's web opening, at the designer's own height</>,
+                  <>One root-cause plan for all three services</>]}
+                chips={["~40 s to a verified fix", "3 of 3 designer fixes"]}
+                note={start.details}>
+                <button className="lp-btn primary" data-tour="demo" disabled={start.disabled} onClick={start.onStart}>
+                  <FolderOpen size={16} aria-hidden /> {start.label}</button>
+                {start.onTour && <button className="lp-btn line" disabled={start.disabled} onClick={start.onTour}>
+                  <Compass size={16} aria-hidden /> Take the guided tour</button>}
+              </DemoCard>
+              {start.onCell && (
+                <DemoCard picture="/demos/cell.webp" eyebrow="Machine · 1 STEP file" title="PC-03, a robot palletising cell"
+                  alt="The PC-03 palletising cell in Iris's viewer: a robot inside its see-through safety zone, a conveyor, fence posts and the air line."
+                  blurb={<>A robot, a conveyor, safety guarding and services in a corner of the plant, from mechanical CAD.
+                    Eight problems were planted in this revision.</>}
+                  shows={[<>The STEP converted: <b>161 parts</b> keep their names and colours, and Gemini names what each is</>,
+                    <>All <b>17 planted clashes</b> found, nothing unexpected</>,
+                    <>The cable ladder moved, the air pipe dropped under both conveyor rails, a branch rerouted round two plant
+                      columns, a rail trimmed, openings asked for in a wall and a panel's gland plate</>,
+                    <>The STEP handed back with the fixes written in</>]}
+                  chips={["17 of 17 found", "STEP in, STEP out"]}
+                  note={<>Opens one STEP file and checks it, in a few seconds.</>}>
+                  <button className="lp-btn primary" data-tour="cell" disabled={start.disabled} onClick={start.onCell}>
+                    <Cpu size={16} aria-hidden /> Open the machine cell</button>
+                  {start.onCellTour && <button className="lp-btn line" disabled={start.disabled} onClick={start.onCellTour}>
+                    <Compass size={16} aria-hidden /> Take the cell tour</button>}
+                </DemoCard>
+              )}
+            </div>
+            <ol className="lp-once lp-reveal" aria-label="Once a demo is open">
+              <li><b>{desktop ? "On the left" : "Clashes"}</b>what Iris found: every clash numbered and named, grouped by check.</li>
+              <li><b>{desktop ? "In the middle" : "On top"}</b>the models in 3D: the building with its streets and river, or the cell.</li>
+              <li><b>{desktop ? "On the right" : "Fix"}</b>pick a clash, press <i>Propose fixes</i>, and watch Iris work.</li>
+            </ol>
+          </div>
+        </section>
+      )}
+
+      <section className="lp-sec lp-proof" id="proof" aria-labelledby="lp-proof-h">
+        <div className="lp-wrap">
+          <Head id="lp-proof-h" kicker="Measured, not promised" title="What it has proven on the demos">
+            Every number here was measured on the two demo models, which were built with planted problems and a known answer.
+          </Head>
+          <div className="lp-stats">
+            <Stat reduce={reduce} pre="~" value={40} unit="s" label="to a verified fix" note="Northbank #1, from pressing Propose to an edit checked against all four models." />
+            <Stat reduce={reduce} value={3} suffix=" of 3" label="designer fixes matched" note="The girder's three clashes, the first idea each time, at the designer's own heights: +400, +250, +280 mm." />
+            <Stat reduce={reduce} value={464} label="clashes triaged on Northbank" note="Triage on Gemini Flash, the faster model; alike clashes are read once." />
+            <Stat reduce={reduce} value={17} suffix=" of 17" label="planted clashes found" note="PC-03, opened straight from its STEP file: 161 parts, nothing unexpected; the fixed revision checks clean." />
+          </div>
+          <div className="lp-proof-more lp-reveal">
+            <span><b>25 of 25</b> opening hosts judged right against an answer key</span>
+            <span><b>150 MB</b> model through the page, opened in about 2 minutes</span>
+            <span><b>Move, offset, trim, route and opening</b> verified on the demos' planted cases; resize on a test model</span>
+          </div>
+          <div className="lp-limits lp-reveal">
+            <h3><TriangleAlert size={16} aria-hidden /> Said plainly: what it doesn't do yet</h3>
+            <ul>
+              <li><b>It doesn't sign off engineering.</b> Whether a beam can take a hole, or a flatter duct still carries its air, needs the designer's review; options say whose.</li>
+              <li><b>Edits live in memory.</b> A restart, or opening the models again, starts clean: export what you keep.</li>
+              <li><b>Some shapes are out of reach.</b> Offsets and routes need straight level runs with plain rectangular or round sections.</li>
+              <li><b>STEP parts mostly move.</b> Offsets and trims work on exact bars and rods; meshed parts can only be moved.</li>
+              <li><b>No accounts yet.</b> A project is kept on the server and found again from this browser by an unguessable id, not by a login.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* docs/ui-design.md §10.2: the long-form sections, kept for whoever wants them, folded away by default. */}
+      <details className="lp-more">
+        <summary className="lp-more-sum">More about Iris: the problem, the check to try by hand, the kinds of fix, the platform, who it is for, the words</summary>
       <section className="lp-sec lp-problem" id="problem" aria-labelledby="lp-problem-h">
         <div className="lp-wrap lp-split">
           <div className="lp-reveal">
@@ -115,16 +246,6 @@ export function About({ start, onAbout }: {
           <Fact value={464} reduce={reduce} label="clashes in about 4 s" note="One check of Northbank's three building models: every pair, and each against itself." />
           <Fact value={1732} reduce={reduce} label="elements checked" note="Structure, services and architecture; what is joined on purpose, like a door in its wall, is left out." />
           <Fact value={3} reduce={reduce} label="planted on one girder" note="The answer key Iris is measured on: a duct, a cable tray and a water main through the Level 02 girder." />
-        </div>
-      </section>
-
-      <section className="lp-sec lp-how" id="how" aria-labelledby="lp-how-h">
-        <div className="lp-wrap">
-          <Head id="lp-how-h" kicker="How it works" title={<>Observe. Resolve. Check. <span className="lp-teal">Apply.</span></>}>
-            One loop, from a pile of clashes to an edited model you can hand back. Each step plays a recording of the real
-            app working on Northbank, sped up.
-          </Head>
-          <Loop steps={LOOP_STEPS} reduce={reduce} />
         </div>
       </section>
 
@@ -170,44 +291,6 @@ export function About({ start, onAbout }: {
               <li><Link2 size={18} aria-hidden /><span><b>Joints are kept</b>what it is joined to comes with it, or it is refused</span></li>
             </ul>
           </div>
-        </div>
-      </section>
-
-      <section className="lp-sec lp-ai" id="ai" data-tone="dark" aria-labelledby="lp-ai-h">
-        <div className="lp-wrap">
-          <Head id="lp-ai-h" kicker="The rule Iris is built on" title="The model proposes. Geometry decides." center>
-            No model output is ever trusted to accept a fix or set a clearance number: only the server's geometry supplies
-            those. Gemini does what geometry can't: read a clash in context, think of the right edit, explain it in plain words.
-          </Head>
-          <div className="lp-rule lp-reveal" aria-label="Gemini proposes, geometry measures, you see only what passed">
-            <div className="lp-rule-node ai"><Sparkles size={22} aria-hidden /><b>Gemini</b><span>ideas, words, judgement</span></div>
-            <div className="lp-rule-link" aria-hidden><span>1–3 real edits</span><i /></div>
-            <div className="lp-rule-node geo"><ShieldCheck size={22} aria-hidden /><b>Geometry</b><span>measures every idea in the model</span></div>
-            <div className="lp-rule-link" aria-hidden><span>only what passed</span><i /></div>
-            <div className="lp-rule-node you"><Check size={22} aria-hidden /><b>You</b><span>review, accept, hand back</span></div>
-          </div>
-          <div className="lp-models">
-            <Model name="Gemini Pro" role="The coordinator" icon={<Sparkles size={18} aria-hidden />} tone="spark">
-              Reads each clash from three pictures and the model's own data, proposes the edits, and runs chat, root causes,
-              plans and the report's words. Its reasoning streams while it thinks.
-            </Model>
-            <Model name="Gemini Flash" role="Bulk reading" icon={<ListFilter size={18} aria-hidden />} tone="open">
-              The faster, lower-cost model on Vertex AI: triage of hundreds of clashes, their titles, names for a STEP file's parts, and live voice.
-            </Model>
-            <Model name="Gemini Pro (deep think)" role="The second opinion" icon={<Wand2 size={18} aria-hidden />} tone="wonder">
-              A longer try on a larger model when nothing passed, or to beat the options, briefed with everything the first
-              try learnt.
-            </Model>
-            <Model name="Gemini Image" role="Show it built" icon={<Image size={18} aria-hidden />} tone="image">
-              Paints Iris's own view of a verified fix as a picture of what will be built, checked against the model before
-              anyone sees it.
-            </Model>
-          </div>
-          <ul className="lp-guards lp-reveal">
-            <li><ShieldCheck size={16} aria-hidden />Keys stay on the server: the browser never sees one.</li>
-            <li><Cpu size={16} aria-hidden />Caps on every paid call, per visitor and per day.</li>
-            <li><FileText size={16} aria-hidden />AI text is marked in the report, which stays DRAFT until every team has reviewed it.</li>
-          </ul>
         </div>
       </section>
 
@@ -279,56 +362,6 @@ export function About({ start, onAbout }: {
         </div>
       </section>
 
-      {start && (
-        <section className="lp-sec lp-demos" id="demos" aria-labelledby="lp-demos-h">
-          <div className="lp-wrap">
-            <Head id="lp-demos-h" kicker="Proven on buildings and machines" title="Two demos, two kinds of model">
-              Both open in a few seconds, with nothing to install. Each card shows its demo in Iris's viewer.
-            </Head>
-            <div className={`lp-demo-grid${start.onCell ? "" : " one"}`}>
-              <DemoCard picture="/demos/northbank.webp" eyebrow="Building · 4 IFC models" title="Northbank, a riverside office site"
-                alt="The Northbank demo in Iris's viewer: an office building among its neighbours, with streets, trees and the river."
-                blurb={<>Structure, building services, architecture and site, modelled by four teams. On Level 02 a transfer
-                  girder is hit by a duct, a cable tray and a water main.</>}
-                shows={[<>Every pair of models checked: <b>464 clashes in 1,732 elements, in 4 s</b></>,
-                  <>Triage sorts the real problems from the noise</>,
-                  <>The duct raised through the girder's web opening, at the designer's own height</>,
-                  <>One root-cause plan for all three services</>]}
-                chips={["~40 s to a verified fix", "3 of 3 designer fixes"]}
-                note={start.details}>
-                <button className="lp-btn primary" data-tour="demo" disabled={start.disabled} onClick={start.onStart}>
-                  <FolderOpen size={16} aria-hidden /> {start.label}</button>
-                {start.onTour && <button className="lp-btn line" disabled={start.disabled} onClick={start.onTour}>
-                  <Compass size={16} aria-hidden /> Take the guided tour</button>}
-              </DemoCard>
-              {start.onCell && (
-                <DemoCard picture="/demos/cell.webp" eyebrow="Machine · 1 STEP file" title="PC-03, a robot palletising cell"
-                  alt="The PC-03 palletising cell in Iris's viewer: a robot inside its see-through safety zone, a conveyor, fence posts and the air line."
-                  blurb={<>A robot, a conveyor, safety guarding and services in a corner of the plant, from mechanical CAD.
-                    Eight problems were planted in this revision.</>}
-                  shows={[<>The STEP converted: <b>161 parts</b> keep their names and colours, and Gemini names what each is</>,
-                    <>All <b>17 planted clashes</b> found, nothing unexpected</>,
-                    <>The cable ladder moved, the air pipe dropped under both conveyor rails, a branch rerouted round two plant
-                      columns, a rail trimmed, openings asked for in a wall and a panel's gland plate</>,
-                    <>The STEP handed back with the fixes written in</>]}
-                  chips={["17 of 17 found", "STEP in, STEP out"]}
-                  note={<>Opens one STEP file and checks it, in a few seconds.</>}>
-                  <button className="lp-btn primary" data-tour="cell" disabled={start.disabled} onClick={start.onCell}>
-                    <Cpu size={16} aria-hidden /> Open the machine cell</button>
-                  {start.onCellTour && <button className="lp-btn line" disabled={start.disabled} onClick={start.onCellTour}>
-                    <Compass size={16} aria-hidden /> Take the cell tour</button>}
-                </DemoCard>
-              )}
-            </div>
-            <ol className="lp-once lp-reveal" aria-label="Once a demo is open">
-              <li><b>{desktop ? "On the left" : "Clashes"}</b>what Iris found: every clash numbered and named, grouped by check.</li>
-              <li><b>{desktop ? "In the middle" : "On top"}</b>the models in 3D: the building with its streets and river, or the cell.</li>
-              <li><b>{desktop ? "On the right" : "Fix"}</b>pick a clash, press <i>Propose fixes</i>, and watch Iris work.</li>
-            </ol>
-          </div>
-        </section>
-      )}
-
       <section className="lp-sec lp-who" id="who" aria-labelledby="lp-who-h">
         <div className="lp-wrap">
           <Head id="lp-who-h" kicker="Who it's for" title="Built around the design coordinator">
@@ -346,35 +379,6 @@ export function About({ start, onAbout }: {
             <Who title="Whoever sets the standard">Coordination requirements every fix must meet: the room each part needs, who moves for whom.</Who>
             <Who title="People who don't read drawings">Show it built paints a checked fix as a picture of what will be built.</Who>
             <Who title="Teams with their own agent">A pairing link: any MCP client works through the same check.</Who>
-          </div>
-        </div>
-      </section>
-
-      <section className="lp-sec lp-proof" id="proof" aria-labelledby="lp-proof-h">
-        <div className="lp-wrap">
-          <Head id="lp-proof-h" kicker="Measured, not promised" title="What it has proven on the demos">
-            Every number here was measured on the two demo models, which were built with planted problems and a known answer.
-          </Head>
-          <div className="lp-stats">
-            <Stat reduce={reduce} pre="~" value={40} unit="s" label="to a verified fix" note="Northbank #1, from pressing Propose to an edit checked against all four models." />
-            <Stat reduce={reduce} value={3} suffix=" of 3" label="designer fixes matched" note="The girder's three clashes, the first idea each time, at the designer's own heights: +400, +250, +280 mm." />
-            <Stat reduce={reduce} value={464} label="clashes triaged on Northbank" note="Triage on Gemini Flash, the faster model; alike clashes are read once." />
-            <Stat reduce={reduce} value={17} suffix=" of 17" label="planted clashes found" note="PC-03, opened straight from its STEP file: 161 parts, nothing unexpected; the fixed revision checks clean." />
-          </div>
-          <div className="lp-proof-more lp-reveal">
-            <span><b>25 of 25</b> opening hosts judged right against an answer key</span>
-            <span><b>150 MB</b> model through the page, opened in about 2 minutes</span>
-            <span><b>Move, offset, trim, route and opening</b> verified on the demos' planted cases; resize on a test model</span>
-          </div>
-          <div className="lp-limits lp-reveal">
-            <h3><TriangleAlert size={16} aria-hidden /> Said plainly: what it doesn't do yet</h3>
-            <ul>
-              <li><b>It doesn't sign off engineering.</b> Whether a beam can take a hole, or a flatter duct still carries its air, needs the designer's review; options say whose.</li>
-              <li><b>Edits live in memory.</b> A restart, or opening the models again, starts clean: export what you keep.</li>
-              <li><b>Some shapes are out of reach.</b> Offsets and routes need straight level runs with plain rectangular or round sections.</li>
-              <li><b>STEP parts mostly move.</b> Offsets and trims work on exact bars and rods; meshed parts can only be moved.</li>
-              <li><b>No accounts yet.</b> A session lives in this browser and on the server until it is cleared; saved projects come later.</li>
-            </ul>
           </div>
         </div>
       </section>
@@ -412,6 +416,7 @@ export function About({ start, onAbout }: {
             {start?.onGolden && <button className="lp-btn primary" disabled={start.disabled} onClick={start.onGolden}>
               <Play size={16} aria-hidden /> Watch Iris fix a clash</button>}
             {start?.onBlank && <button className="lp-btn glass" onClick={start.onBlank}><Upload size={16} aria-hidden /> Use your own models</button>}
+            {start?.onProjects && <button className="lp-btn glass" onClick={start.onProjects}><FolderOpen size={16} aria-hidden /> Projects</button>}
             {start?.onTour && <button className="lp-btn glass" disabled={start.disabled} onClick={start.onTour}><Compass size={16} aria-hidden /> Take the guided tour</button>}
           </div>
           {onAbout && (
@@ -423,6 +428,8 @@ export function About({ start, onAbout }: {
           )}
         </div>
       </section>
+
+      </details>
 
       <footer className="lp-foot" data-tone="dark">
         <div className="lp-wrap">

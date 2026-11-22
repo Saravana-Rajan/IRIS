@@ -1,0 +1,73 @@
+/* Model understanding (ModelSummaryPanel.tsx, modelSummary.ts): a compact discipline table, each row a click to isolate.
+   Colours come from index.css's variables only, so a theme that redefines them (light or dark) carries through. */
+.msum { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--ink); container-type: inline-size; }
+.msum-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; }
+.msum-head h3 { font-size: 12.5px; }
+.msum-total { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.msum-iso { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 8px;
+  border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.msum-iso b { font-weight: 600; overflow-wrap: anywhere; }
+
+.msum-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.msum-table col.c-num { width: 56px; }
+.msum-table col.c-share { width: 60px; }
+.msum-table thead th { text-align: left; font-weight: 600; font-size: 11px; color: var(--muted); padding: 3px 4px;
+  border-bottom: 1px solid var(--line); white-space: nowrap; }
+.msum-table td { padding: 2px 4px; height: 26px; vertical-align: middle; border-bottom: 1px solid var(--line-soft); }
+.msum-table .num { text-align: right; font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.msum-table thead th.num { font-family: inherit; font-size: 11px; }
+
+.msum-row { cursor: pointer; }
+.msum-row:hover td { background: var(--raised); }
+.msum-row.on td { background: var(--accent-soft); }
+.msum-row.on .msum-name { color: var(--accent-ink); font-weight: 600; }
+.msum-row.empty { cursor: default; color: var(--muted); }
+.msum-row.empty:hover td { background: none; }
+.msum-row.discipline td { border-bottom-color: var(--line); }
+.msum-row.discipline .msum-name { font-weight: 600; }
+.msum-row.empty .msum-name { font-weight: 500; }
+.msum-row.sub td:first-child { padding-left: 28px; }
+.msum-row.sub .msum-name { font-weight: 400; }
+.msum-row.sub .msum-name.mono { font-size: 11.5px; }
+
+.msum-cell { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.msum-label { display: block; min-width: 0; }
+.msum-name { border: 0; background: none; padding: 1px 0; margin: 0; font: inherit; color: inherit; text-align: left;
+  cursor: inherit; min-width: 0; overflow-wrap: anywhere; }
+.msum-name:disabled { cursor: default; color: inherit; }
+.msum-toggle { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0;
+  border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
+.msum-toggle:hover { background: var(--bg); color: var(--ink); }
+.msum-toggle svg { transition: transform .12s; }
+.msum-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.msum-pad { flex: none; width: 20px; }
+.msum-name:focus-visible, .msum-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.msum-tag { display: inline-block; vertical-align: 1px; margin-left: 4px; padding: 0 5px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); font-size: 10px; font-weight: 600; line-height: 15px; white-space: nowrap; }
+
+.msum-group th { padding: 6px 4px 2px 28px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
+.msum-share { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
+.msum-bar { flex: none; width: 24px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.msum-bar > i { display: block; height: 100%; background: var(--accent); }
+.msum-row.on .msum-bar > i { background: var(--accent-ink); }
+.msum-mix { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
+.msum-models .msum-row td { padding-top: 3px; padding-bottom: 3px; }
+.msum-note { font-size: 11.5px; }
+
+.msum-how { font-size: 12px; color: var(--muted); }
+.msum-how summary { cursor: pointer; font-size: 12px; }
+.msum-how summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.msum-how p { margin: 6px 0 0; line-height: 1.45; }
+.msum-how b { color: var(--ink); font-weight: 600; }
+.msum-how .msum-tag { margin-left: 0; }
+.msum-rules { margin: 8px 0 0; display: grid; gap: 6px; }
+.msum-rules dt { color: var(--ink); font-weight: 600; font-size: 11.5px; }
+.msum-rules dd { margin: 1px 0 0; font-size: 11px; overflow-wrap: anywhere; line-height: 1.4; }
+
+/* A narrow side bar (the default left column is 310 px): the share keeps its number and drops its bar. */
+@container (max-width: 360px) {
+  .msum-table col.c-num { width: 56px; }
+  .msum-table col.c-share { width: 36px; }
+  .msum-bar { display: none; }
+}

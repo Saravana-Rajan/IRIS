@@ -4,8 +4,11 @@
 > `web/src/AppMenu.tsx`, `web/src/Detect.tsx`, `web/src/ReportList.tsx`, `web/src/Triage.tsx`,
 > `web/src/Insights.tsx`, `web/src/ClashPanel.tsx`, `web/src/PlanPanel.tsx`, `web/src/ContextPlan.tsx`,
 > `web/src/Chat.tsx`, `web/src/Requirements.tsx`, `web/src/ReportDoc.tsx`, `web/src/Agent.tsx`, `web/src/Owner.tsx`,
-> `web/src/Sheet.tsx`, `web/src/layout.ts`, `web/src/ViewerToolbar.tsx`, `web/src/Brand.tsx` · **Checked against code:** re-branded on
-> 2026-11-11 · **Deeper design:** [docs/mobile.md](../mobile.md), [docs/detection.md](../detection.md),
+> `web/src/Sheet.tsx`, `web/src/layout.ts`, `web/src/ViewerToolbar.tsx`, `web/src/Brand.tsx`, and the engineer workflow's
+> `web/src/ProjectsHome.tsx`, `web/src/ProjectOverview.tsx`, `web/src/ImportPanel.tsx`, `web/src/ModelSummary.tsx`,
+> `web/src/CoordinationOverview.tsx`, `web/src/ClashHeader.tsx`, `web/src/ProposalCard.tsx`, `server/iris/projects.py` ·
+> **Checked against code:** re-branded on 2026-11-11; the coordination round in a project on 2026-11-22 · **Deeper design:**
+> [docs/engineer-workflow.md](../engineer-workflow.md), [docs/mobile.md](../mobile.md), [docs/detection.md](../detection.md),
 > [docs/edits.md](../edits.md), [docs/requirements.md](../requirements.md), [docs/escalation.md](../escalation.md),
 > [docs/show-it-built.md](../show-it-built.md), [docs/voice.md](../voice.md), [docs/mcp.md](../mcp.md),
 > [docs/step.md](../step.md), [docs/uploads.md](../uploads.md)
@@ -135,6 +138,55 @@ Gemini.
 | 10. Re-check | **Detect again** (the icon on the Insights tab's run summary), **Run again** on the check picker over the list, or **Run all again**: the chips say how many clashes the fixes resolved and how many are new, for that check since its own last run. | `runDetect(null, sid, {check})` or `{all: true}`. Each check's latest run is kept ([docs/detection.md](../detection.md), "Kept checks"); clash ids are stable, so the page keeps its marks, a fix's mark until the check listing it runs again, and the scene keeps titles, views and triage readings. |
 
 ## Every feature as a journey
+
+### An MEP engineer runs a coordination round in a project
+
+An MEP engineer coordinating a level's services against its structure and architecture works in a **project**, not a
+one-off session: the models, the coordination results, every review decision and the reports stay together, and the
+round can be closed and picked up again. The workflow is **Import → Understand → Detect → Investigate → Propose →
+Validate → Review → Report**: AI proposes, geometry proves, the engineer decides. The contract is
+[docs/engineer-workflow.md](../engineer-workflow.md); the page side is [12](12-web-app.md), "Engineer workflow"; the
+flows are in [03](03-end-to-end-flows.md).
+
+**What is built, plainly.** The server side is built and tested: projects kept on disk
+(`server/iris/projects.py`, `/api/projects*`: create, attach, open, save, reviews, reports), decisions in the scene's
+journal (`POST /api/scenes/{sid}/decisions`; the keep routes take `reviewer` and `reason` and record the accept), and
+the project's name and decisions in the PDF. The page side is built and mounted (Nov 22): the first screen
+(`/home`) leads to the Projects pages (`/projects`, `/projects/<pid>/<step>`), with the step bar over the workspace,
+the import table with Retry, the model summary, the coordination overview over the clash list, the clash header and a
+proposal card per option with its state, and Accept, Reject, Modify and Request another each recorded with the
+reviewer's name and reason. Opening a project reopens its newest saved state; the bare workspace without a project
+(`/workspace`, the golden path above) still works as before. **2D PDF drawings** are read on the project's
+Drawings step (`/projects/<pid>/drawings`, `DrawingsPanel.tsx`; [docs/drawings.md](../drawings.md)): a PDF chosen in the
+import goes there, not to the models; the sheets are read with AI, each tag and size checked against the PDF's own text
+layer and compared with the models' data, and the engineer decides what to fix (nothing is changed for them). DWG and
+DXF are still refused at the import row. There are no accounts: a project is private by its unguessable id, which the
+browser keeps.
+
+```mermaid
+flowchart LR
+  pdf["2D PDF drawings: read and compared"] -.-> und
+  imp["1 Import: IFC and STEP models"] --> und["2 Understand: disciplines and systems"]
+  und --> det["3 Detect: hard, clearance, duplicates, triage"]
+  det --> inv["4 Investigate one clash"]
+  inv --> prop["5 Propose: AI edits real elements"]
+  prop --> val{"6 Validate: the geometry check"}
+  val -->|"validated, failed or never tried"| rev["7 Review: the engineer decides"]
+  rev -->|"request another"| prop
+  rev -->|"accept: checked again, kept"| det
+  rev --> rep["8 Report: PDF and BCF"]
+```
+
+| Step | What the engineer does and sees | Built today |
+|---|---|---|
+| 1. Import | Creates a project on `/projects` (or opens one) and imports the level's IFC models (MEP, Structure, Architecture) or STEP. Each file is a row: type, size, stage, progress, error; **Retry import** sends the batch again (the server opens it all or none). | The upload stream and STEP conversion (existing, [docs/uploads.md](../uploads.md)); per-file rows and Retry (`importRows.ts`, `ImportPanel.tsx`); create and attach (the server copies the original files into the project). A PDF goes to the Drawings step (`DrawingsPanel.tsx`, `drawingsApi.ts`). |
+| 2. Understand | What the models hold by discipline (HVAC, Plumbing & piping, Electrical, MEP by system, Structure, Architecture, Site), each with its classes, systems and models; a click isolates a row in 3D. | `ModelSummary.tsx` over the filters' index. The HVAC / plumbing / electrical split is a new IFC-class mapping, tagged "by class" and explained under "How this is grouped"; the models do not state it. |
+| 3. Detect | Runs the checks and triage; the overview counts the clashes by class (actual, clearance issue, touching, by design, non-conflict, modelling error, not triaged), by severity (AI-assessed) and by status (open, fix kept awaiting re-check, resolved by geometry, reviewed by design, sent to author); each number filters the list. | Detection, kept checks and triage (existing); the overview (`coordination.ts`, `CoordinationOverview.tsx`) only counts fields the page holds. No "critical" severity exists, so none is shown. |
+| 4. Investigate | One clash: #N and id, class, severity and status, A and B with their GlobalIds to copy, the overlap or gap against the required clearance, level and grid, **Focus in 3D**; the A/B/C views and triage reading below. | The clash panel and views (existing); `ClashHeader.tsx`. |
+| 5. Propose | **Propose fixes**: one to three options that edit real IFC elements, each a card: the element to move, direction, distance, the reason (labelled AI-drafted), constraints considered, expected outcome. | The agent loop on Gemini Pro (existing, [09](09-agent-workflows.md)); `ProposalCard.tsx`, `proposalState.describe`. |
+| 6. Validate | Each proposal in one of four states: **AI-proposed**, **Geometry-validated**, **Failed validation** (with the reason and what it hit), **Unverified** (never tried, like an "as designed" plan item). **Before / After** in 3D. | The geometry gate at propose and again at keep (existing, `plans.apply`); the states from `proposalState.stateOf`, which never reads the model's words. |
+| 7. Review | **Accept** (only a geometry-validated fix; the server checks it again before keeping it), **Reject** with a reason, **Modify** in the edit tool, **Request another**: each recorded with the reviewer, the reason and the time. Reviews per clash (open, by design, sent to author, resolved) are kept on the project under a key that survives re-detection. **Save** keeps the edited models, the edit log and the decisions; reopening the project starts from them. | The server: decisions in the journal, the keep routes' `reviewer` and `reason`, project save, open and reviews; `api.accept`, `api.applyPlan` and `api.decide` carry them. The card's buttons; App's wiring to them is still to come. |
+| 8. Report | **Report: PDF and BCF**: the project's name on the cover, GlobalIds, the rationale, the moved element and its move, how many elements the check ran against, the required clearance, and each clash's proposal history with its decisions (from the newest saved state when the session is gone). The report is kept with the project and listed on its Reports step. | The report dialog (existing); the server's `project_id` on the report build and `POST /api/projects/{pid}/reports`. |
 
 ### Triage: sort them all first
 
@@ -398,3 +450,6 @@ flowchart TB
 - A change to the tours: acts, step counts, recorded runs (`BUILDING_STEPS`, `CELL_STEPS`, `web/public/tour/`).
 - A change to the layouts: panes, tabs, the dock, breakpoints in `layout.ts`, the phone sheet's tabs or `follow()`.
 - New measured headline numbers on the landing or the demo cards.
+- A change to the coordination round in a project: a step, what a step shows, a proposal state, a decision kind,
+  App mounting the engineer-workflow pages, or a "not yet" (2D PDF drawings, accounts) becoming built
+  ([docs/engineer-workflow.md](../engineer-workflow.md)).

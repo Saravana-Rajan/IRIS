@@ -739,20 +739,31 @@ class Workspace:
         return {k: j[k] for k in ("can_undo", "can_redo", "undo", "redo")}
 
     def edits_csv(self, scene_id: str) -> str:
-        """The edit log as CSV, one row per entry (kept and undone), for a spreadsheet or an issue tracker."""
+        """The edit log as CSV, one row per entry (kept and undone), for a spreadsheet or an issue tracker. The last
+        columns say who kept it (`actor`: the reviewer, an agent's name) and what the check at keep found: in words
+        (`document.check_words`), whether it passed, the nearest clearance in mm and how many elements it was checked
+        against (blank when the check does not say)."""
         import csv
         import io
+        from .document import check_words
         out = io.StringIO()
         w = csv.writer(out)
         w.writerow(["id", "when", "source", "kind", "title", "summary", "clashes", "follows", "changed", "created",
-                    "removed", "warnings", "state"])
+                    "removed", "warnings", "state", "actor", "check", "verified", "min_clearance_mm", "checked_against"])
         for e in self.journal(scene_id).entries:
             d = e.to_dict()
+            check = e.check or {}
+            least = check.get("min_clearance_m")
+            against = check.get("checked_against")
             w.writerow([e.id, d["when"], e.source, e.kind, e.title, e.summary,
-                        " ".join(str(c.get("id") or "/".join(c.get("pair") or [])) for c in e.clashes),
+                        " ".join(str(cl.get("id") or "/".join(cl.get("pair") or [])) for cl in e.clashes),
                         " ".join(e.follows), " ".join(e.names.get(g, g) for g in e.elements),
                         " ".join(e.names.get(g, g) for g in e.created), " ".join(e.names.get(g, g) for g in e.removed),
-                        "; ".join(w_["text"] for w_ in e.warnings), e.state])
+                        "; ".join(w_["text"] for w_ in e.warnings), e.state, e.actor or "",
+                        check_words(d) if e.check else "",
+                        "" if "verified" not in check else ("true" if check["verified"] else "false"),
+                        round(least * 1000) if isinstance(least, (int, float)) and not isinstance(least, bool) else "",
+                        against if isinstance(against, int) and not isinstance(against, bool) else ""])
         return out.getvalue()
 
     def patch(self, scene_id: str, changed: list[str], revision_before: int, removed: list[str] = ()) -> dict:
@@ -1222,6 +1233,54 @@ class Workspace:
         return {"id": scene_id, "files": self.names.get(scene_id, []), "step": self.step_files(scene_id),
                 "revision": self.scene(scene_id).revision, "layout": self.scene(scene_id).layout,
                 **self.checks_info(scene_id)}
+
+    # Projects (projects.py, docs/engineer-workflow.md): what a project copies from a scene and gives back to one.
+
+    def original_paths(self, scene_id: str) -> list[Path]:
+        """Each model's file as the scene was opened from it, in file order: an IFC as it is on disk (edits live in
+        memory), a model converted from STEP as its original STEP."""
+        s = self.scene(scene_id)
+        sources = self.sources.get(scene_id, {})
+        return [Path(sources[i]["step"]) if i in sources else Path(p) for i, p in enumerate(s.paths)]
+
+    def clash_memory(self, scene_id: str) -> dict[str, dict]:
+        """What the scene's clashes keep from check to check, by clash id: {kind, a, b, test, name, number, title}
+        (titles written onto the current list taken in first). Empty before any detection."""
+        self.scene(scene_id)
+        register = self.checks.get(scene_id)
+        if register is None:
+            return {}
+        with self.lock:
+            register.absorb(self.reports.get(register.report_id or ""))
+            with register.lock:
+                return {cid: {**{k: was.get(k) for k in ("kind", "a", "b", "test", "name")},
+                              "number": register.numbers.get(cid), "title": register.titles.get(cid)}
+                        for cid, was in register.ids.items()}
+
+    def seed_clashes(self, scene_id: str, items: dict[str, dict]) -> int:
+        """Give a scene's clashes, before they are detected, the ids, #N numbers and titles they had (a reopened
+        project): clash id → {kind, a, b, test?, name?, number?, title?}. Detection then gives a pair it finds again,
+        of the same kind, that id, so its number and title follow it; new clashes number on after the highest. Ids or
+        numbers the scene already has are kept. Returns how many were seeded."""
+        self.scene(scene_id)
+        with self.lock:
+            register = self._register(scene_id)
+            taken = set(register.numbers.values())
+            n = 0
+            with register.lock:
+                for cid, it in items.items():
+                    if not cid or cid in register.ids or not it.get("a") or not it.get("b"):
+                        continue
+                    register.ids[cid] = {"kind": it.get("kind") or "hard", "a": it["a"], "b": it["b"],
+                                         "test": it.get("test"), "name": it.get("name")}
+                    number = it.get("number")
+                    if isinstance(number, int) and number > 0 and number not in taken:
+                        register.numbers[cid] = number
+                        taken.add(number)
+                    if it.get("title"):
+                        register.titles[cid] = str(it["title"])
+                    n += 1
+            return n
 
     def save_capture(self, report_id: str, clash_id: str, label: str, png: bytes) -> list[str]:
         """A view of a detected clash taken in the browser (A, B or C). It joins the clash's images, so the fix agent,

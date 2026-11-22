@@ -229,11 +229,11 @@ async function record(browser, run, tmp) {
     await page.waitForTimeout(6000); mark("reasoning");
     follow = setInterval(() => { scrollPanel(page, "h2", "Understanding").catch(() => {}); }, 1000);
   }
-  await page.waitForSelector(".card-body.option", { timeout: 300000 });
+  await page.waitForSelector(".pcard-show", { timeout: 300000 });
   await page.waitForFunction(() => !document.querySelector('[data-tour="propose"]')?.textContent?.includes("Working"), null, { timeout: 300000 });
   clearInterval(follow);
   mark("options"); await page.waitForTimeout(3000);
-  const options = page.locator(".card-body.option"), count = await options.count();
+  const options = page.locator(".pcard-show"), count = await options.count();
   const pick = async (i) => { if ((await options.nth(i).getAttribute("aria-pressed")) !== "true") await options.nth(i).click(); await page.waitForTimeout(3000); };
   await pick(0);
   for (const m of ["Before", "After", "Before", "After"]) {

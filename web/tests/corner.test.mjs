@@ -11,7 +11,7 @@ test("a kept fix counts on Export in the corner, not in a chip of its own beside
   const work = host.button("Propose fixes").props.onClick(); host.render();
   host.requests.at(-1).resolve({ understanding: "A fix", options: [option], attempts: [] }); await work; host.render();
   assert.equal(count(exportLink(host)), undefined, "nothing kept yet: no count");
-  await host.button("Accept this fix").props.onClick(); await host.settle();
+  await host.component("ProposalCard").props.onAccept(); await host.settle();
   const fixed = Object.keys(host.state.fixes).length;
   assert.ok(fixed > 0, "the fix was kept");
   const link = exportLink(host);

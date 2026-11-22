@@ -44,3 +44,36 @@ export function showAboutHash(tab: AboutTab | null, push: boolean): void {
   if (push) window.history.pushState(window.history.state, "", base + aboutHash(tab));
   else window.history.replaceState(window.history.state, "", base + aboutHash(tab));
 }
+
+/** The About page's address as a path (`/about`, `/about/<tab>`): the hash form is the first one, still read. */
+export function aboutPath(tab: AboutTab): string {
+  return tab === "overview" ? "/about" : `/about/${tab}`;
+}
+
+/** The tab the page's address asks for: its path (`/about`, `/about/<tab>`), else an old `#about` hash; else null. */
+export function aboutTabNow(): AboutTab | null {
+  const path = typeof window !== "undefined" ? window.location?.pathname ?? "" : "";
+  const m = /^\/about(?:\/([\w-]*))?\/?$/.exec(path);
+  if (m) return ABOUT_TABS.find((t) => t.id === m[1])?.id ?? "overview";
+  return aboutTabFromHash(currentHash());
+}
+
+/** Where the About page was opened from, to go back to on close. */
+let aboutFrom: string | null = null;
+
+/** Put the About page's tab in the address bar as a path (push: Back closes it), or (null) leave it for where it was
+ * opened from (else `fallback`). No-op without a window. */
+export function showAboutPath(tab: AboutTab | null, push: boolean, fallback = "/home"): void {
+  if (typeof window === "undefined" || !window.history || !window.location) return;
+  const here = window.location.pathname, search = window.location.search;
+  const onAbout = /^\/about(\/|$)/.test(here) || !!aboutTabFromHash(window.location.hash);
+  if (tab === null) {
+    if (onAbout) window.history.replaceState(window.history.state, "", (aboutFrom ?? fallback) + search);
+    aboutFrom = null;
+    return;
+  }
+  if (!onAbout) aboutFrom = here;
+  const next = aboutPath(tab) + search;
+  if (push) window.history.pushState(window.history.state, "", next);
+  else window.history.replaceState(window.history.state, "", next);
+}

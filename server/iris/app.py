@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import importlib
 import io
 import json
 import os
@@ -18,7 +19,7 @@ import wave
 import zlib
 from dataclasses import asdict
 from functools import partial
-from typing import Callable
+from typing import Callable, Literal
 from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 
@@ -28,13 +29,14 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import HTTPConnection
 from starlette.routing import Route
 
-from . import (agents, built, chat, checks, context_planner, demos, detect, document, domains, edits, escalation,
-               faces, journal, manual, mcp_server, model_client, origins, owner, plans, property_edits, requirements, settings,
-               spend, step, titles, triage, voice_live)
+from . import (agents, built, chat, checks, context_planner, demos, detect, document, domains, drawings, edits,
+               escalation, faces, journal, manual, mcp_server, model_client, origins, owner, plans, projects,
+               property_edits, requirements, settings, spend, step, titles, triage, voice_live)
 from .model_client import escalation_info, labels as model_labels, transcribe, triage_model, triage_model_info
 from .limits import ProposeLimit, client_id, env_float, env_int
 from .service import MODEL_SUFFIXES, MODELS, StaleLayout, Workspace, project_name
@@ -339,6 +341,11 @@ class PlanRequest(BaseModel):
 class PlanApply(BaseModel):
     options: list[dict]
     clash_ids: list[str | None] | None = None   # per option, the clash it was accepted for (the edit log ties them)
+    # Who accepted it and why: the edit log's actor, and an "accepted" decision per fix (docs/engineer-workflow.md).
+    reviewer: str | None = Field(None, max_length=120)
+    reason: str | None = Field(None, max_length=2000)
+    clash_keys: list[str | None] | None = None   # per option, its clash key, when the server cannot work it out
+    numbers: list[int | None] | None = None      # per option, its clash's #N, likewise
 
 
 class OpenReport(BaseModel):
@@ -718,6 +725,365 @@ def scene_info(scene_id: str):
     return ws.scene_info(_scene(scene_id))
 
 
+# Projects (projects.py, docs/engineer-workflow.md): a named set of models, its saved edits, reviews and reports, kept
+# on disk. Private by an unguessable id: the browser lists the ids it made; only the owner lists them all.
+
+PROJECT_IDS_MAX = 200   # ids one listing may ask for
+
+
+class ProjectNew(BaseModel):
+    name: str = Field(min_length=1, max_length=projects.NAME_MAX)
+
+
+class ProjectPatch(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=projects.NAME_MAX)
+    counts: dict | None = None   # {clashes, open, resolved, reviewed}, as the page last counted them; null clears
+
+
+class ProjectScene(BaseModel):
+    scene_id: str
+
+
+class ProjectReview(BaseModel):
+    key: str = Field(min_length=1, max_length=projects.KEY_MAX)   # the clash key (projects.clash_key)
+    status: Literal["open", "by_design", "author", "resolved"]
+    note: str | None = Field(None, max_length=projects.NOTE_MAX)
+    by: str | None = Field(None, max_length=projects.BY_MAX)
+    number: int | None = Field(None, ge=1)
+    title: str | None = Field(None, max_length=projects.TITLE_MAX)
+
+
+class ProjectReport(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=200)   # a built report's id, or its /api/documents/<id> path
+    name: str = Field(min_length=1, max_length=200)
+    kind: Literal["pdf", "bcf"]
+
+
+def _project(go):
+    """A project call, its errors as HTTP: no such project 404, the cap 409, anything refused in words 400."""
+    try:
+        return go()
+    except projects.NotFound:
+        raise HTTPException(404, "No such project.")
+    except projects.Full as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/projects")
+def list_projects(ids: str | None = None):
+    """The projects with these ids (comma-separated; unknown ones are left out), newest change first. Without ids:
+    every project, for the owner only."""
+    if ids is None:
+        if not owner.is_owner():
+            raise HTTPException(403, "Only the owner can list every project: ask for the ids you have.")
+        return projects.list_projects(None)
+    wanted = [i.strip() for i in ids.split(",") if i.strip()][:PROJECT_IDS_MAX]
+    return projects.list_projects(wanted)
+
+
+@app.post("/api/projects")
+def create_project(body: ProjectNew):
+    return _project(lambda: projects.create(body.name))
+
+
+@app.get("/api/projects/{pid}")
+def get_project(pid: str):
+    return _project(lambda: projects.get(pid))
+
+
+@app.patch("/api/projects/{pid}")
+def patch_project(pid: str, body: ProjectPatch):
+    return _project(lambda: projects.patch(pid, name=body.name, counts=body.counts,
+                                           set_counts="counts" in body.model_fields_set))
+
+
+@app.post("/api/projects/{pid}/attach")
+def attach_project(pid: str, body: ProjectScene):
+    """Make an open scene's models the project's: their original files are copied into it (edits are kept by save)."""
+    _scene(body.scene_id)
+    return _project(lambda: projects.attach(ws, pid, body.scene_id))
+
+
+@app.post("/api/projects/{pid}/open")
+def open_project(pid: str):
+    """Open the project as a new scene: its last saved state, else its original files. Its clashes keep their numbers
+    and titles once detected again; its decisions come back to the edit log. `scene` is GET /api/scenes/{id}'s."""
+    project = _project(lambda: projects.get(pid))
+    if not project.get("files"):
+        raise HTTPException(409, "No models are attached to this project yet.")
+    needs = any(f.get("kind") == "STEP" for f in project["files"])
+    try:
+        sid, project = projects.open_project(ws, pid, classify_with=_classifier() if needs else None)
+    except projects.NotFound:
+        raise HTTPException(404, "No such project.")
+    except FileNotFoundError as e:
+        raise HTTPException(409, f"A model file of this project is missing: {Path(str(e.filename or e)).name}")
+    except step.StepError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # not a model IfcOpenShell can read
+        raise HTTPException(400, f"Could not open the project's models: {type(e).__name__}: {e}")
+    return {"scene_id": sid, "project": project, "scene": ws.scene_info(sid)}
+
+
+@app.post("/api/projects/{pid}/save")
+def save_project(pid: str, body: ProjectScene):
+    """Keep the open scene's models as they are now, with its edit log, decisions and clash numbers and titles."""
+    _scene(body.scene_id)
+    return _project(lambda: projects.save(ws, pid, body.scene_id))
+
+
+@app.put("/api/projects/{pid}/reviews")
+def review_project_clash(pid: str, body: ProjectReview):
+    """Where one clash stands for the project, by its clash key: open, by design, sent to its author, resolved."""
+    return _project(lambda: projects.set_review(pid, body.key, body.status, note=body.note, by=body.by,
+                                                number=body.number, title=body.title))
+
+
+@app.post("/api/projects/{pid}/reports")
+def add_project_report(pid: str, body: ProjectReport):
+    """Keep a built report (POST /api/reports/{id}/document/stream) with the project, while the server still holds it."""
+    doc_id = body.doc_id.rsplit("/", 1)[-1]
+    if doc_id not in _documents:
+        raise HTTPException(404, "That report has expired. Build it again.")
+    data = _documents[doc_id][0]
+    return _project(lambda: projects.add_report(pid, doc_id, body.name, body.kind, data))
+
+
+@app.get("/api/projects/{pid}/reports/{doc_id}")
+def project_report(pid: str, doc_id: str):
+    try:
+        path, name = projects.report_file(pid, doc_id)
+    except projects.NotFound:
+        raise HTTPException(404, "No such report in this project.")
+    media = {".pdf": "application/pdf", ".zip": "application/zip"}.get(path.suffix.lower(), "application/octet-stream")
+    return FileResponse(path, filename=name, media_type=media)
+
+
+# 2D drawings (drawings.py, docs/drawings.md): PDF sheets held with a scene, read by the drawing reader
+# (drawing_reader.py) and compared with the model (drawing_compare.py). Those two are used when this build has them:
+# until then their routes answer 501.
+
+
+class DrawingRead(BaseModel):
+    pages: list[int] | None = Field(None, max_length=1000)   # Page.index values; None or absent: every page
+
+
+def _optional(module: str, attr: str):
+    """`iris.<module>.<attr>`, or None when that module is not part of this build (a missing dependency inside it is
+    an error, never a quiet 501)."""
+    name = f"{__package__}.{module}"
+    try:
+        found = importlib.import_module(name)
+    except ModuleNotFoundError as e:
+        if e.name == name:
+            return None
+        raise
+    return getattr(found, attr, None)
+
+
+def _drawing(drawing_id: str) -> drawings.Drawing:
+    drawings.STORE.prune(ws.scenes)
+    try:
+        return drawings.STORE.get(drawing_id)
+    except KeyError:
+        raise HTTPException(404, "No such drawing. Upload it again.") from None
+
+
+@app.post("/api/scenes/{scene_id}/drawings")
+async def upload_drawings(scene_id: str, request: Request):
+    """PDF drawings for an open scene (multipart `files`, as models): each page rendered and its text layer read
+    (drawings.ingest), returned as Drawing[]. Refused before the body is read without a length (411) or over the caps
+    (413: IRIS_DRAWING_MAX_MB a file, drawings.MAX_FILES files); one model upload from the allowance. A file that is
+    not a PDF, is password-protected or has more than IRIS_DRAWING_MAX_PAGES pages: 400, and none of the upload is
+    kept."""
+    _scene(scene_id)
+    store = drawings.STORE
+    store.prune(ws.scenes)
+    cap = drawings.max_mb()
+    try:
+        length = int(request.headers["content-length"])
+    except (KeyError, ValueError):
+        raise HTTPException(411, "Send the upload with its length (Content-Length).") from None
+    if length > drawings.MAX_FILES * (cap << 20) + (1 << 20):
+        raise HTTPException(413, f"Upload is over {drawings.MAX_FILES * cap} MB.")
+    form = await request.form(max_files=drawings.MAX_FILES + 1)
+    files = [v for v in form.getlist("files") if not isinstance(v, str)]
+    if not files or len(files) > drawings.MAX_FILES:
+        raise HTTPException(400, f"Choose 1 to {drawings.MAX_FILES} PDF drawings.")
+    names = [Path(f.filename or "").name for f in files]
+    bad = [n for n in names if Path(n).suffix.lower() != ".pdf"]
+    if bad:
+        raise HTTPException(400, f"{bad[0] or 'A file'} is not a PDF drawing (.pdf).")
+    if len(set(names)) < len(names):
+        raise HTTPException(400, "A file was given twice.")
+    if len(files) > store.room(scene_id):
+        raise HTTPException(409, f"A model set holds at most {drawings.MAX_PER_SCENE} drawings.")
+    refused = _take(model_upload_limit, request)
+    if refused:
+        raise HTTPException(429, refused)
+    blobs = []
+    for f, name in zip(files, names):
+        await f.seek(0)
+        data = await f.read((cap << 20) + 1)
+        if len(data) > cap << 20:
+            raise HTTPException(413, f"{name} is over {cap} MB.")
+        blobs.append((name, data))
+    scene = ws.scenes.get(scene_id)
+    if scene is None:
+        _scene(scene_id)
+    store.watch(scene_id, scene)
+    root = store.root(scene_id)
+
+    def ingest_all() -> list[drawings.Drawing]:
+        made: list[drawings.Drawing] = []
+        try:
+            for name, data in blobs:
+                made.append(drawings.ingest(data, name, root))
+        except BaseException:
+            for d in made:
+                shutil.rmtree(root / d.id, ignore_errors=True)
+            raise
+        return made
+
+    try:
+        made = await run_in_threadpool(ingest_all)
+    except drawings.TooBig as e:
+        raise HTTPException(413, str(e))
+    except drawings.DrawingError as e:
+        raise HTTPException(400, str(e))
+    if scene_id not in ws.scenes:   # let go while its pages were rendered
+        for d in made:
+            shutil.rmtree(root / d.id, ignore_errors=True)
+        _scene(scene_id)
+    for d in made:
+        store.add(scene_id, d)
+    return [d.to_dict() for d in made]
+
+
+@app.get("/api/scenes/{scene_id}/drawings")
+def list_drawings(scene_id: str):
+    """The scene's drawings, in upload order (Drawing[])."""
+    _scene(scene_id)
+    drawings.STORE.prune(ws.scenes)
+    return [d.to_dict() for d in drawings.STORE.list(scene_id)]
+
+
+@app.get("/api/drawings/{drawing_id}/pages/{n}.png")
+def drawing_page(drawing_id: str, n: int):
+    """A drawing's page as rendered (n: its Page.index)."""
+    drawing = _drawing(drawing_id)
+    try:
+        path = drawings.page_path(drawing, n)
+    except (KeyError, IndexError):
+        raise HTTPException(404, "No such page.") from None
+    if not path.is_file():
+        raise HTTPException(404, "No such page.")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.post("/api/drawings/{drawing_id}/read")
+def read_drawing_stream(drawing_id: str, body: DrawingRead | None = None):
+    """Read a drawing's pages (all, or `pages`) with the drawing reader (drawing_reader.read_drawing: the fast model,
+    each page checked against its text layer, paid for once per file hash and page, within the day's budget), answered
+    as newline-delimited JSON: its `page` progress and `item` events, then `done` {items, cost_usd}, or `error`
+    {status, detail}; a `tick` every 5 s. A read the budget cannot cover is refused before the stream starts (429).
+    The items are kept for GET .../items and the comparison (a read of some pages replaces only those pages' items).
+    501 "reader not available" when this build has no reader."""
+    drawing = _drawing(drawing_id)
+    read = _optional("drawing_reader", "read_drawing")
+    if read is None:
+        raise HTTPException(501, "reader not available")
+    refused = _optional("drawing_reader", "ReadRefused")
+    pages = None if body is None or body.pages is None else sorted(set(body.pages))
+    if pages is not None:
+        if not pages:
+            raise HTTPException(400, "Choose the pages to read.")
+        wrong = [n for n in pages if not 0 <= n < len(drawing.pages)]
+        if wrong:
+            raise HTTPException(400, f"{drawing.name} has no page {wrong[0]} (pages 0 to {len(drawing.pages) - 1}).")
+
+    def failed(e: Exception) -> tuple[int, str]:
+        if refused is not None and isinstance(e, refused):
+            return 429, str(e)
+        return 500, f"Could not read the drawing: {type(e).__name__}: {e}"
+
+    # The reader checks the budget before its first event: run to it here, so a refusal is a plain HTTP error.
+    reading = iter(read(drawing, pages, folder=drawings.folder_of(drawing)))   # where its page PNGs are
+    try:
+        first = next(reading, None)
+    except Exception as e:
+        raise HTTPException(*failed(e)) from None
+    events: queue.Queue = queue.Queue()
+
+    def work():
+        found: list = []
+
+        def take(event) -> None:
+            if isinstance(event, dict) and event.get("type") == "item" and event.get("item") is not None:
+                found.append(event["item"])
+            if isinstance(event, dict) and event.get("type") == "done":
+                items = drawings.plain(event.get("items") if isinstance(event.get("items"), list) else found)
+                try:
+                    old = drawings.STORE.items_of(drawing_id)
+                except KeyError:   # its scene went while it was read: nothing to keep them with
+                    old = None
+                if old is not None:
+                    drawings.STORE.set_items(drawing_id, drawings.merge_items(old, items, pages))
+            events.put(json.loads(json.dumps(drawings.plain(event), default=str)))
+        try:
+            if first is not None:
+                take(first)
+            for event in reading:
+                take(event)
+        except Exception as e:   # the reader's own failure (the budget spent mid-read, the model): said in the stream
+            status, detail = failed(e)
+            events.put({"type": "error", "status": status, "detail": detail})
+        events.put(None)
+
+    owner.spawn(work)
+    return _ndjson(_ticking(events))
+
+
+@app.get("/api/drawings/{drawing_id}/items")
+def drawing_items(drawing_id: str):
+    """What the last read found on the drawing (Item[]; [] before a read)."""
+    _drawing(drawing_id)
+    try:
+        return drawings.plain(drawings.STORE.items_of(drawing_id))
+    except KeyError:
+        raise HTTPException(404, "No such drawing. Upload it again.") from None
+
+
+@app.get("/api/scenes/{scene_id}/drawings/compare")
+def compare_drawings(scene_id: str):
+    """The items read on the scene's drawings against the model's own data, drawing by drawing, each with the level
+    its title block names (drawings.compare_scene, drawing_compare.compare, the model's index built once): {matches:
+    [{item, element, by, drawing}], mismatches: [Mismatch + drawing], unmatched, drawings: [{drawing, name, storey,
+    read, scope}]}. 501 "comparison not available" when this build has none."""
+    _scene(scene_id)
+    drawings.STORE.prune(ws.scenes)
+    compare = _optional("drawing_compare", "compare")
+    if compare is None:
+        raise HTTPException(501, "comparison not available")
+    index = _optional("drawing_compare", "model_index")
+    held = drawings.STORE.list(scene_id)
+
+    def items_of(did: str) -> list:
+        try:
+            return drawings.STORE.items_of(did)
+        except KeyError:
+            return []
+    with ws.lock:
+        try:
+            scene = ws.scene(scene_id)
+        except KeyError:
+            _scene(scene_id)
+            raise
+        return drawings.compare_scene(scene, held, items_of, compare, index)
+
+
 EXPORTS_KEEP_S = env_int("IRIS_EXPORTS_KEEP_S", 3600)   # written models and exports older than this are deleted (a big model's export is big)
 
 
@@ -977,18 +1343,80 @@ def _with_patch(scene_id: str, kept) -> dict:
         return {**r, **ws.patch(scene_id, r.get("changed", []), before, removed=r.get("removed", []))}
 
 
-def _keep(scene_id: str, options: list[dict], what: str, clash_ids: list[str | None] | None = None) -> dict:
+def _keep(scene_id: str, options: list[dict], what: str, clash_ids: list[str | None] | None = None,
+          review: dict | None = None) -> dict:
     """Keep fixes through `plans.apply`, which tries each again first (as its proposal did, with the clearance and
     requirements of its clash) and keeps all or none, plus what the page needs to patch its model. A fix that no longer
-    passes is a 409 with why; one that cannot be made a 422; one that is not a fix Iris knows a 400."""
+    passes is a 409 with why; one that cannot be made a 422; one that is not a fix Iris knows a 400. With `review`
+    ({reviewer, reason, clash_keys, numbers}: the fix and plan routes), the entry's actor is the reviewer and each fix
+    kept appends an "accepted" decision to the journal (`decisions` in the reply)."""
+    actor = (review or {}).get("reviewer") or None
     try:
-        return _with_patch(_scene(scene_id), lambda: plans.apply(ws, scene_id, options, clash_ids=clash_ids))
+        kept = _with_patch(_scene(scene_id), lambda: plans.apply(ws, scene_id, options, clash_ids=clash_ids, actor=actor))
     except plans.NotVerified as e:
         raise HTTPException(409, str(e))
     except edits.Unsupported as e:
         raise HTTPException(422, f"Cannot apply {what}: {e}")
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise HTTPException(400, f"Not a fix Iris can apply: {e}")
+    if review is not None:
+        kept["decisions"] = _accepted(scene_id, kept, options, clash_ids, review)
+    return kept
+
+
+def _clash_ref(scene_id: str, clash_id: str | None) -> tuple[str | None, int | None]:
+    """A clash's key and #N as the server knows them (`projects.clash_key`): Iris's own from the scene's kept checks,
+    an imported one as `nw|<report title>|<clash name>`; (None, None) when it knows neither."""
+    if not clash_id:
+        return None, None
+    register = ws.checks.get(scene_id)
+    if register is not None and clash_id in register.ids:
+        was = register.ids[clash_id]
+        if was.get("a") and was.get("b"):
+            return projects.clash_key(was.get("kind"), was["a"], was["b"]), register.numbers.get(clash_id)
+    for r in list(ws.reports.values()):
+        if r.origin == "iris":
+            continue
+        c = next((c for c in r.clashes if c.id == clash_id), None)
+        if c is not None:
+            return f"nw|{r.title}|{c.ref or c.name}", c.number or None
+    return None, None
+
+
+def _accepted(scene_id: str, kept: dict, options: list[dict], clash_ids: list[str | None] | None,
+              review: dict) -> list[dict]:
+    """One "accepted" decision per fix kept: geometry-validated (it passed the check again to be kept), with what the
+    check found. The option as the server kept it (the entry's), else as sent."""
+    entry = kept.get("entry") or {}
+    sent = (entry.get("params") or {}).get("options") or options
+    n = len(sent)
+    pad = lambda xs: list(xs or []) + [None] * n
+    ids, keys, numbers, verified = pad(clash_ids), pad(review.get("clash_keys")), pad(review.get("numbers")), pad(kept.get("verified"))
+    log = ws.journal(scene_id)
+    out = []
+    for k, o in enumerate(sent):
+        key, number = _clash_ref(scene_id, ids[k])
+        v = verified[k] or {}
+        option = {"title": o.get("title") or o.get("kind") or "fix", "kind": o.get("kind") or "move",
+                  "moved": [str(g) for g in o.get("moved") or []], "delta_m": o.get("delta_m")}
+        if o.get("rationale"):
+            option["rationale"] = o["rationale"]
+        d = {"clash_id": ids[k] or "", "clash_key": key or keys[k] or "", "option": option,
+             "state": "geometry_validated", "decision": "accepted",
+             "check": {"verified": True, "min_clearance_m": v.get("min_clearance_m"),
+                       "checked_against": v.get("checked_against")}}
+        number = number or numbers[k]
+        if number:
+            d["number"] = number
+        for field in ("reason", "reviewer"):
+            if review.get(field):
+                d[field] = review[field]
+        if entry.get("id"):
+            # The edit log's entry it was kept as, and the session (scene) that kept it: E-ids start again in every
+            # session, so a reopened project tells its saved entries apart by both (projects.save stamps `session`).
+            d["entry"], d["session"] = entry["id"], scene_id
+        out.append(log.add_decision(d))
+    return out
 
 
 def _one(r: dict) -> dict:
@@ -1097,6 +1525,11 @@ def apply_offset(scene_id: str, body: Offset):
 class FixApply(BaseModel):
     option: dict
     clash_id: str | None = None   # the clash it was accepted for (the edit log ties them)
+    # Who accepted it and why: the edit log's actor, and an "accepted" decision (docs/engineer-workflow.md).
+    reviewer: str | None = Field(None, max_length=120)
+    reason: str | None = Field(None, max_length=2000)
+    clash_key: str | None = Field(None, max_length=400)   # used when the server cannot work the key out itself
+    number: int | None = Field(None, ge=1)
 
 
 @app.post("/api/scenes/{scene_id}/fix/apply")
@@ -1110,7 +1543,8 @@ def fix_apply(scene_id: str, body: FixApply):
     # A drain tilted about its fixture with its other end free translates nothing: it names the drain it tilts.
     if not isinstance(o.get("moved"), list) or not (o["moved"] or (o.get("edit") or {}).get("tilts")):
         raise HTTPException(400, "The fix names no element.")
-    return _one(_keep(scene_id, [o], "this fix", [body.clash_id]))
+    review = {"reviewer": body.reviewer, "reason": body.reason, "clash_keys": [body.clash_key], "numbers": [body.number]}
+    return _one(_keep(scene_id, [o], "this fix", [body.clash_id], review))
 
 
 class FacePick(BaseModel):
@@ -1227,6 +1661,50 @@ def edits_undo(scene_id: str, body: EditStep):
 @app.post("/api/scenes/{scene_id}/edits/redo")
 def edits_redo(scene_id: str, body: EditStep):
     return _step(scene_id, lambda: ws.redo_edit(scene_id, body.entry))
+
+
+class DecisionOption(BaseModel):
+    title: str = Field(max_length=300)
+    kind: str = Field(max_length=40)
+    moved: list[str] = Field(max_length=500)
+    delta_m: list[float] | None = Field(None, min_length=3, max_length=3)
+    rationale: str | None = Field(None, max_length=4000)
+
+
+class DecisionCheck(BaseModel):
+    verified: bool
+    min_clearance_m: float | None = None
+    checked_against: int | None = Field(None, ge=0)
+    reason: str | None = Field(None, max_length=2000)
+
+
+class Decision(BaseModel):
+    """A reviewer's decision about a proposal (docs/engineer-workflow.md, "Decisions"). `at` is the server's."""
+    clash_id: str = Field(min_length=1, max_length=200)
+    clash_key: str = Field(min_length=1, max_length=400)
+    number: int | None = Field(None, ge=1)
+    option: DecisionOption
+    state: Literal["ai_proposed", "geometry_validated", "failed_validation", "unverified"]
+    decision: Literal["accepted", "rejected", "modified", "requested_another"]
+    reason: str | None = Field(None, max_length=2000)
+    reviewer: str | None = Field(None, max_length=120)
+    check: DecisionCheck | None = None
+
+
+@app.post("/api/scenes/{scene_id}/decisions")
+def add_decision(scene_id: str, body: Decision):
+    """Record what a reviewer decided about a proposal (rejected, modified, another requested; accepting goes through
+    the fix and plan routes, which record it themselves). Kept in the scene's journal with its edits."""
+    _scene(scene_id)
+    d = body.model_dump(exclude_none=True)
+    d["option"].setdefault("delta_m", None)
+    log = ws.journal(scene_id)
+    try:
+        stored = log.add_decision(d)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    with log.lock:
+        return {"decision": stored, "decisions": [dict(x) for x in log.decisions]}
 
 
 @app.get("/api/scenes/{scene_id}/export")
@@ -1990,7 +2468,9 @@ def plan_stream(scene_id: str, body: PlanRequest, request: Request):
 @app.post("/api/scenes/{scene_id}/plan/apply")
 def plan_apply(scene_id: str, body: PlanApply):
     """Keep a plan's fixes, all or none: each tried again alone and all together first (plans.apply)."""
-    return _keep(scene_id, body.options, "the plan", body.clash_ids)
+    return _keep(scene_id, body.options, "the plan", body.clash_ids,
+                 {"reviewer": body.reviewer, "reason": body.reason, "clash_keys": body.clash_keys,
+                  "numbers": body.numbers})
 
 
 _chat: chat.Chat | None = None
@@ -2054,6 +2534,7 @@ class DocumentRequest(BaseModel):
     marks: dict[str, str] = {}         # clash id -> "by_design" | "author"
     triage: dict[str, dict] = {}       # clash id -> the verdict the browser shows (survives a server restart or rerun)
     check: str | None = None           # one kept check's clashes only (its key; None: every clash in the report)
+    project_id: str | None = None      # the project it is for: its name on the cover (docs/engineer-workflow.md)
 
 
 _documents: dict[str, tuple[bytes, str, str]] = {}
@@ -2100,6 +2581,16 @@ def document_stream(report_id: str, body: DocumentRequest, request: Request):
     if len(verdicts) < len(report.clashes) // 2:
         raise HTTPException(409, "Triage the report first: the report sorts clashes by its verdicts.")
     scene = ws.scene(body.scene_id) if body.scene_id and body.scene_id in ws.scenes else None
+    # For a project: its name on the cover; with no live edit log for the scene (none open, or the server restarted),
+    # the reviewers' decisions of its newest saved state.
+    project_name, decisions = None, None
+    if body.project_id:
+        try:
+            project_name = projects.get(body.project_id)["name"]
+            if scene is None or ws.journals.get(body.scene_id) is None:
+                decisions = projects.saved_decisions(body.project_id)
+        except projects.NotFound:
+            raise HTTPException(404, "No such project.")
     refused = _take(propose_limit, request)
     if refused:
         raise HTTPException(429, refused)
@@ -2109,7 +2600,8 @@ def document_stream(report_id: str, body: DocumentRequest, request: Request):
         try:
             doc = _build_document(report, verdicts, body.scene_id if scene is not None else None, body.scope, teams=body.teams, evidence=body.evidence,
                                   reviews=body.reviews, marks=body.marks, bcf=body.bcf, emit=events.put,
-                                  triage_info=job.info if job is not None else None)
+                                  triage_info=job.info if job is not None else None, project_name=project_name,
+                                  decisions=decisions)
             events.put({"type": "ready", "url": doc["path"], "name": doc["name"], "bytes": doc["bytes"]})
         except Exception as e:
             events.put({"type": "error", "message": f"Could not build the report: {type(e).__name__}: {e}"})
@@ -2126,16 +2618,20 @@ def document_stream(report_id: str, body: DocumentRequest, request: Request):
 
 def _build_document(report, verdicts: dict, scene_id: str | None, scope: str, *, teams: dict | None = None,
                     evidence: dict | None = None, reviews: dict | None = None, marks: dict | None = None,
-                    bcf: bool = True, emit=None, triage_info: dict | None = None) -> dict:
+                    bcf: bool = True, emit=None, triage_info: dict | None = None, project_name: str | None = None,
+                    decisions: list | None = None) -> dict:
     """Build a report and keep it for download: {path (the download route), name, bytes, file (a local copy)}.
-    `triage_info`: the triage run's model, which the PDF names (none: the one triage would run on now)."""
+    `triage_info`: the triage run's model, which the PDF names (none: the one triage would run on now).
+    `project_name`: the project's name for the cover; `decisions`: the reviewers' decisions when there is no live edit
+    log to read them from (a project's saved state; None: the scene's journal's)."""
     scene = ws.scene(scene_id) if scene_id and scene_id in ws.scenes else None
     matches = ws.match(report.id, scene_id) if scene is not None else None
     data, name, media = document.generate(
         report, verdicts, ws.model, scope=scope, model_teams=teams or {}, matches=matches, scene=scene,
         evidence=evidence or {}, reviews=reviews or {}, marks=marks or {}, include_bcf=bcf, emit=emit or (lambda e: None),
         triage_info=triage_info, domain=domains.of(ws, scene_id if scene is not None else None),
-        journal=ws.journals.get(scene_id) if scene is not None else None)
+        journal=ws.journals.get(scene_id) if scene is not None else None, project_name=project_name,
+        decisions=decisions)
     doc_id = uuid.uuid4().hex
     _documents[doc_id] = (data, name, media)
     while len(_documents) > 24:
@@ -2440,6 +2936,42 @@ def front_door():
     return API_ROOT
 
 
-# Last, so /api routes win over static files. Split (origins.py), no web app is served here at all.
+# The app's own pages (web/src/projectRoute.ts, aboutRoute.ts): a browser asking for one of these gets index.html.
+WEB_PAGES = frozenset({"home", "projects", "workspace", "about", "settings"})
+
+
+def _is_page(scope) -> bool:
+    """A browser asking for one of the app's pages: GET or HEAD, a path under WEB_PAGES with no file extension and
+    nothing that walks up or is encoded to ("..", "%", a backslash), and an Accept that takes HTML. Never /api, /mcp,
+    /docs, /openapi.json, /assets, /wasm or a file."""
+    if scope.get("method") not in ("GET", "HEAD"):
+        return False
+    path = scope.get("path") or ""
+    raw = (scope.get("raw_path") or b"").decode("latin-1")
+    if any(bad in s for s in (path, raw) for bad in ("..", "%", "\\")):
+        return False
+    parts = [p for p in path.split("/") if p]
+    if not parts or parts[0] not in WEB_PAGES or "." in parts[-1]:
+        return False
+    accept = next((v for k, v in scope.get("headers") or [] if k == b"accept"), b"").decode("latin-1")
+    return "text/html" in accept
+
+
+class _WebApp(StaticFiles):
+    """The built web app. One of its pages with no file of its own (/home, /projects/<id>/clashes/3, …: `_is_page`) is
+    the app itself, index.html, so a reload or a shared link opens it (the app reads its route from the path).
+    Everything else that is missing (an /api route, a file) stays a 404."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as e:
+            if e.status_code != 404 or not _is_page(scope):
+                raise
+            return await super().get_response("index.html", scope)
+
+
+# Last, so /api routes win over static files. Split (origins.py: the web app on Firebase Hosting), no web app is
+# served here at all and `/` says this is the API.
 if not origins.allowed() and (WEB_DIST / "index.html").exists():
-    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+    app.mount("/", _WebApp(directory=WEB_DIST, html=True), name="web")

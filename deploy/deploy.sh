@@ -39,7 +39,8 @@ OWNER_TOKEN_SECRET="${OWNER_TOKEN_SECRET:-iris-owner-token}"
 GEMINI_API_KEY_SECRET="${GEMINI_API_KEY_SECRET-iris-gemini-api-key}"   # optional; used only if it exists; "" never
 
 # Optional Cloud Storage bucket, mounted with Cloud Storage FUSE at /mnt/iris: keeps the owner's settings for
-# everyone and the Show it built picture cache across restarts. Empty: nothing persists outside the process.
+# everyone, the Show it built picture cache and the projects (IRIS_PROJECTS_DIR) across restarts. Empty: nothing
+# persists outside the process (projects then live on the instance's in-memory disk and go with it).
 BUCKET="${BUCKET:-}"
 
 # Container shape, kept minimal: at most one instance (state is in memory), scaled to zero when idle, 2 CPU and 4 GiB
@@ -102,6 +103,7 @@ cat "$ROOT/deploy/env.yaml" > "$ENV_FILE"
   if [ -n "$BUCKET" ]; then
     echo "IRIS_SETTINGS_FILE: \"/mnt/iris/settings.json\""
     echo "IRIS_BUILT_CACHE: \"/mnt/iris/built\""
+    echo "IRIS_PROJECTS_DIR: \"/mnt/iris/projects\""
   fi
 } >> "$ENV_FILE"
 

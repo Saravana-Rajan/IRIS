@@ -2,15 +2,16 @@
 
 > **Covers:** `server/iris/service.py`, `scene.py`, `reports.py`, `detect.py`, `checks.py`, `agent.py`, `plans.py`,
 > `triage.py`, `titles.py`, `chat.py`, `agents.py`, `requirements.py`, `settings.py`, `limits.py`, `spend.py`,
-> `built.py`, `document.py`, `app.py` (its module-level stores), and the browser storage in `web/src/` (`App.tsx`,
-> `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`, `reqFile.ts`, `signoffs.ts`) ·
-> **Checked against code:** re-branded on 2026-11-11 · **Deeper design:** [docs/detection.md](../detection.md),
-> [docs/requirements.md](../requirements.md), [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md),
-> [docs/uploads.md](../uploads.md)
+> `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `app.py` (its module-level stores), and the browser storage
+> in `web/src/` (`App.tsx`, `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`, `reqFile.ts`,
+> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings; re-branded on 2026-11-11) ·
+> **Deeper design:** [docs/detection.md](../detection.md), [docs/requirements.md](../requirements.md),
+> [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md), [docs/uploads.md](../uploads.md),
+> [docs/engineer-workflow.md](../engineer-workflow.md)
 
 Iris keeps almost everything in the memory of one server process: the open models with their edits, the clash
 reports, the shared triage and title runs, chat sessions, agent links, the caps and the day's spend. Only a few
-things touch disk (uploads, conversions, exports, picture caches, the settings file), the settings for everyone live
+things touch disk (uploads, conversions, exports, picture caches, the settings file, projects), the settings for everyone live
 in a settings file that a Cloud Run deploy keeps in Cloud Storage, and the browser keeps a handful of conveniences in `localStorage`, including the
 session it can resume. This doc names the objects, their fields and ids, how each one lives and dies, and where
 every piece of state is kept, so you know what a change touches and what a restart loses.
@@ -341,9 +342,13 @@ Navisworks reports and Iris's own detection produce the same objects, so everyth
   `escalated`. The Workspace keeps the last one per pair in `_last`.
 - **`Plan` and `Item`:** a Fix-together or root-cause plan and its pairs (`key` is the two GlobalIds sorted, joined
   by `|`). `Item.option` is the chosen `Option` as a dict; `Plan.check` is `verify_together`'s verdict. Plans are
-  returned to the caller, not kept on the server; an MCP link keeps the plans its agent built (`Link.plans`).
+  returned to the caller, not kept on the server; an MCP link keeps the plans its agent built (`Link.plans`). An "as
+  designed" root-cause plan edits nothing, so its `check` is `{passed: false, geometry: false, items: {}, conflicts:
+  []}`: never shown or reported as geometry-validated.
 - **Kept fixes** have no object of their own: keeping one edits the scene's models and bumps its revision. The page
-  records which clash it fixed (`fixes` in [12](12-web-app.md)).
+  records which clash it fixed (`fixes` in [12](12-web-app.md)). The edit-log entry the keep makes (`plans.apply`)
+  carries `check = {verified, min_clearance_m, checked_against}` (`checked_against`: the largest count among the
+  fixes kept) and, when the page sends one, the reviewer as `actor`.
 
 ### Shared jobs (`triage.py`, `titles.py`)
 
@@ -369,6 +374,56 @@ Navisworks reports and Iris's own detection produce the same objects, so everyth
   pending captures.
 - **`agents.Job`:** an MCP tool call that may outlast one request: `id`, `kind`, `started`, `done` (an Event),
   `result`, `error`.
+
+### Projects, reviews and decisions (`projects.py`, `journal.py`)
+
+The engineer-first workflow's objects ([docs/engineer-workflow.md](../engineer-workflow.md)). A project lives on
+disk; decisions live in memory with the scene, like the edit log, and reach disk only through a project save.
+
+- **Project** (`project.json`): `id`, `name`, `created`, `updated`, `files` (`[{name, kind: "IFC" | "STEP", size,
+  sha256}]`, the originals in `models/`), `scene_id` (the session last attached, opened or saved, or null; the scene
+  itself lives in memory and goes with eviction or a restart), `saved` (`[{n, at, files, edits}]`, `edits` the kept
+  entries), `reviews` (clash key → Review, at most 5,000), `reports` (`[{doc_id, name, at, kind: pdf | bcf}]`, at
+  most 100, the oldest file deleted), `counts` (`{clashes, open, resolved, reviewed}` as the page last saw them, or
+  null).
+- **Review:** `{status, note?, by?, at, number?, title?}`, `status` one of `open`, `by_design`, `author`, `resolved`;
+  set one clash at a time (`projects.set_review`).
+- **Clash key:** `<test kind>|<GlobalId A>|<GlobalId B>` with the two ids sorted (`projects.clash_key`), so it holds
+  across re-detection; an imported Navisworks clash is `nw|<report title>|<clash name>`. Reviews are keyed by it;
+  decisions and the clash memory carry it.
+- **Saved state** (`saved/<n>/`): each model as it is now (`Workspace.file`; a STEP model edited is its exported
+  STEP, unedited its original) and `state.json` (`{n, at, files, entries, decisions, clashes}`): the edit-log entries
+  (earlier sessions' first; each saved by the session that kept it carries `session`, that scene's id, because E-ids
+  start again in every session), the decisions, and the clash memory `clashes` (clash id → `{kind, a, b, test, name,
+  number, title, key}`, from `Workspace.clash_memory`, `key` the clash key).
+- **Decision** (`Journal.decisions`, `Journal.add_decision`): `{clash_id, clash_key, number?, option: {title, kind,
+  moved, delta_m?, rationale?}, state, decision, reason?, reviewer?, at, check?: {verified, min_clearance_m?,
+  checked_against?, reason?}}`, plus `entry` and `session` (the edit-log entry and the scene that kept it) on one a
+  keep appended. `state` is one of `DECISION_STATES` (`ai_proposed`, `geometry_validated`,
+  `failed_validation`, `unverified`), `decision` one of `DECISIONS` (`accepted`, `rejected`, `modified`,
+  `requested_another`); anything else is refused; `at` is stamped on arrival. A keep through `fix/apply` or
+  `plan/apply` appends one `accepted`, `geometry_validated` decision per kept fix; the page posts the rest. Undo never
+  touches them.
+- **`Journal.earlier`:** the entry dicts of the saved state the scene was opened from: history to read, never undone.
+  The report reads them for a clash with no fix kept in this session (`document.earlier_for`), told apart from this
+  session's entries by session and E-id (`document.entry_key`), never by E-id alone.
+
+### Drawings (`drawings.py`)
+
+The 2D drawing reader's objects ([docs/drawings.md](../drawings.md)); the reader's `Item` and the comparison's
+`Mismatch` are in [04](04-server-code-map.md). A drawing lives in memory with its scene, like the edit log, and reaches
+disk beyond the temp folder only through a project attach or save.
+
+- **Drawing:** `{id, name, sha256, pages, title}`; `title` holds only the title-block fields printed on the first sheet
+  that has any (`sheet`, `scale`, `title`, `drawing_no`).
+- **Page:** `{index, width_px, height_px, dpi, png, words, has_text_layer}`; `index` 0-based, `png` relative to the
+  drawing's folder (`page-<index>.png`), `dpi` 150 unless the page is over 50 MP at it.
+- **Word:** `{text, x0, y0, x1, y1}` in pixels on the page's image, origin top-left, from the PDF's own text layer.
+- **Items** of a drawing: the last read's (`drawing_reader.read_drawing`'s `done.items`, plain dicts); a read of some
+  pages replaces only those pages' items (`merge_items`).
+- **In a project:** `project.json`'s `drawings` (`[{name, sha256, size, pages, items}]`), the PDF as
+  `drawings/<sha256>.pdf` and the items as `drawings/<sha256>.items.json`; a scene holding no drawings leaves a
+  project's as they were.
 
 ### Requirements, settings and limits
 
@@ -426,6 +481,11 @@ Navisworks reports and Iris's own detection produce the same objects, so everyth
 | Built page key | The pair sorted, kind, title and the fix's numbers and edit key | `builtKey` in `App.tsx` | The page's own map of pictures per fix |
 | Wider-fix proposal id | 32 hex | `context_planner.build` | The scene revision it was made at |
 | Host kind key | 16 hex of sha256 of the host's kind facts | `hosts.profile` | The server's life (readings are cached by it) |
+| Project id | 24 hex (`secrets.token_hex(12)`) | `projects.create` | Restarts and redeploys while the folder is kept (on Cloud Run, with a bucket). Unguessable: the browser keeps the ids it made. Anything else is a 404 before a path is built |
+| Clash key | `<test kind>\|<GlobalId A>\|<GlobalId B>`, the ids sorted; an import's `nw\|<report title>\|<clash name>` | `projects.clash_key` | Re-detection, reopening and restarts; keys a project's reviews, and decisions and the clash memory carry it |
+| Saved state `n` | Integer, one more than the newest | `projects.save` | The project |
+| Drawing id | 16 hex (`secrets.token_hex(8)`) | `drawings.ingest` | Its scene; a project's drawing gets a new id each time the project opens (its `sha256` stays) |
+| Drawing item id | `<drawing id>-p<page index>-<n>` | `drawing_reader.read_drawing` | One read of that page |
 
 ## Lifecycles
 
@@ -532,6 +592,34 @@ stateDiagram-v2
 - Title runs (`titles.Job`, `app._title_jobs`, 32 kept) follow the same start, follow and done pattern without
   learn, audits or staleness; a finished run that left clashes untitled is replaced by one for those.
 
+### A project
+
+```mermaid
+stateDiagram-v2
+    [*] --> empty : created with a name
+    empty --> attached : attach, the scene's original files copied in
+    attached --> attached : attach again, the file list replaced
+    attached --> open : open, a new scene from the newest matching saved state or the originals
+    open --> saved : save, each model as it is now, the edit log, decisions, clash memory
+    saved --> saved : save again, the next n
+    saved --> open : open again, another session or after a restart
+```
+
+- **Attach** (`projects.attach`): copies the scene's original files (`Workspace.original_paths`: an IFC as opened, a
+  STEP model's original STEP) into `models/` with their sha256, replacing the project's file list (files of the
+  earlier list are deleted once `project.json` no longer names them), and sets `scene_id`.
+- **Open** (`projects.open_project`): the newest saved state whose file list equals the project's files, else the
+  originals, copied into a fresh temp folder that the new scene owns. The scene's register is seeded
+  (`Workspace.seed_clashes`) with clash ids, `#N` numbers and titles from that state's clash memory, then from the
+  reviews' `number` and `title` for keys not there, so a clash keeps its number and title after re-detection. The
+  saved decisions go back into `Journal.decisions`, the saved entries into `Journal.earlier`. Undo history does not
+  cross a reopen: a saved state is the new baseline.
+- **Save** (`projects.save`): writes `saved/<n+1>/` and sets `scene_id`.
+- **Drawings:** attach and save copy the scene's drawings (PDF and last read items) into `drawings/` when it holds any;
+  open ingests them again into the new scene (a missing or no longer acceptable file is logged and left out).
+- **Bounds:** `IRIS_PROJECTS_MAX` projects (default 50; 0 is no limit); one more is refused (`projects.Full`, 409).
+  Per project, 5,000 reviews (`REVIEWS_MAX`) and 100 reports (`REPORTS_MAX`, the oldest file deleted).
+
 ### A pairing link
 
 ```mermaid
@@ -562,7 +650,7 @@ stateDiagram-v2
 | Open scenes, their in-memory models and edits, boxes, revisions | `Workspace.scenes` (`IfcScene`) | `IRIS_MAX_SCENES` (code default 0, no limit; Cloud Run 8) and `IRIS_SCENE_BUDGET_MB` (default 0, by count only; Cloud Run 300), by `Workspace._evict`; live links' last (`Workspace.keep`) |
 | Per-scene facts | `Workspace.sizes`, `names`, `sources`, `_roots`, `_last` | Dropped with the scene; `_last` also capped at `LAST_KEPT` (200) |
 | Kept checks per scene, and what each clash keeps (ids, numbers, titles, views, triage readings) | `Workspace.checks` (`checks.Register`) | `IRIS_MAX_CHECKS` (12) checks per scene, two lists of them; dropped with the scene |
-| The edit log per scene: one `journal.Entry` per kept edit (who, what, clashes, follows, check, warnings, picture), the lineage (element → entries), the undone entries for redo, each entry's IfcOpenShell transactions (or a wider fix's state before and after) | `Workspace.journals` (`journal.Journal`), on the Workspace because a wider fix replaces the scene's `__dict__` | Dropped with the scene; each model keeps `scene.HISTORY_SIZE` (1,024) transactions |
+| The edit log per scene: one `journal.Entry` per kept edit (who, what, clashes, follows, check, warnings, picture), the lineage (element → entries), the undone entries for redo, each entry's IfcOpenShell transactions (or a wider fix's state before and after); the reviewers' decisions (`decisions`) and a saved project state's entries (`earlier`) | `Workspace.journals` (`journal.Journal`), on the Workspace because a wider fix replaces the scene's `__dict__` | Dropped with the scene (decisions and entries reach disk only through a project save); each model keeps `scene.HISTORY_SIZE` (1,024) transactions |
 | The hand edit the model checked last, per chat conversation (what `edit_keep` may keep) | `Chat.pending` | Replaced by the next check; kept edits clear it |
 | Clash reports, titles on their clashes | `Workspace.reports` | `IRIS_MAX_REPORTS` (default 0; Cloud Run 8), by `Workspace._keep`; live links' last |
 | Report-to-model matches | `Workspace._matches` | Not bounded |
@@ -578,6 +666,7 @@ stateDiagram-v2
 | Host readings by kind | `hosts._cache` | The server's life |
 | The filters' index | `IfcScene._facets` (`facets.index`; `Workspace.facets` reads and builds it outside the lock and keeps it only if the revision held) | Until a kept edit changes the scene's revision or its elements |
 | Pictures being drawn | `built._running` | Only while drawing |
+| 2D drawings per scene and the items of their last read | `drawings.STORE` (`scenes`, `drawings`, `scene_of`, `items`) | 30 per scene (`MAX_PER_SCENE`); dropped with the scene: when its `IfcScene` is garbage (`Store.watch`), and on every drawing call for any scene no longer open (`Store.prune`) |
 | Settings for everyone (cached) | `settings._current` | Read from the store once |
 | Caps | Each `ProposeLimit`'s deques in `app.py` | The rolling hour and day |
 | Escalation-model spend | `spend._day`, `_spent`, `_held` | The UTC day |
@@ -591,7 +680,9 @@ Paths under "temp" are in the system temporary folder (`tempfile.gettempdir()`).
 | What | Path | Kept until |
 |---|---|---|
 | Sample models, sample reports, shipped STEP cache | `samples/`, `samples/reports/<name>/`, `samples/step-cache/` | Read-only; part of the deploy image |
-| Uploaded models and STEP conversions | temp `iris-models/<folder>/` (`service.MODELS`, `Workspace._roots`: one folder per opening or adding) | The scene is evicted (or the open or add fails); a removed model's file at once, its folder once it holds none of the scene's files |
+| Uploaded models and STEP conversions; a project's files copied in to open it | temp `iris-models/<folder>/` (`service.MODELS`, `Workspace._roots`: one folder per opening or adding) | The scene is evicted (or the open or add fails); a removed model's file at once, its folder once it holds none of the scene's files |
+| Projects | `IRIS_PROJECTS_DIR`, default `server/.iris-projects/` (gitignored); on Cloud Run `/mnt/iris/projects` when a bucket is mounted. One folder per project: `project.json`, `models/`, `saved/<n>/` (with `state.json`), `reports/`, `drawings/` ([14](14-files-in-and-out.md)) | Kept; at most `IRIS_PROJECTS_MAX` (50) projects |
+| 2D drawings: the PDF and each page's PNG | temp `iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`): `source.pdf`, `page-<index>.png` | The scene is evicted (its folder goes when the scene object is let go, or on the next drawing call) |
 | STEP conversion cache (when `samples/step-cache` is absent) | temp `iris-models/step-cache/` (`Workspace.step_cache`) | Not cleaned |
 | Uploaded Navisworks reports | temp `iris-reports/<folder>/` (`app.UPLOADS`) | The report is dropped (it is `temporary`) |
 | A run on its own (evals, the requirements preview) | temp `iris-run-*/` | The report is dropped |
@@ -605,8 +696,9 @@ Paths under "temp" are in the system temporary folder (`tempfile.gettempdir()`).
 ### Settings store on Cloud Run
 
 `settings.py` keeps the settings for everyone in one JSON file, `IRIS_SETTINGS_FILE`; on Cloud Run it points at the
-Cloud Storage mount for persisted files ([17](17-deployment-and-operations.md)). It is the only server state that survives a
-restart or a redeploy.
+Cloud Storage mount for persisted files ([17](17-deployment-and-operations.md)). It and the projects
+(`IRIS_PROJECTS_DIR`, `/mnt/iris/projects` on the same mount) are the only server state that survives a restart or a
+redeploy. Without a bucket, projects sit on the container's in-memory disk and go with the instance.
 
 ### The browser
 
@@ -642,7 +734,8 @@ screen, the runs Workings draws) is React state or module state that a reload lo
 
 | Survives | Lost |
 |---|---|
-| Settings for everyone (the settings file, in Cloud Storage on Cloud Run) | Every scene and its edits: reopening starts from the files |
+| Settings for everyone (the settings file, in Cloud Storage on Cloud Run) | Every scene and its edits and decisions: reopening starts from the files, or a project's last saved state |
+| Projects (`IRIS_PROJECTS_DIR`; on Cloud Run only with a bucket): original models, saved states with their edit log, decisions and clash memory, reviews, reports | |
 | `samples/` and the shipped STEP cache | Reports, titles, triage and title runs |
 | The browser's `localStorage` and the owner cookie (signed with a key made from the owner token, so it stays valid while the token does) | Chat sessions, agent links (a page's saved link stops working), MCP jobs and plans |
 | Locally only: the temp folders. The STEP cache and built pictures are found again by hash; uploads, run folders and exports are orphaned | The requirements registry (the next request gets 409 `requirements_unknown` and the page registers again), host readings, caps and the day's spend |
@@ -660,9 +753,10 @@ fixes the link's agent applied meanwhile (`Link.applied`), and follows the link 
   `checks.Register` or `checks.Check`,
   `detect.Test` or `detect.Run`, `agent.Option`, `Attempt`, `Result` or `Clash`, `plans.Plan` or `Item`,
   `triage.Job` or a verdict dict, `titles.Job`, `chat.Session` or `Context`, `agents.Link` or `Job`,
-  `requirements.Doc` and its parts, or `settings.Settings`.
+  `requirements.Doc` and its parts, `settings.Settings`, a project (`project.json`), a Review, a saved state's
+  `state.json`, or a journal decision (`DECISION_STATES`, `DECISIONS`).
 - An id changes format or what it is stable across: scene, report or clash ids, `number`, job keys, link tokens,
-  requirements ids, built cache keys.
+  requirements ids, built cache keys, project ids, the clash key.
 - A lifecycle changes: eviction rules, how a rerun numbers and diffs clashes, triage sharing or staleness, link
   renewal, expiry or caps.
 - A new store appears or a bound changes: a module-level dict in `app.py`, a cache, a temp folder, the settings store, a

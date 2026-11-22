@@ -12,6 +12,12 @@ the entry's transactions) fences it. Undo and redo always move the scene's revis
 
 A model taken out of the scene (`drop_file`) takes its transactions with it: an entry that changed it stays in the log,
 marked `model_removed`, and is never undone or redone; undo passes over it to the newest entry it can undo.
+
+Decisions sit beside the entries (docs/engineer-workflow.md, "Decisions"): what a reviewer decided about a proposal
+(accepted, rejected, modified, another requested), with its state (AI-proposed, geometry-validated, failed validation,
+unverified), the reason and who. A keep through the fix or plan routes appends an "accepted" one; the page posts the
+rest. They are data only: undo never touches them. `earlier` holds the entries of a project's saved state the scene was
+opened from (projects.py), as dicts: history to read, never undone.
 """
 from __future__ import annotations
 
@@ -26,6 +32,8 @@ import numpy as np
 
 SOURCES = ("you", "model", "agent", "fix", "plan", "wider")
 PICTURE_MAX_BYTES = 400_000   # one small picture per entry, as a data URL (the page takes it; the server has no GPU)
+DECISION_STATES = ("ai_proposed", "geometry_validated", "failed_validation", "unverified")
+DECISIONS = ("accepted", "rejected", "modified", "requested_another")
 
 
 class Fenced(RuntimeError):
@@ -106,6 +114,8 @@ class Journal:
         self.lineage: dict[str, list[str]] = {}   # GlobalId -> the entries that changed or made it
         self.lock = threading.RLock()
         self._reran: set[str] = set()                # entries kept with clashes whose free detection rerun was used
+        self.decisions: list[dict] = []              # what reviewers decided about proposals, oldest first
+        self.earlier: list[dict] = []                # a saved project state's entries (projects.py): read only
 
     # ------------------------------------------------------------------------------------------------- recording
 
@@ -214,9 +224,30 @@ class Journal:
 
     def summary(self) -> dict:
         top = self._top()
+        with self.lock:
+            decisions = [dict(d) for d in self.decisions]
         return {"entries": [e.to_dict() for e in self.entries],
                 "can_undo": top is not None, "can_redo": bool(self._redo),
-                "undo": top.id if top else None, "redo": self._redo[-1].id if self._redo else None}
+                "undo": top.id if top else None, "redo": self._redo[-1].id if self._redo else None,
+                "decisions": decisions}
+
+    # ------------------------------------------------------------------------------------------------- decisions
+
+    def add_decision(self, decision: dict) -> dict:
+        """Append a reviewer's decision about a proposal (docs/engineer-workflow.md, "Decisions"): its `state` one of
+        DECISION_STATES, its `decision` one of DECISIONS (ValueError otherwise). Stamped with the time now; returns the
+        stored copy."""
+        d = dict(decision)
+        if d.get("state") not in DECISION_STATES:
+            raise ValueError(f"state is one of {', '.join(DECISION_STATES)}")
+        if d.get("decision") not in DECISIONS:
+            raise ValueError(f"decision is one of {', '.join(DECISIONS)}")
+        if not isinstance(d.get("option"), dict):
+            raise ValueError("a decision names the option it is about")
+        d["at"] = time.time()
+        with self.lock:
+            self.decisions.append(d)
+        return dict(d)
 
     def _top(self) -> Entry | None:
         """The newest kept entry undo can take: one whose model was removed is passed over."""

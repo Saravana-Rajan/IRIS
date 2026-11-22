@@ -193,7 +193,7 @@ export const BUILDING_STEPS: Step[] = [
   },
   {
     act: "A joint, not a move", title: "Accept it",
-    body: () => <>Click <b>Accept this cleanup</b>. The server edits the IFC model, the viewer swaps in the changed
+    body: () => <>Click <b>Accept</b> on the cleanup. The server checks it again, edits the IFC model, the viewer swaps in the changed
       element without reloading the file, and the clash is marked fixed.</>,
     target: "[data-tour=accept]", reveal: true, done: (s) => !!s.joint && s.fixed.includes(s.joint.id), show: { label: "Accept for me" },
   },
@@ -408,7 +408,7 @@ export const CELL_STEPS: Step[] = [
   },
   {
     act: "One fix", title: "Accept it",
-    body: () => <>Click <b>Accept this fix</b>. The server edits the model, the viewer swaps in the changed parts without
+    body: () => <>Click <b>Accept</b>. The server checks it again, edits the model, the viewer swaps in the changed parts without
       reloading the file, and the clash is marked fixed.</>,
     target: "[data-tour=accept]", reveal: true, done: (s) => !!s.ladder && s.fixed.includes(s.ladder.id), show: { label: "Accept for me" },
   },

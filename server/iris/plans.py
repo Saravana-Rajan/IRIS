@@ -540,8 +540,9 @@ def build_root_cause(ws: Workspace, scene_id: str, report_id: str, hub: str, fix
           "reason": reply.get("reason", "")})
     hub_el = cluster["hub"]
     if strategy == "as_designed":  # connections, not conflicts: nothing to edit, say what to do instead
+        # Nothing was changed, so nothing was checked: never shown or reported as geometry-validated.
         return Plan("root_cause", f"Root cause: {hub_el['ifc_class']} '{hub_el['name']}'", reply.get("root_cause", ""),
-                    strategy, cluster, [], {"passed": True, "items": {}, "conflicts": []},
+                    strategy, cluster, [], {"passed": False, "geometry": False, "items": {}, "conflicts": []},
                     round(time.perf_counter() - started, 1), reply.get("reason", ""))
     notes = f"Root cause: {reply.get('root_cause', '')}\nCoordinated plan: {reply.get('reason', '')}"
     if strategy == "move_hub":
@@ -789,8 +790,12 @@ def apply(ws: Workspace, scene_id: str, options: list[dict], *, source: str | No
             rec.params = {"options": [{k: v for k, v in o.items() if k not in ("preview", "before", "placements")}
                                       for o in checked]}
             rec.clashes = [{"id": ids[k], "pair": list(option_pair(o)[:2])} for k, o in enumerate(checked)]
+            # The evidence a reviewer sees: the nearest clearance, and how many elements the check tested the fix
+            # against (the most of any fix kept, as a combined fix counts it).
             rec.check = {"verified": True, "min_clearance_m": min((o["min_clearance_m"] for o in checked
-                                                                   if o.get("min_clearance_m") is not None), default=None)}
+                                                                   if o.get("min_clearance_m") is not None), default=None),
+                         "checked_against": max((o["checked_against"] for o in checked
+                                                 if o.get("checked_against") is not None), default=None)}
             moved = list(dict.fromkeys(g for o in checked for g in [*o["moved"], *EXTRA_FILES.get(
                 o.get("kind", "move"), lambda _: [])(o)]))
             was = parametric.snapshot(scene, moved)   # what the model says besides the shape (docs/editing-parity.md)

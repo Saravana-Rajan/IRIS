@@ -1,16 +1,18 @@
 # 03 · End-to-end flows
 
 > **Covers:** `web/src/App.tsx`, `web/src/api.ts`, `web/src/pilot.ts`, `web/src/voice.ts`, `web/src/uploads.ts`,
-> `web/src/Chat.tsx`, `web/src/ReportDoc.tsx`, `web/src/Agent.tsx`, `server/iris/app.py`,
-> `server/iris/service.py`, and the workflow modules each flow reaches · **Checked against code:** re-branded on
-> 2026-11-11 · **Deeper design:** [docs/detection.md](../detection.md), [docs/edits.md](../edits.md),
+> `web/src/Chat.tsx`, `web/src/ReportDoc.tsx`, `web/src/Agent.tsx`, `web/src/proposalState.ts`, `web/src/ProposalCard.tsx`,
+> `web/src/projectsApi.ts`, `web/src/projectRoute.ts`, `server/iris/app.py`, `server/iris/service.py`,
+> `server/iris/projects.py`, `server/iris/journal.py`, and the workflow modules each flow reaches ·
+> **Checked against code:** re-branded on 2026-11-11; the decision and project flows on 2026-11-22 · **Deeper design:**
+> [docs/engineer-workflow.md](../engineer-workflow.md), [docs/detection.md](../detection.md), [docs/edits.md](../edits.md),
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md), [docs/voice.md](../voice.md),
 > [docs/mcp.md](../mcp.md), [docs/uploads.md](../uploads.md), [docs/requirements.md](../requirements.md)
 
 One section per thing a person (or an agent) does, traced through the code: what the page calls, which route answers,
 what `Workspace` and the workflow modules do, which model is asked, and what comes back. Each step is short and links to
-the doc that owns that part. Route paths use `{sid}` (scene id), `{rid}` (report id), `{cid}` (clash id); diagrams write
-them as `:sid`. Every route, event and error is listed in [10](10-http-api-and-streams.md); threads and the lock are in
+the doc that owns that part. Route paths use `{sid}` (scene id), `{rid}` (report id), `{cid}` (clash id), `{pid}`
+(project id); diagrams write them as `:sid`. Every route, event and error is listed in [10](10-http-api-and-streams.md); threads and the lock are in
 [02](02-system-architecture.md#process-and-concurrency-model).
 
 Names used in the diagrams:
@@ -23,6 +25,9 @@ Names used in the diagrams:
 | `Workspace` | `service.Workspace`, the shared operations |
 | `Geometry` | `IfcScene`, `verify`, `detect`, `edits` under `Workspace.lock` |
 | a model name | the model host call ([08](08-ai-models-prompts-and-spend.md)) |
+| `ProposalCard` | `web/src/ProposalCard.tsx` with `web/src/proposalState.ts` (the four states, `toDecision`) |
+| `Journal` | `journal.Journal`, the scene's edit log and its `decisions` |
+| `projects.py` | `server/iris/projects.py`: projects on disk under `IRIS_PROJECTS_DIR`, a lock per project |
 
 ## Open the Northbank demo and run the check
 
@@ -169,6 +174,59 @@ sequenceDiagram
 
 Owned by: [07](07-fixes-and-edits.md) (keeping, `plans.KEEP`, patches), [13](13-3d-viewer.md) (`Viewer.patch`),
 [12](12-web-app.md) (`accept`, `applyToViewer`), [05](05-domain-model-and-state.md) (scene revisions).
+
+## Accept or reject a proposal, with the decision recorded
+
+The engineer workflow ([docs/engineer-workflow.md](../engineer-workflow.md), "Decisions") records every decision on a
+proposal on the server, with the reviewer, the reason and the time. The server side is built; the page side below is
+the contract's, built in `ProposalCard.tsx` and `proposalState.ts` but not mounted by `App` yet
+([12](12-web-app.md), "Engineer workflow").
+
+The card shows the proposal in one of four states, which `proposalState.stateOf` reads from the item's shape alone:
+only an option from a proposal's `options` or an attempt the check passed is **Geometry-validated**; nothing the model
+wrote is read. **Accept** is enabled only then, and it is still the keep route that decides: `fix/apply` (or
+`plan/apply` for a plan) with `reviewer`, `reason`, `clash_key` and `number`, which tries the fix again through
+`plans.apply` and answers 409 with why when it no longer passes, so nothing is kept or recorded. When it passes, the
+kept entry's actor is the reviewer and `_accepted` appends one `accepted` decision per fix kept, stamped
+`geometry_validated` with what the re-check found (`min_clearance_m`, `checked_against`); the reply carries
+`decisions`. **Reject** (a reason is required), **Modify** and **Request another** build the decision on the page with
+`toDecision`, which records no more than the item's shape supports and throws on accepting anything else, and post it
+to `POST /api/scenes/{sid}/decisions`; `Journal.add_decision` stamps the server's time and refuses an unknown state or
+decision (422). Every decision comes back in `GET /api/scenes/{sid}/edits` (`decisions`), is kept by a project save,
+and appears on the clash's page in the PDF.
+
+```mermaid
+sequenceDiagram
+  participant Card as ProposalCard
+  participant App as App.tsx
+  participant API as app.py
+  participant WS as Workspace
+  participant J as Journal
+  App->>Card: item and its state, proposalState.stateOf
+  alt Accept: geometry-validated only
+    Card->>App: onAccept
+    App->>API: POST scenes/:sid/fix/apply with option, clash_id, reviewer, reason, clash_key, number
+    API->>WS: _keep: plans.apply tries it again under Workspace.lock
+    alt it no longer passes
+      API-->>App: 409 with why, nothing kept, nothing recorded
+    else it passes
+      WS->>J: kept entry, actor the reviewer
+      API->>J: _accepted: add_decision accepted, geometry_validated, the check's numbers
+      API-->>App: the patch, and decisions
+    end
+  else Reject with a reason, Modify, Request another
+    Card->>App: onReject with the reason, onModify or onAnother
+    App->>App: toDecision: the state no higher than the item's shape
+    App->>API: POST scenes/:sid/decisions
+    API->>J: add_decision, 422 on an unknown state or decision
+    API-->>App: decision and decisions
+  end
+  App->>Card: decided: verb, reviewer, time, why
+```
+
+Owned by: [12](12-web-app.md) ("Proposal states"), [07](07-fixes-and-edits.md) (`plans.apply`, keeping),
+[05](05-domain-model-and-state.md) (the journal), [10](10-http-api-and-streams.md) (the routes),
+[14](14-files-in-and-out.md) (the PDF).
 
 ## Triage the report
 
@@ -593,6 +651,58 @@ sequenceDiagram
 Owned by: [12](12-web-app.md) (the saved session), [05](05-domain-model-and-state.md) (what the server keeps and for
 how long), [11](11-mcp-and-agent-links.md) (`Link.applied`).
 
+## Open a saved project
+
+A project ([docs/engineer-workflow.md](../engineer-workflow.md), "Projects") outlives a session: its files are on disk
+under `IRIS_PROJECTS_DIR`, one folder per project (`project.json`, `models/` with the original files, `saved/<n>/`,
+`reports/`), written atomically under a lock per project. **Save** (`POST /api/projects/{pid}/save` with the scene's
+id) writes the scene's models as they are now into `saved/<n>/` (`Workspace.file` for an edited one), then its
+`state.json` (the edit log's entries, the decisions, the clashes' ids, numbers and titles), then `project.json`, so a
+state is read only once it is whole.
+
+`#projects` lists the projects whose ids this browser keeps (`iris.projects`): `GET /api/projects?ids=…` leaves out
+ids the server does not have, and `pruneProjectIds` forgets them. Opening one (`#project/<pid>/<step>`, then
+`openProject`) posts `POST /api/projects/{pid}/open`: 409 when no models are attached or a model file is missing, 400
+when the models cannot be read. `projects.open_project` takes the newest saved state of the project's current files
+(else the originals in `models/`), copies it into a fresh temporary folder the scene owns (eviction never touches the
+project's own files), and opens it as a new scene (`Workspace.open_paths`; a STEP model is converted with the
+classifier, as an upload is). Before anything is detected it seeds the scene's clashes (`Workspace.seed_clashes`)
+with the ids, `#N` numbers and titles the saved state had, then the reviews' numbers and titles, so a clash found
+again keeps them and new ones number on; it puts the saved decisions and earlier entries back in the journal and
+records the new `scene_id` on the project. The reply is `{scene_id, project, scene}` (`scene` as
+`GET /api/scenes/{sid}` gives it). The page then draws the files as Resume does and runs the check; the decisions come
+back with the edit log. A reopened project's undo history starts at the saved state: it is the new baseline. The page
+side is the contract's; `App` does not mount the Projects pages yet ([12](12-web-app.md), "Engineer workflow").
+
+```mermaid
+sequenceDiagram
+  participant App as App.tsx
+  participant V as Viewer
+  participant API as app.py
+  participant P as projects.py
+  participant WS as Workspace
+  App->>API: GET projects with the ids in iris.projects
+  API-->>App: those projects, unknown ids left out
+  App->>App: pruneProjectIds, then the project's hash address
+  App->>API: POST projects/:pid/open
+  API->>P: open_project
+  P->>P: newest saved state of the current files, else models
+  P->>P: copy into a fresh temporary folder
+  P->>WS: open_paths, a new scene
+  P->>WS: seed_clashes: ids, numbers, titles
+  P->>WS: journal: saved decisions and earlier entries
+  P->>P: project.scene_id, project.json written
+  API-->>App: scene_id, project, scene
+  App->>API: GET scenes/:sid/files/:i for each file
+  App->>V: load(bytes)
+  App->>API: run the check: clashes found again keep their numbers and titles
+  App->>API: GET scenes/:sid/edits, with decisions
+```
+
+Owned by: [05](05-domain-model-and-state.md) (projects on disk, the journal), [10](10-http-api-and-streams.md) (the
+project routes), [12](12-web-app.md) (`projectsApi.ts`, `projectRoute.ts`), [15](15-requirements-settings-and-config.md)
+(`IRIS_PROJECTS_DIR`, `IRIS_PROJECTS_MAX`).
+
 ## When the server lets go of the models
 
 A redeploy, a restart, a scale-down after 20 idle minutes (none while the deploy keeps its container warm:
@@ -754,3 +864,5 @@ Owned by: [15](15-requirements-settings-and-config.md) (requirements), [docs/req
 - A change to how accepting a fix reaches the viewer (`_with_patch`, `Workspace.patch`, `applyToViewer`).
 - A change to which model a flow calls, or to the endpoint it uses.
 - A change to how the page and an MCP agent share a session (link events, captures, `applied`).
+- A change to how a decision is recorded (the keep routes' review fields, `POST /api/scenes/{sid}/decisions`,
+  `toDecision`), or to what opening or saving a project does (`projects.open_project`, `projects.save`).

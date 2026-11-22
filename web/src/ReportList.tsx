@@ -79,7 +79,8 @@ interface RowWindows { rowH: number; ranges: Record<string, [number, number]> }
 
 export function ReportList({ report, matches, selected, onSelect, onImage, fixes, reviewed, checked, onCheck, onFixChecked, triageCard, insights,
   insightsCount = null, view = "clashes", onView, status, picker, busy, triage, triageFilter, naming = 0, thumbs, onThumb, focus = null, onClearFocus,
-  onPropose, onSetAside, onFocus, proposing = null, ready = {}, panel = false, onViewProposal, isolating = false, onIsolate, reveal = null }: {
+  onPropose, onSetAside, onFocus, proposing = null, ready = {}, panel = false, onViewProposal, isolating = false, onIsolate, reveal = null,
+  coord = null, onClearCoord }: {
   report: Report; matches: Matches | null; selected: string | null; onSelect: (c: ReportClash) => void;
   onImage: (c: ReportClash, index: number) => void;
   fixes: Record<string, string>; reviewed: Record<string, Review>;
@@ -108,6 +109,9 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
   isolating?: boolean; onIsolate?: (c: ReportClash) => void;
   /** A clash to scroll to without selecting it (the tour pointing at a row that is not drawn yet). */
   reveal?: string | null;
+  /** The coordination overview's filter (a class, a severity or a status: coordination.passes, applied by the page),
+   * with a chip to show every clash again. */
+  coord?: { label: string; keep: (c: ReportClash) => boolean } | null; onClearCoord?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [onlyLinked, setOnlyLinked] = useState(false);
@@ -132,12 +136,13 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
       // measure, a mark made from its panel), and a row never leaves the list from under the click. It goes with the
       // next selection, as the other rows the filter leaves out.
       if (triageFilter && c.id !== selected && triage[c.id]?.verdict !== triageFilter) continue;
+      if (coord && c.id !== selected && !coord.keep(c)) continue;   // likewise: the clash on screen stays
       const text = [`#${c.number}`, c.title, c.name, c.ref, c.test, c.a.name, c.b.name, c.a.ifc_class, c.b.ifc_class, c.a.level, c.b.level, c.grid].join(" ").toLowerCase();
       if (q && !q.split(/\s+/).every((w) => text.includes(w))) continue;
       out.set(c.test, [...(out.get(c.test) ?? []), c]);
     }
     return [...out.entries()];
-  }, [report, matches, query, onlyLinked, by, fixes, reviewed, triage, triageFilter, focus, selected]);
+  }, [report, matches, query, onlyLinked, by, fixes, reviewed, triage, triageFilter, focus, selected, coord]);
 
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -296,6 +301,11 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
             </select>)}
           {shown !== report.clashes.length && <span className="hint shown">{shown} shown</span>}
         </div>}
+        {coord && <div className="list-focus coord-focus" role="status">
+          <span><b>{coord.label}</b> · {shown} shown</span>
+          <button className="ibtn" onClick={onClearCoord} aria-label="Show every clash again" data-tip="Show every clash again" data-tip-side="left">
+            <X size={14} aria-hidden /></button>
+        </div>}
         {focus && <div className="list-focus" role="status">
           <span><b>{focus.label}</b> · {shown} of {focus.ids.length} shown</span>
           <button className="ibtn" onClick={onClearFocus} aria-label="Show every clash again" data-tip="Show every clash again" data-tip-side="left">
@@ -311,7 +321,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
           const range = win?.ranges[test] ?? [0, FIRST_ROWS];
           const start = Math.min(range[0], cs.length), end = Math.min(range[1], cs.length);
           return (
-            <details key={test} open={!!query.trim() || !!focus || by !== "all" || groups.length <= 3 || cs.some((c) => c.id === selected)}>
+            <details key={test} open={!!query.trim() || !!focus || !!coord || by !== "all" || groups.length <= 3 || cs.some((c) => c.id === selected)}>
               <summary>
                 {matches && <input type="checkbox" className="group-check" aria-label={`Select every fixable clash in ${test}`}
                   checked={all} disabled={!pick.length} onClick={(e) => e.stopPropagation()} onChange={(e) => onCheck(pick, e.target.checked)} />}

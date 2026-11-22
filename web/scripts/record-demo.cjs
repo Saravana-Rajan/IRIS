@@ -493,7 +493,7 @@ async function settle(page, timeout, what) {
 
 /** What the clash panel shows after a run. */
 async function outcome(page) {
-  const options = page.locator(".card-body.option:visible");
+  const options = page.locator(".pcard-show:visible");
   return {
     options: await options.count(),
     titles: await options.locator(".opt-title").allInnerTexts(),
@@ -522,7 +522,7 @@ async function fitWorkings(page, click) {
 /** Clash #1 with its verified options on screen, the first chosen: reused from the duct take when it is still there. */
 async function ensureProposal(page, ctx, n) {
   const reuse = state.scene === "northbank" && state.proposal === n && !state.fixed
-    && (await page.locator(".card-body.option:visible").count()) > 0;
+    && (await page.locator(".pcard-show:visible").count()) > 0;
   if (!reuse) {
     await openDemo(page, ctx.url, "northbank");
     await prepareShot(page);
@@ -531,7 +531,7 @@ async function ensureProposal(page, ctx, n) {
     state.proposal = n;
     if (!result.options) throw new Error(`#${n} got no verified option this time: run it again`);
   }
-  const first = page.locator(".card-body.option:visible").first();
+  const first = page.locator(".pcard-show:visible").first();
   if ((await first.getAttribute("aria-pressed")) !== "true") await first.click();
   await sleep(1000);
 }
@@ -621,7 +621,7 @@ async function chatAnswer(page, { replies, before }, timeout, what) {
  */
 async function landedOptions(page, verified, { timeout = 60000, settleMs = 1500 } = {}) {
   const working = page.locator('button[data-tour="propose"]', { hasText: "Working" });
-  const options = page.locator(".card-body.option");   // the Clash panel's, drawn behind Chat too
+  const options = page.locator(".pcard-show");   // the Clash panel's, drawn behind Chat too
   const end = Date.now() + timeout;
   let count = 0;
   for (;;) {
@@ -920,7 +920,7 @@ const SHOTS = [
       if (!options) return ctx.retake(`the chat's run verified no fix for #22 (${fix.said || error || "no summary"})`);
       await sleep(GAP);
       await ctx.click(tab(page, "clash"));   // the verified fix in the Clash panel
-      await page.locator(".card-body.option:visible").first().waitFor({ state: "visible", timeout: 10000 });
+      await page.locator(".pcard-show:visible").first().waitFor({ state: "visible", timeout: 10000 });
       await sleep(4000);
     },
   },

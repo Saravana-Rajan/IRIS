@@ -1,0 +1,69 @@
+/* The import panel (ImportPanel.tsx; docs/engineer-workflow.md, step 2): one row per chosen file. Colours are the
+   app's tokens (index.css :root), so it follows the rest of the page. */
+.imp { container-type: inline-size; display: grid; gap: 10px; font-size: 13px; color: var(--ink); min-width: 0; }
+.imp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.imp-head > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.imp-head h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.imp-close, .imp-x { padding: 3px 5px; margin: 0; }
+
+.imp-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.imp-table col.c-type { width: 52px; } .imp-table col.c-size { width: 72px; } .imp-table col.c-stage { width: 104px; }
+.imp-table col.c-prog { width: 128px; } .imp-table col.c-x { width: 32px; }
+.imp-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; padding: 0 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.imp-table td { padding: 7px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.imp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.imp-table td.num { font-size: 12px; color: var(--muted); padding-top: 9px; }
+.imp-row.st-failed { background: color-mix(in srgb, var(--fail-soft) 45%, transparent); }
+
+.imp-type { display: inline-block; min-width: 38px; text-align: center; font: 600 10.5px/18px var(--mono); border-radius: 4px;
+  padding: 0 5px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); }
+.imp-type.k-ifc { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+.imp-type.k-step { background: var(--spark-soft); color: var(--spark); border-color: var(--spark-line); }
+.imp-type.k-nw { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+.imp-name { min-width: 0; }
+.imp-name > .mono { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; line-height: 20px; }
+.imp-name > .hint, .imp-error { display: block; font-size: 11.5px; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+.imp-error { color: var(--fail); }
+
+.imp-stage { margin-top: 1px; }
+.imp-stage.st-packing, .imp-stage.st-uploading, .imp-stage.st-converting, .imp-stage.st-processing, .imp-stage.st-drawing {
+  background: var(--accent-soft); color: var(--accent-ink); }
+.imp-stage.st-ready { background: var(--ok-soft); color: var(--ok); }
+.imp-stage.st-failed { background: var(--fail-soft); color: var(--fail); }
+
+.imp-prog { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.imp-bar { position: relative; display: block; flex: 1; height: 6px; margin-top: 7px; border-radius: 999px;
+  background: var(--line-soft); overflow: hidden; }
+.imp-prog .imp-bar { margin-top: 0; }
+.imp-bar > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); transition: width .25s ease-out; }
+.imp-bar.shared > i { background: repeating-linear-gradient(135deg, var(--accent) 0 5px, var(--edge) 5px 8px); }
+.imp-bar.done > i { width: 100%; background: var(--ok); }
+.imp-bar.busy > i { width: 34%; animation: imp-slide 1.3s ease-in-out infinite; }
+@keyframes imp-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.imp-pct { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.imp-retry { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border-radius: var(--radius);
+  background: var(--fail-soft); border: 1px solid color-mix(in srgb, var(--fail) 25%, transparent); }
+.imp-retry .btn { margin: 0; }
+.imp-retry > .imp-error { flex-basis: 100%; margin: 0; font-size: 12.5px; }
+
+.imp-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-radius: var(--radius);
+  border: 1px dashed var(--edge); background: var(--raised); color: var(--muted); }
+.imp-drop .btn { margin: 0; }
+.imp-drop.over { border-color: var(--accent); border-style: solid; background: var(--accent-soft); color: var(--accent-ink); }
+.imp-drop.busy { opacity: .7; }
+.imp-formats { font-size: 11.5px; }
+
+.imp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* A narrow dock panel or a phone: size and the progress column go; the stage chip and the note stay. */
+@container (max-width: 440px) {
+  .imp-table .c-size, .imp-table col.c-size, .imp-table .c-prog, .imp-table col.c-prog { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imp-bar > i { transition: none; }
+  .imp-bar.busy > i { animation: none; width: 100%; opacity: .35; }
+}

@@ -974,3 +974,52 @@ measured facts 90% [76, 100]; mean confidence 0.96 in every mode. Small samples:
 not a model result. Checked: `pytest tests/bench`; `iris-bench all --seeds 0:6
 --model fake:0.7 --locked-services 1` (verify passes, all nine jobs and four modes present, 24/24 pairs rendered
 from the scene cameras with no fallback); a 3-seed fake run with `agentic`.
+**Nov 22 (2026-11-22), engineer-first workflow, server side** ([docs/engineer-workflow.md](../engineer-workflow.md);
+[04](04-server-code-map.md), [05](05-domain-model-and-state.md), [10](10-http-api-and-streams.md),
+[14](14-files-in-and-out.md), [15](15-requirements-settings-and-config.md), [17](17-deployment-and-operations.md)).
+Projects (`projects.py`, `/api/projects*`) keep the original models, saved states (each model as it is now, the edit
+log, decisions and clash memory), clash reviews and reports on disk across restarts (`IRIS_PROJECTS_DIR`, at most
+`IRIS_PROJECTS_MAX`; `/mnt/iris/projects` on Cloud Run with a bucket); a reopened project keeps each clash's number and
+title. Decisions in the journal (`POST /api/scenes/{scene_id}/decisions`; a keep records the reviewer and appends an
+`accepted` decision); `checked_against` in kept fixes' checks; as-designed plans never geometry-validated
+(`check.passed` false). Checked: `server/tests/test_projects.py` and `test_decisions.py`, the full server suite and
+`test_docs_map.py`.
+
+**Nov 22 (2026-11-22), the coordination report for the engineer-first workflow** ([14](14-files-in-and-out.md);
+[docs/engineer-workflow.md](../engineer-workflow.md), step 10). `document.py`: the project's name and a models table
+(schema and element count only from the open scene) on the cover; both GlobalIds on each page; the fix box read from
+the edit log as re-checked at keep (`kept_fix`: the clash's own option from `params.options`), with direction and
+distance, the moved element's name and GlobalId, the AI-drafted rationale, the required and measured clearance and
+"checked against N elements"; what backs a fix said from the strongest record (`evidence_state`: "Geometry-validated
+at keep" only from the log's check, never the page's word; "as designed" never validated); the reviewers' decisions
+as a proposal history and as dated BCF comments. Checked: `server/tests/test_document_engineer.py` (HTML and rows; the
+PDF needs pango) and the full server suite.
+
+**Nov 22 (2026-11-22), engineer workflow wired through the server** ([09](09-agent-workflows.md),
+[10](10-http-api-and-streams.md), [14](14-files-in-and-out.md), [05](05-domain-model-and-state.md)). The report route
+takes `project_id` (404 "No such project."): its name on the cover, and with no live edit log the newest saved
+state's decisions (`projects.saved_decisions`). The edit log CSV adds `actor`, `check`, `verified`, `min_clearance_mm`
+and `checked_against` after its old columns. The chat words an "as designed" root cause "accepted as designed — no
+geometry check", never "not all verified". A reopened project's kept fix is labelled from its saved check
+("Geometry-validated at keep (earlier session)", `document.earlier_for`) when this session kept none; saved entries
+and a keep's decision carry `session` (the scene id), and entries are matched by session and E-id (`entry_key`), never
+E-id alone. Checked: `test_projects.py`, `test_decisions.py`, `test_chat.py`, `test_document_engineer.py`, the full
+server suite.
+
+**Nov 22 (2026-11-22), PDF drawings in, and the drawing routes** ([04](04-server-code-map.md),
+[05](05-domain-model-and-state.md), [10](10-http-api-and-streams.md), [14](14-files-in-and-out.md),
+[15](15-requirements-settings-and-config.md); [docs/drawings.md](../drawings.md)). `drawings.py`: `ingest` takes a PDF
+(sha256; each page rendered with pypdfium2 to PNG at 150 dpi, lower only past 50 MP; pdfplumber's words mapped to
+pixels on that image, origin top-left; `has_text_layer`; the title block's SHEET / SCALE / TITLE / DRAWING NO. as
+printed in the bottom-right quarter, never guessed), refusing a non-PDF, a damaged or password-protected one, and one
+past `IRIS_DRAWING_MAX_MB` (50) or `IRIS_DRAWING_MAX_PAGES` (40), leaving nothing on disk. `drawings.STORE` holds each
+scene's drawings and their last read items under `$TMP/iris-drawings/<scene id>/`, deleted with the scene (a finalizer
+on the scene object, and a sweep on every drawing call). Routes: `POST`/`GET /api/scenes/{scene_id}/drawings` (one
+model upload from the allowance), `GET /api/drawings/{drawing_id}/pages/{n}.png`, `POST /api/drawings/{drawing_id}/read`
+(the reader's NDJSON stream; a budget refusal before the first event is a plain 429; 501 without the reader),
+`GET /api/drawings/{drawing_id}/items`, `GET /api/scenes/{scene_id}/drawings/compare` (drawing by drawing with the
+level from each title block, the model index built once; 501 without the comparison). Projects copy the drawings and
+their items into `drawings/` on attach and save and ingest them again on open. Checked: `server/tests/test_drawings.py`
+(reportlab sheets: word boxes against the rendered ink, title fields, a scan, the caps, refusals, every route with the
+reader and comparison stubbed and once with the real reader's `FakeReader` and the real comparison, eviction, a
+project round trip), `test_docs_map.py` and the full server suite.

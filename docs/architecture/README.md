@@ -13,7 +13,7 @@ How this set relates to the other docs:
 - **`CLAUDE.md` and `AGENTS.md`** hold the rules, the traps and the current status. They point here for how things
   work.
 - **The feature designs in [`docs/`](../)** ([connections](../connections.md), [detection](../detection.md), [edits](../edits.md),
-  [escalation](../escalation.md), [filters](../filters.md), [mcp](../mcp.md), [measure](../measure.md), [mobile](../mobile.md), [panels](../panels.md), [requirements](../requirements.md),
+  [engineer workflow](../engineer-workflow.md), [escalation](../escalation.md), [filters](../filters.md), [mcp](../mcp.md), [measure](../measure.md), [mobile](../mobile.md), [panels](../panels.md), [requirements](../requirements.md),
   [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [views](../views.md), [voice](../voice.md),
   [workings](../workings.md)) hold
   the reasoning and measurements behind each feature. This map summarises them and links to them; it does not copy
@@ -62,6 +62,10 @@ by geometry (clash gone, clearance met, nothing new hit) → **review** in 3D �
 export**. See [01](01-product-and-journeys.md) for what the user sees and [03](03-end-to-end-flows.md) for how each
 step crosses the layers.
 
+In a **project**, the same loop is the engineer's round: Import → Understand → Detect → Investigate → Propose →
+Validate → Review → Report, with every decision recorded and the work saved to pick up again
+([engineer workflow](../engineer-workflow.md); the server side is built, the app does not mount its pages yet).
+
 ## The docs
 
 ### Getting oriented
@@ -71,6 +75,7 @@ step crosses the layers.
 | [01 · Product and user journeys](01-product-and-journeys.md) | What Iris does and for whom, every way in, the golden path, the main screen |
 | [02 · System architecture](02-system-architecture.md) | The parts, the single process, threads and locks, the request lifecycle, the stack and why |
 | [03 · End-to-end flows](03-end-to-end-flows.md) | Sequence diagrams for every user action, browser to models and back |
+| [Engineer workflow](../engineer-workflow.md) (a feature design) | The project-based round, Import → Report: projects, decisions, the four proposal states, the server and web contract, and what is not built (2D PDF drawings, accounts) |
 
 ### Server
 
@@ -164,6 +169,7 @@ assets/brand/iris/    approved identity, motion, exports and rebuild/check scrip
 | When you change… | Update |
 |---|---|
 | What the user sees or can do; a new entry point, screen or tour step | 01, 03, 12 |
+| The project workflow: a project route or stored field, a step, a proposal state, a decision kind | 01, 03, 05, 10, 12; [engineer workflow](../engineer-workflow.md) |
 | A process, thread pool, lock, middleware or how parts call each other | 02, 03 |
 | A module in `server/iris/` (new, renamed, removed, new dependency) | 04 (the test checks it), 05 if it holds state |
 | An object's fields, an id's format, a lifecycle, where state is kept, a storage key | 05 |

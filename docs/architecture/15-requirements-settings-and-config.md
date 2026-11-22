@@ -6,6 +6,10 @@
 > `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing and `VITE_API_BASE` in
 > `web/src/api.ts` · **Checked against code:** re-branded on 2026-11-11; the deploy variables and the web build
 > variable on 2026-11-22 · **Deeper design:** [docs/requirements.md](../requirements.md)
+> `env_float`, every environment variable the server, deploy and evals read,
+> `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing in `web/src/api.ts` ·
+> **Checked against code:** 2026-11-22 (the projects and drawing variables; re-branded on 2026-11-11) · **Deeper design:**
+> [docs/requirements.md](../requirements.md)
 
 Three layers decide how Iris behaves for a request. **Coordination requirements** are a project's own standard
 (what is checked, how strictly, who may move), sent by the page as a file id. **Settings** are the owner's switches
@@ -308,9 +312,12 @@ everyone per rolling day; 0 means no limit, and unset or empty is the default co
 | `IRIS_UPLOAD_MAX_MB` | 200 | 150 | `app.UPLOAD_MAX_MB` | Navisworks report uploads, all files; also the default for model uploads |
 | `IRIS_UPLOAD_MAX_FILES` | 5000 | not set | `app.UPLOAD_MAX_FILES` | Files in one report upload |
 | `IRIS_MODEL_UPLOAD_MAX_MB` | `IRIS_UPLOAD_MAX_MB` | 150 | `app.MODEL_UPLOAD_MAX_MB` | Model uploads, all files together, unpacked; the page reads it from `GET /api/models` |
+| `IRIS_DRAWING_MAX_MB` | 50 | not set | `drawings.max_mb` (each ingest; the upload route's length check) | One PDF drawing's size; over it is a 413 ([docs/drawings.md](../drawings.md)) |
+| `IRIS_DRAWING_MAX_PAGES` | 40 | not set | `drawings.max_pages` (each ingest) | Pages one PDF drawing may have; more is a 400, nothing kept; 0 is no limit |
 | `IRIS_MAX_SCENES` | 0 (no limit) | 8 | `service.MAX_SCENES` (import) | Open model sets held in memory |
 | `IRIS_SCENE_BUDGET_MB` | 0 (count only) | 300 | `service.SCENE_BUDGET_MB` (import) | IFC bytes of the open scenes held; also the most one scene may grow to by adding models |
 | `IRIS_MAX_REPORTS` | 0 (no limit) | 8 | `service.MAX_REPORTS` (import) | Open clash reports held (each scene's current list of kept checks is evicted last, and made again from its checks if it goes) |
+| `IRIS_PROJECTS_MAX` | 50 | 50 | `projects.max_projects` (each create) | Projects kept on disk; one more is refused (409); 0 is no limit ([docs/engineer-workflow.md](../engineer-workflow.md)) |
 | `IRIS_MAX_CHECKS` | 12 | not set | `checks.MAX_CHECKS` (import) | Checks kept per open scene (the open models and each check on filters); past it the oldest check on filters goes, never the open models ([docs/detection.md](../detection.md), "Kept checks") |
 | `IRIS_BIG_MODEL_MB` | 50 | not set | `scene.BIG_MODEL_BYTES` (import) | From this federation size every element's box is measured through CGAL |
 | `IRIS_WIDER_FIX_MAX_MB` | 100 | not set | `context_planner.WIDER_MAX_MB` (import) | Largest models a wider fix is offered for (it copies them) |
@@ -364,6 +371,7 @@ its default, so a bad value fails the wider-fix run with a `ValueError` rather t
 |---|---|---|---|
 | `IRIS_SETTINGS_FILE` | `server/.iris-settings.json` | `settings._file` | The settings file for everyone; on Cloud Run, a path on the Cloud Storage mount |
 | `IRIS_BUILT_CACHE` | `$TMP/iris-built` | `built.CACHE` (import) | Built-view pictures |
+| `IRIS_PROJECTS_DIR` | `server/.iris-projects` (gitignored; empty is the default) | `projects.projects_dir` (each call) | Where projects are kept, one folder each ([14](14-files-in-and-out.md)); on Cloud Run `deploy/deploy.sh` sets `/mnt/iris/projects` when `BUCKET` is set |
 | `IRIS_WEB_DIST` | `web/dist` | `app.WEB_DIST` | The built web app served at `/` when its `index.html` exists |
 | `DEMO_MODELS` | `../demo-models` beside the repo | `evals/step_cell.py`, `detection_cell.py`, `detection_navisworks.py`, `escalation.py` | A clone of the team's private demo-models repo, for the evals ([18](18-testing-and-evals.md)) |
 

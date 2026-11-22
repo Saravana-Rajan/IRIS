@@ -689,3 +689,12 @@
 .lp-page.still .lp-triage b, .lp-page.still .lp-navis-rows em { opacity: 1; }
 .lp-page.still .lp-built .paint { clip-path: inset(0 0 0 50%); }
 @media (prefers-reduced-motion: reduce) { .lp-page { scroll-behavior: auto; } }
+
+/* The long-form sections, folded (docs/ui-design.md §10.2): one quiet line until opened. */
+.lp-more { display: block; }
+.lp-more-sum { list-style: none; cursor: pointer; max-width: 1120px; margin: 0 auto; padding: 22px 24px; font-size: 14px; font-weight: 600;
+  color: var(--ink); text-align: center; }
+.lp-more-sum::-webkit-details-marker { display: none; }
+.lp-more-sum::after { content: " ▾"; color: var(--muted, #6b7785); }
+.lp-more[open] > .lp-more-sum::after { content: " ▴"; }
+.lp-more-sum:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; border-radius: 6px; }
