@@ -1,13 +1,31 @@
 :root {
-  /* Iris's palette (assets/brand/iris/tokens): ink, navy, paper, line and muted; the accent is the brand navy */
-  --bg: #f5f7f8; --surface: #fff; --raised: #fbfcfd; --ink: #11161b; --muted: #52636e; --line: #dde3e7; --line-soft: #ebeff2;
-  --navy: #052640; --accent: #052640; --accent-ink: #052640; --accent-soft: #e3eaf0; --red: #d0342c; --green: #1f9d3a;
-  --ok: #1d7f47; --ok-soft: #e6f4ec; --fail: #b8352a; --fail-soft: #fbeceb; --warn: #9a6100; --warn-soft: #fbf1df;
-  --wonder: #5b3c99; --wonder-ink: #432a78; --wonder-soft: #efe8fb; --wonder-line: #d8cbef;
-  --spark: #4b4fb3; --spark-soft: #eeeffb; --spark-line: #d2d4f2; --image: #9c3a6b; --image-soft: #f9ecf3; --image-line: #ecc9da;
-  --trying: #f5a623; --passed: #12b5cb; --you: #8592a3; --edge: #b0bac6;
+  /* Iris on lifemed's palette (owner's brief, Nov 22): a white page, ink for text and primary buttons, lavender as the
+     accent (focus rings, active marks, small badges, progress, links) and the holographic gradient for AI-made things.
+     Light only: the only dark things are text and primary buttons. Engineering meanings keep their colours: clash red,
+     verified green, warning amber. --navy is kept as an alias of the ink for older rules. */
+  --bg: #ffffff; --surface: #ffffff; --raised: #fafafa; --panel: #f2f2f2; --hover: #f5f5f5;
+  --line: #e6e6e6; --line-soft: #efefef; --line-strong: #d4d4d4;
+  --ink: #1a1a1a; --ink-2: #3a3a3a; --ink-hover: #333333; --muted: #6a6a6a; --navy: var(--ink);
+  /* accent-ink is the lavender legible as text: 5.2:1 on white, 4.7:1 on accent-soft */
+  --accent: #b07af2; --accent-ink: #7340c4; --accent-soft: #f6f0fe; --accent-line: #e4d3fb; --on-accent: var(--ink);
+  --holo: linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%);
+  --glass-bg: rgba(255, 255, 255, .55); --glass-border: rgba(255, 255, 255, .7); --glass-blur: blur(16px) saturate(140%);
+  --scrim: rgba(250, 250, 252, .6);
+  --red: #e0473f; --green: #2fb153; --amber: #f5a623;
+  --ok: #1b7f3e; --ok-soft: #eaf7ee; --fail: #c4352d; --fail-soft: #fdeeed; --warn: #9a6100; --warn-soft: #fef5e4;
+  /* The model families (Workings, chips): wonder in the lavender, spark in periwinkle, image in pink; each a text tone
+     legible on white with a soft tint and a line */
+  --wonder: #7c4dd8; --wonder-ink: #5b2fae; --wonder-soft: #f6f0fe; --wonder-line: #e4d3fb;
+  --spark: #4f5bd5; --spark-soft: #f0f2ff; --spark-line: #d7dcff;
+  --image: #b8269a; --image-soft: #fff0fb; --image-line: #fbcdee;
+  --trying: #f5a623; --passed: #12b5cb; --you: #8a8a8a; --edge: #c4c4ca;
+  /* The 3D view's empty background (viewer/Viewer.ts scene.background): the load cover matches it; change both together */
+  --viewer-bg: #dfe6ee;
   --body: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
-  --radius: 8px; --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 2px 8px rgba(16, 24, 40, .06);
+  --radius: 8px;
+  --shadow-soft: 0 1px 2px rgba(26, 26, 40, .04), 0 4px 16px rgba(26, 26, 40, .05);
+  --shadow: 0 1px 2px rgba(26, 26, 40, .04), 0 2px 8px rgba(26, 26, 40, .05);
+  --shadow-lift: 0 2px 6px rgba(26, 26, 40, .05), 0 12px 32px rgba(26, 26, 40, .09);
   font-family: var(--body); color: var(--ink); background: var(--bg); font-size: 14px;
 }
 * { box-sizing: border-box; }
