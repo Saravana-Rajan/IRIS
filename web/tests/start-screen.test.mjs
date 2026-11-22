@@ -240,6 +240,8 @@ test("'See it work': the 3D check and the 2D reader side by side, each lazily, s
     assert.ok(item, `${c.id}: its own figure, by data-clip`);
     assert.ok(item.includes(`>${c.label}<`), `${c.id}: its label`);
     assert.ok(item.includes(`<source media="(prefers-reduced-motion: reduce)" srcSet="${c.still}"/>`), `${c.id}: its still under reduced motion`);
+    assert.ok(item.includes(`<picture class="demo-clip-frame" style="background-image:url(${c.still})">`),
+      `${c.id}: its still shows in the frame until the clip loads`);
     const img = item.match(/<img[^>]*>/)[0];
     for (const attr of [`src="${c.src}"`, 'width="1000"', 'height="625"', 'loading="lazy"', `alt="${entity(c.alt)}"`])
       assert.ok(img.includes(attr), `${c.id}: ${attr}`);
@@ -255,6 +257,7 @@ test("the clips' stylesheet is light, on the page's tokens: white cards side by 
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|prefers-color-scheme|\bdark\b/i, "colours only from tokens, no dark mode");
   assert.match(css, /\.demo-clips-row \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, \d+px\), 1fr\)\)/);
   assert.match(css, /\.demo-clip \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 12px;[^}]*background: var\(--surface\)/);
+  assert.match(css, /\.demo-clip-frame \{[^}]*background-size: cover;/, "the still placeholder covers the frame");
 });
 
 // ------------------------------------------------------------------------------------------------- sampleDrawings.ts
