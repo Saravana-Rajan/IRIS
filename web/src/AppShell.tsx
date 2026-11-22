@@ -157,7 +157,7 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
     </li>
   );
   const home = hrefOf("home");
-  const cls = ["side", rail ? "rail" : "", inDrawer ? `side-drawer ${isOpen ? "open" : "closed"}` : ""].filter(Boolean).join(" ");
+  const cls = ["sidebar", rail ? "sidebar-rail" : "", inDrawer ? `side-drawer ${isOpen ? "open" : "closed"}` : ""].filter(Boolean).join(" ");
 
   return (
     <>
@@ -187,9 +187,10 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
             <div className={`side-group${showSteps ? " open" : ""}${stepActive ? " has-active" : ""}`}>
               {!rail && (
                 <button type="button" className="side-group-head" aria-expanded={groupOpen} aria-controls={groupId}
+                  data-tip={project.name.length > 22 ? project.name : undefined} data-tip-side={project.name.length > 22 ? "right" : undefined}
                   onClick={() => setGroupOpen((o) => !o)}>
                   <FolderOpen className="side-icon" size={20} strokeWidth={1.75} aria-hidden />
-                  <span className="side-group-label"><span className="side-group-kicker">Project:</span> <span className="side-group-name">{project.name}</span></span>
+                  <span className="side-group-label"><span className="side-group-kicker">Project<span className="search-sr">:</span></span> <span className="side-group-name">{project.name}</span></span>
                   <ChevronDown className="side-chevron" size={16} aria-hidden />
                 </button>
               )}

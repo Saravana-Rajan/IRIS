@@ -56,13 +56,13 @@ const STEPS = ["Overview", "Models", "Drawings", "Coordination", "Clash review",
 
 test("the sidebar is the Main nav with the logo, Home and Projects as real links, Help, Settings and no log out", () => {
   const html = sidebar();
-  assert.match(html, /^<nav class="side" aria-label="Main">/);
+  assert.match(html, /^<nav class="sidebar" aria-label="Main">/);
   const t = text(html);
   assert.match(t, /^Iris by Techjays Home Projects Help Settings P Priya Raman Reviewer Edit$/);
   assert.deepEqual(hrefs(html), ["/home", "/home", "/projects"]);   // the logo (mouse only), then the items
   assert.match(html, /<a class="side-brand" href="\/home" tabindex="-1" aria-hidden="true">/);
   assert.doesNotMatch(t, /log ?out|sign ?out/i);
-  assert.doesNotMatch(html, /side-drawer|side-scrim|Workspace|Project:/);
+  assert.doesNotMatch(html, /side-drawer|side-scrim|Workspace|side-group/);
   // Help and Settings are buttons, not links
   assert.equal(tags(html).filter((tag) => /^<button/.test(tag) && /side-item/.test(tag)).length, 2);
 });
@@ -89,7 +89,7 @@ test("exactly the page shown is marked current", () => {
 test("the open project's group: its name, the seven steps in order with their links, counts only where given", () => {
   const html = sidebar({ project, active: "projects" });
   const t = text(html);
-  assert.match(t, /Projects Project: Riverside Block C Overview Models 4 Drawings Coordination Clash review 463 Reports Activity Help/);
+  assert.match(t, /Projects Project : Riverside Block C Overview Models 4 Drawings Coordination Clash review 463 Reports Activity Help/);
   assert.match(html, /<button type="button" class="side-group-head" aria-expanded="true" aria-controls="[^"]+">/);
   assert.match(html, /<ul class="side-list side-steps" id="[^"]+" aria-label="Project: Riverside Block C">/);
   assert.deepEqual(hrefs(html).slice(3), ["/projects/" + PID, `/projects/${PID}/models`, `/projects/${PID}/drawings`,
@@ -98,6 +98,9 @@ test("the open project's group: its name, the seven steps in order with their li
   // Two counts, two pills: the open clashes tinted, nothing invented for the rest
   assert.deepEqual([...html.matchAll(/<span class="side-badge([^"]*)">([^<]*)<\/span>/g)].map((m) => [m[1], m[2]]), [["", "4"], [" alert", "463"]]);
   assert.doesNotMatch(sidebar({ project: { id: PID, name: "Empty" } }), /side-badge/);
+  // A name too long for the row carries it whole in a tip
+  assert.match(sidebar({ project: { id: PID, name: "Northbank Tower, Level 02 transfer" } }),
+    /class="side-group-head" aria-expanded="true" aria-controls="[^"]+" data-tip="Northbank Tower, Level 02 transfer" data-tip-side="right">/);
   assert.doesNotMatch(sidebar({ project: { id: PID, name: "Zero", counts: { clash: 0 } } }), /side-badge alert/);
   assert.match(sidebar({ project: { id: PID, name: "Zero", counts: { clash: 0 } } }), /<span class="side-badge">0<\/span>/);
   assert.doesNotMatch(sidebar({ project: { id: PID, name: "Bad", counts: { models: Number.NaN, clash: "9" } } }), /side-badge/);
@@ -113,7 +116,7 @@ test("a project step shown marks that step, opens the group and nothing else", (
 
 test("the rail: icons only, every item keeps its name as an aria-label and a right-side tip", () => {
   const html = sidebar({ rail: true, project, active: "models", workspace: { label: "Workspace" } });
-  assert.match(html, /^<nav class="side rail" aria-label="Main">/);
+  assert.match(html, /^<nav class="sidebar sidebar-rail" aria-label="Main">/);
   assert.equal(text(html), "P");                                    // the avatar's initial is the only text
   assert.doesNotMatch(html, /side-label|side-badge|side-group-head|side-brand-text|side-user-text|Edit/);
   const items = tags(html).filter((tag) => tag.includes("side-item"));
@@ -145,11 +148,11 @@ test("the user block: the initial and name, or 'Add your name' when there is non
 
 test("phones and tablets: the drawer is open or closed over a light scrim, with labels and a close button", () => {
   const open = sidebar({ drawer: "open", rail: true });
-  assert.match(open, /^<div class="side-scrim open" aria-hidden="true"><\/div><nav class="side side-drawer open" aria-label="Main">/);
+  assert.match(open, /^<div class="side-scrim open" aria-hidden="true"><\/div><nav class="sidebar side-drawer open" aria-label="Main">/);
   assert.match(open, /<button type="button" class="side-close" aria-label="Close the menu">/);
   assert.match(text(open), /Home Projects/);                          // the drawer never uses the rail
   const closed = sidebar({ drawer: "closed" });
-  assert.match(closed, /^<div class="side-scrim closed" aria-hidden="true"><\/div><nav class="side side-drawer closed" aria-label="Main">/);
+  assert.match(closed, /^<div class="side-scrim closed" aria-hidden="true"><\/div><nav class="sidebar side-drawer closed" aria-label="Main">/);
 });
 
 test("a plain click on an item goes to it (and closes an open drawer); a click for a new tab is the browser's", () => {

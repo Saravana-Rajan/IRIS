@@ -3,18 +3,17 @@
 
    The container App renders:
      <div class="shell">
-       <Sidebar … />                      nav.side (.rail collapsed; .side-drawer.open/.closed on phones and tablets)
+       <Sidebar … />                      nav.sidebar (.sidebar-rail collapsed; .side-drawer.open/.closed on phones and tablets)
        <div class="shell-main">
          <TopBar … />                     header.topbar
-         <div class="shell-body">…</div>  the page (it scrolls here); add .fill on the 3D workspace (no scroll)
+         <div class="shell-body">…</div>  the page (frame.css places what fills it)
        </div>
      </div>
    With `drawer` set the sidebar leaves the flow (fixed, over a light scrim), so .shell-main takes the whole width. */
 
-.shell { display: flex; height: 100%; min-height: 0; background: var(--bg, #fff); }
+.shell { display: flex; height: 100%; min-width: 0; min-height: 0; background: var(--bg, #fff); }
 .shell-main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg, #fff); }
-.shell-body { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; overflow: auto; }
-.shell-body.fill { overflow: hidden; }
+.shell-body { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; }
 
 /* The app icon: the mark in white on a rounded holographic tile with a glassy top light */
 .shell-logo { position: relative; display: inline-grid; place-items: center; flex: none; overflow: hidden; color: #fff;
@@ -26,10 +25,10 @@
 .shell-logo .iris-mark { position: relative; z-index: 1; filter: drop-shadow(0 1px 1px rgba(70, 30, 130, .28)); }
 
 /* ---- Sidebar ------------------------------------------------------------------------------------------------- */
-.side { position: relative; flex: none; display: flex; flex-direction: column; width: 264px; height: 100%; min-height: 0;
+.sidebar { position: relative; flex: none; display: flex; flex-direction: column; width: 264px; height: 100%; min-height: 0;
   overflow: hidden; background: var(--surface, #fff); border-right: 1px solid var(--line, #e6e6e6); color: var(--ink, #1a1a1a);
   font-family: var(--body, "IBM Plex Sans", system-ui, sans-serif); transition: width .18s ease; }
-.side.rail { width: 64px; }
+.sidebar.sidebar-rail { width: 64px; }
 
 .side-top { flex: none; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 12px 0 16px; }
 .side-brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--ink, #1a1a1a); text-decoration: none;
@@ -74,10 +73,10 @@
 
 /* The open project's group: "Project: <name>" with a chevron, its steps indented along a hairline guide */
 .side-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft, #efefef); }
-.side-group-head { gap: 12px; }
-.side-group-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.side-group-kicker { color: var(--muted, #6a6a6a); }
-.side-group-name { color: var(--ink, #1a1a1a); font-weight: 500; }
+.side-group-head { height: 48px; }
+.side-group-label { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.side-group-kicker { color: var(--muted, #6a6a6a); font-size: 11.5px; line-height: 1; }
+.side-group-name { overflow: hidden; text-overflow: ellipsis; color: var(--ink, #1a1a1a); font-weight: 500; line-height: 1.15; }
 .side-chevron { flex: none; color: var(--muted, #6a6a6a); transform: rotate(-90deg); transition: transform .15s ease; }
 .side-group.open .side-chevron { transform: none; }
 .side-group.has-active:not(.open) .side-group-head .side-icon { color: var(--ink, #1a1a1a); }
@@ -104,20 +103,20 @@
   outline: none; box-shadow: 0 0 0 3px var(--accent-soft, #f4ecfd); }
 
 /* The rail: icons only, centred on the 64 px column */
-.side.rail .side-top { padding: 0 16px; }
-.side.rail .side-item { width: 40px; gap: 0; }
-.side.rail .side-item.sub { height: 40px; padding: 0 10px; }
-.side.rail .side-group { margin-top: 8px; padding-top: 8px; border-top-color: var(--line, #e6e6e6); }
-.side.rail .side-steps { margin: 0; padding: 0; border-left: 0; }
+.sidebar.sidebar-rail .side-top { padding: 0 16px; }
+.sidebar.sidebar-rail .side-item { width: 40px; gap: 0; }
+.sidebar.sidebar-rail .side-item.sub { height: 40px; padding: 0 10px; }
+.sidebar.sidebar-rail .side-group { margin-top: 8px; padding-top: 8px; border-top-color: var(--line, #e6e6e6); }
+.sidebar.sidebar-rail .side-steps { margin: 0; padding: 0; border-left: 0; }
 
 /* Phones and tablets: a drawer from the left over a light veil, off-screen and unfocusable while closed */
-.side.side-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 55; width: 280px; max-width: 86vw; height: auto;
+.sidebar.side-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 55; width: 280px; max-width: 86vw; height: auto;
   transform: translateX(-100%); visibility: hidden;
   transition: transform .22s cubic-bezier(.2, .7, .2, 1), visibility 0s linear .22s, box-shadow .22s ease; }
-.side.side-drawer.open { transform: none; visibility: visible; box-shadow: 0 16px 48px -12px rgba(26, 26, 26, .16);
+.sidebar.side-drawer.open { transform: none; visibility: visible; box-shadow: 0 16px 48px -12px rgba(26, 26, 26, .16);
   transition: transform .22s cubic-bezier(.2, .7, .2, 1), visibility 0s, box-shadow .22s ease; }
-.side.side-drawer .side-item { height: 44px; }
-.side.side-drawer .side-item.sub { height: 42px; }
+.sidebar.side-drawer .side-item { height: 44px; }
+.sidebar.side-drawer .side-item.sub { height: 42px; }
 .side-scrim { position: fixed; inset: 0; z-index: 54; background: rgba(250, 250, 252, .6); -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px); opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility 0s linear .2s; }
 .side-scrim.open { opacity: 1; visibility: visible; transition: opacity .2s ease, visibility 0s; }
@@ -203,6 +202,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .side, .side.side-drawer, .side.side-drawer.open, .side-scrim, .side-scrim.open, .side-item, .side-group-head, .side-icon,
+  .sidebar, .sidebar.side-drawer, .sidebar.side-drawer.open, .side-scrim, .side-scrim.open, .side-item, .side-group-head, .side-icon,
   .side-chevron, .topbar-btn, .search-field { transition: none; }
 }
