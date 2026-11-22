@@ -21,7 +21,8 @@ async function moduleUrl(path, css, deps = {}) {
   assert.match(input, line, `${path} brings its own stylesheet`);
   let { outputText } = ts.transpileModule(input.replace(line, ""), { compilerOptions: {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX } });
-  for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`);
+  for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`)
+    .replaceAll(`import("${name}")`, `import(${JSON.stringify(target)})`);
   return url(outputText);
 }
 const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css");
@@ -30,7 +31,11 @@ const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Valid
 /** HowIrisWorks stands in as one section that names the steps in order, so Home's order shows in its markup. */
 const howStub = url(`import { jsx } from ${JSON.stringify(import.meta.resolve("react/jsx-runtime"))};
 export function HowIrisWorks() { return jsx("section", { className: "hiw", children: "How Iris works: ${FLOW.join(", ")}" }); }`);
+const glassUrl = await compiled("../src/glassModel.ts");
+/** HeroGlass (three.js) never loads here: a lazy stand-in that never resolves, so the static render shows the still. */
+const heroStub = url("export default function HeroGlass() { return null; }; await new Promise(() => {});");
 const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./HowIrisWorks": howStub, "./Holo": holoUrl,
+  "./glassModel": glassUrl, "./HeroGlass": heroStub,
   "./About": url("export const projectName = (files) => files.join(' + ');"),
   "./projectRoute": await compiled("../src/projectRoute.ts"),
   "./projectsApi": await compiled("../src/projectsApi.ts", {
@@ -61,18 +66,25 @@ test("the greeting: the time of day and the reviewer's name, or 'there' without 
   const at = (h) => new Date(2026, 10, 22, h, 5).getTime();
   assert.deepEqual([at(5), at(11), at(12), at(17), at(18), at(23), at(2)].map(start.greetingFor),
     ["Good morning", "Good morning", "Good afternoon", "Good afternoon", "Good evening", "Good evening", "Good evening"]);
-  assert.match(markup({ name: "Priya", now: at(9) }), /<h1 class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/h1>/);
-  assert.match(markup({ name: "  " }), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/);
-  assert.match(markup({}), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/, "no name at all");
+  assert.match(markup({ name: "Priya", now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/p>/);
+  assert.match(markup({ name: "  " }), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/);
+  assert.match(markup({}), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/, "no name at all");
 });
 
-test("the hero: the principle, what Iris does, a soft pink wash (no ribbon); no brand header, and the page scrolls in its container", async () => {
+test("the hero: the principle in two lines beside the 3D glass aperture (its still until three loads), the cue down", async () => {
   const html = markup({});
-  assert.match(html, /^<div class="home">/);
-  assert.match(html, /<p class="home-tagline">.*AI proposes\. Geometry proves\. The engineer decides\..*?<\/p>/);
+  assert.match(html, /^(<link rel="preload" as="image" href="[^"]+"\/>)*<div class="home">/, "React may hint the stills");
+  assert.deepEqual(start.TAGLINE, ["AI proposes. Geometry proves.", "The engineer decides."]);
+  assert.match(html, /<h1 class="home-tagline"><span class="home-tagline-line">.*?AI proposes\. Geometry proves\..*?<\/span><span class="home-tagline-line">.*?The engineer decides\..*?<\/span><\/h1>/);
   assert.match(text(html), /Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked, and report what was decided\./);
-  assert.match(html, /<div class="home-art" aria-hidden="true"><div class="home-art-wash"><\/div><\/div>/, "a soft wash, decorative, until the 3D aperture");
-  assert.doesNotMatch(html, /holo-ribbon/, "the striped ribbon is gone");
+  assert.match(html, /<div class="home-hero-text">.*?<\/div><div class="home-art" aria-hidden="true"><div class="hero-glass home-glass"><img class="hero-glass-still" src="\/hero\/aperture\.webp" alt=""\/><\/div><\/div>/,
+    "the aperture beside the words, decorative: the still while the live one loads");
+  assert.doesNotMatch(html, /holo-ribbon|holo-fan/, "no striped CSS ribbon on Home");
+  assert.match(html, /<button type="button" class="home-cue" aria-label="Down to start"><svg/, "the square ↓ cue");
+  assert.ok(html.indexOf("home-cue") < html.indexOf("home-body"), "the cue sits in the hero, above the tiles");
+  const src = await readFile(new URL("../src/StartScreen.tsx", import.meta.url), "utf8");
+  assert.match(src, /lazy\(\(\) => import\("\.\/HeroGlass"\)\)/, "three.js loads after the first paint");
+  assert.doesNotMatch(src, /from "\.\/HeroGlass"|from "\.\/glass"|from "three"/, "nothing three.js in Home's own module");
   assert.doesNotMatch(html, /wordmark|by Techjays|start-brand/i, "the shell has the brand");
   const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
   assert.match(css, /\.home \{[^}]*height: 100%;[^}]*overflow: hidden auto;/, "scrolls inside the main panel, never sideways");
