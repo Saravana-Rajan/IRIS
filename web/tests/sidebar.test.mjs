@@ -13,7 +13,7 @@ const jsx = { "react/jsx-runtime": import.meta.resolve("react/jsx-runtime") };
 
 const routeUrl = await compiled("../src/projectRoute.ts");
 const navUrl = await compiled("../src/shellNav.ts");
-const brandUrl = await compiled("../src/Brand.tsx", { ...jsx, "./Holo": url("export function HoloRibbon(){return null;}") });
+const brandUrl = await compiled("../src/Brand.tsx", { ...jsx, react: import.meta.resolve("react"), "./Holo": url("export function HoloRibbon(){return null;}") });
 const nav = await import(navUrl);
 
 /** AppShell compiled with its own modules and `react` as given; its stylesheet import is dropped (Vite's job). */

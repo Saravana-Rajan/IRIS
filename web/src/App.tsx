@@ -45,7 +45,7 @@ import { SheetBar } from "./Sheet";
 import { MenuSheet } from "./AppMenu";
 import { shortNames } from "./names";
 import { DEFAULT_AI_NAMES, setAiNames, type AiNames } from "./aiNames";
-import { KeptToast, LoadCard, serverLine, type LoadProgress, type NotchStatus } from "./Brand";
+import { ApertureMark, KeptToast, LoadCard, serverLine, type LoadProgress, type NotchStatus } from "./Brand";
 import { DockHost, SlotHost, inSlot, usePanelSlots, type DockHandle } from "./dock";
 import { FiltersPanel, blankRule } from "./FiltersPanel";
 import { ElementCard, type CardActions } from "./ElementCard";
@@ -4369,7 +4369,7 @@ export function App() {
           ? <button type="button" className="btn small" onClick={() => pilot.current?.takeOver()}>Take the view</button>
           : <button type="button" className="btn small" onClick={() => pilot.current?.resume()}>Let Iris drive</button>}</span>)
     : notchStatus ? (
-      <span className={`status-line status-work${aiWorking ? " ai-shimmer" : ""}`}><i className="spinner" aria-hidden /><b>{notchStatus.title}</b>
+      <span className={`status-line status-work${aiWorking ? " ai-shimmer" : ""}`}><ApertureMark size={18} working /><b>{notchStatus.title}</b>
         {notchStatus.detail && <span className="status-text">{notchStatus.detail}</span>}</span>)
     : report ? (
       <span className="status-line status-idle">{plural((listReport ?? report).clashes.length, "clash", "clashes")}

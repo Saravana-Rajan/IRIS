@@ -973,17 +973,15 @@ def _page(r: Row, n: int) -> str:
 </section>"""
 
 
-# The Iris wordmark (assets/brand/iris/svg/iris-wordmark-light.svg), navy: the cover's lockup.
-LOCKUP = ("<svg class='lockup' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1077 256' width='150' height='36' fill='#052640'"
-          " role='img' aria-label='Iris'>"
-          + "".join(f"<path d='{d}'/>" for d in (
-              "M 31.35038 211.9217 C -12.70846 161.18071 -10.02719 85.00785 37.49033 37.49033 C 85.00785 -10.02719 161.18071 -12.70846 211.9217 31.35038 L 172.14842 71.12366 C 143.48543 48.87496 102.74539 51.43123 77.08831 77.08831 C 51.43123 102.74539 48.87496 143.48543 71.12366 172.14842 Z",
-              "M 224.64962 44.0783 C 268.70846 94.81929 266.02719 170.99215 218.50967 218.50967 C 170.99215 266.02719 94.81929 268.70846 44.0783 224.64962 L 83.85158 184.87634 C 112.51457 207.12504 153.25461 204.56877 178.91169 178.91169 C 204.56877 153.25461 207.12504 112.51457 184.87634 83.85158 Z",
-              "M 292 0 L 441 0 C 499 0 530 30 530 80 C 530 126 504 154 455 162 L 543 256 L 466 256 L 347 143 L 320 115 L 435 115 C 460 115 473 102 473 82 C 473 63 458 54 435 54 L 292 54 Z",
-              "M 292 121 L 351 180 L 351 256 L 292 256 Z",
-              "M 791.05369 45.72319 C 756.46465 4.50157 699.78721 -10.6851 649.22142 7.71934 C 598.65563 26.12379 565 74.18901 565 128 C 565 181.81099 598.65563 229.87621 649.22142 248.28066 C 699.78721 266.6851 756.46465 251.49843 791.05369 210.27681 L 748.1552 174.28071 C 728.69887 197.46786 696.81781 206.01037 668.37455 195.65787 C 639.93129 185.30537 621 158.26868 621 128 C 621 97.73132 639.93129 70.69463 668.37455 60.34213 C 696.81781 49.98963 728.69887 58.53214 748.1552 81.71929 Z",
-              "M 805 256 L 941 0 L 975 64 L 877 256 Z", "M 988 88 L 1077 256 L 1004 256 L 951 157 Z"))
-          + "</svg>")
+# The Iris lockup on the cover: the Aperture mark (web/src/Brand.tsx, web/public/favicon.svg: six holographic blades
+# around an ink hexagonal pupil) and "Iris" in the report's type.
+_APERTURE = ("<svg class='mark' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='36' height='36' aria-hidden='true'>"
+             "<defs><linearGradient id='iris-holo' gradientUnits='userSpaceOnUse' x1='9.54' y1='26.64' x2='90.46' y2='73.36'>"
+             "<stop offset='0' stop-color='#8f9bff'/><stop offset='.4' stop-color='#b07af2'/><stop offset='.75' stop-color='#ff5cd6'/>"
+             "<stop offset='1' stop-color='#7dd3fc'/></linearGradient></defs>"
+             "<path fill='#1a1a1a' d='M42.29 36.65L42.83 36.6L42.51 37.03L46.49 36.73L46.81 36.32A73.9 73.9 0 0 1 57.71 36.65L58.02 37.09L57.49 37.03L59.73 40.33L60.26 40.4A73.9 73.9 0 0 1 65.41 50L65.19 50.49L64.97 50L63.25 53.59L63.44 54.08A73.9 73.9 0 0 1 57.71 63.35L57.17 63.4L57.49 62.97L53.51 63.27L53.19 63.68A73.9 73.9 0 0 1 42.29 63.35L41.98 62.91L42.51 62.97L40.27 59.67L39.74 59.6A73.9 73.9 0 0 1 34.59 50L34.81 49.51L35.03 50L36.75 46.41L36.56 45.92A73.9 73.9 0 0 1 42.29 36.65Z'/>"
+             "<path fill='url(#iris-holo)' d='M46.49 36.73A70.5 70.5 0 0 1 76.62 14.34A44.5 44.5 0 0 1 94.47 51.63A73.5 73.5 0 0 0 46.49 36.73ZM59.73 40.33A70.5 70.5 0 0 1 94.19 55.22A44.5 44.5 0 0 1 70.82 89.33A73.5 73.5 0 0 0 59.73 40.33ZM63.25 53.59A70.5 70.5 0 0 1 67.58 90.88A44.5 44.5 0 0 1 26.35 87.7A73.5 73.5 0 0 0 63.25 53.59ZM53.51 63.27A70.5 70.5 0 0 1 23.38 85.66A44.5 44.5 0 0 1 5.53 48.37A73.5 73.5 0 0 0 53.51 63.27ZM40.27 59.67A70.5 70.5 0 0 1 5.81 44.78A44.5 44.5 0 0 1 29.18 10.67A73.5 73.5 0 0 0 40.27 59.67ZM36.75 46.41A70.5 70.5 0 0 1 32.42 9.12A44.5 44.5 0 0 1 73.65 12.3A73.5 73.5 0 0 0 36.75 46.41Z'/></svg>")
+LOCKUP = f"<div class='lockup' role='img' aria-label='Iris'>{_APERTURE}<span class='lockup-name'>Iris</span></div>"
 
 CSS = """
 @page { size: A4; margin: 18mm 16mm 18mm 16mm; font-family: "DejaVu Sans", sans-serif;
@@ -999,7 +997,9 @@ h2 { font-size: 13pt; margin: 0 0 8pt; color: #16202b; }
 h3 { font-size: 11pt; margin: 14pt 0 6pt; color: #2f5d8a; }
 h4 { font-size: 10pt; margin: 10pt 0 4pt; }
 .cover { page: cover; padding-top: 40mm; }
-.cover .lockup { display: block; margin-bottom: 18pt; }
+.cover .lockup { display: flex; align-items: center; gap: 8pt; margin-bottom: 18pt; }
+.cover .lockup .mark { width: 36px; height: 36px; }
+.cover .lockup-name { font-size: 24pt; font-weight: 500; color: #1a1a1a; letter-spacing: -.01em; }
 .cover .eyebrow { font-family: monospace; letter-spacing: .08em; color: #2f5d8a; font-size: 9pt; text-transform: uppercase; }
 .stamp { display: inline-block; border: 2pt solid #b8352a; color: #b8352a; padding: 4pt 10pt; font-weight: bold;
   font-size: 12pt; margin: 14pt 0; transform: rotate(-2deg); }

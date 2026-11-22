@@ -3,7 +3,7 @@ import {
   Box, Boxes, ChevronDown, CircleHelp, ClipboardList, CornerDownLeft, Crosshair, FileText, FolderKanban, FolderOpen,
   History, House, LayoutDashboard, Menu, PanelLeft, Radar, Search, Settings, X, type LucideIcon,
 } from "lucide-react";
-import { IrisMark } from "./Brand";
+import { ApertureMark } from "./Brand";
 import { PROJECT_STEPS, isProjectStep, ownClick, type ProjectStep } from "./projectRoute";
 import { cleanName, groupHits, initials, isSearchKey, NAME_MAX, type NavId, type SearchHit } from "./shellNav";
 import "./appShell.css";
@@ -25,11 +25,11 @@ const KIND_ICON: Record<SearchHit["kind"], LucideIcon> = { project: FolderKanban
 const FOCUSABLE = 'a[href]:not([tabindex="-1"]), button:not([disabled]), input:not([disabled])';
 const count = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
-/** Iris's app icon: the mark in white on a small rounded holographic tile. */
+/** Iris's mark in the shell: the Aperture (six holographic blades around an ink pupil), on its own. */
 export function LogoTile({ size = 32 }: { size?: number }) {
   return (
-    <span className="shell-logo" aria-hidden style={{ width: size, height: size, borderRadius: Math.round(size * 0.3) }}>
-      <IrisMark size={Math.round(size * 0.6)} />
+    <span className="shell-logo" aria-hidden style={{ width: size, height: size }}>
+      <ApertureMark size={size} />
     </span>
   );
 }

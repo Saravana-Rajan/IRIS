@@ -9,31 +9,32 @@
     <meta property="og:title" content="Iris — Does AI truly see?" />
     <meta property="og:image" content="/brand/og.png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/brand/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/brand/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
-    <link rel="mask-icon" href="/brand/safari-pinned-tab.svg" color="#052640" />
+    <link rel="mask-icon" href="/brand/safari-pinned-tab.svg" color="#1a1a1a" />
     <link rel="manifest" href="/brand/site.webmanifest" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
     <style>
-      /* Shown until React mounts (it replaces #root's children): the mark and the wordmark's letters arrive once. */
+      /* Shown until React mounts (it replaces #root's children): the Aperture mark, its blades opening and closing. */
       .boot { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-        background: #fff; color: #11161b; font: 13px "IBM Plex Sans", system-ui, sans-serif; }
-      .boot p { margin: 0; color: #52636e; }
-      .boot g { animation: boot-in .7s cubic-bezier(.2, .8, .2, 1) both; }
-      .boot g:nth-child(2) { animation-delay: .16s; } .boot g:nth-child(3) { animation-delay: .32s; } .boot g:nth-child(4) { animation-delay: .48s; }
-      @keyframes boot-in { from { transform: translateY(18px); opacity: 0; } }
-      @media (prefers-reduced-motion: reduce) { .boot g { animation: none; } }
+        background: #fff; color: #1a1a1a; font: 13px "IBM Plex Sans", system-ui, sans-serif; }
+      .boot p { margin: 0; color: #6a6a6a; }
+      .boot-name { font-size: 22px; font-weight: 500; letter-spacing: -.01em; color: #1a1a1a; }
+      .boot-blades { transform-origin: 50% 50%; animation: boot-open 1.8s cubic-bezier(.45, 0, .2, 1) infinite; }
+      @keyframes boot-open { 0%, 100% { transform: rotate(0) scale(1); } 50% { transform: rotate(-38deg) scale(.82); } }
+      @media (prefers-reduced-motion: reduce) { .boot-blades { animation: none; } }
     </style>
   </head>
   <body>
     <div id="root">
       <div class="boot" role="status">
-        <svg width="130" height="50" viewBox="0 0 260 100" fill="currentColor" role="img" aria-label="Iris" style="overflow: visible">
-          <g><circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" stroke-width="9"/><path fill-rule="evenodd" d="M 26 50 A 24 24 0 1 0 74 50 A 24 24 0 1 0 26 50 Z M 60 50 L 55 58.66 L 45 58.66 L 40 50 L 45 41.34 L 55 41.34 Z"/></g>
-          <g fill="none" stroke="currentColor" stroke-width="14"><path d="M 128 8 L 128 92"/></g>
-          <g fill="none" stroke="currentColor" stroke-width="14"><path d="M 156 92 L 156 40 M 156 62 C 156 48 166 40 182 40"/></g>
-          <g><path d="M 200 40 L 200 92" fill="none" stroke="currentColor" stroke-width="14"/><circle cx="200" cy="17" r="8"/><path d="M 250 48 C 246 42 239 40 232 40 C 222 40 216 45 216 52 C 216 60 224 63 232 66 C 241 69 248 72 248 80 C 248 88 241 92 232 92 C 224 92 217 89 214 84" fill="none" stroke="currentColor" stroke-width="12"/></g>
+        <svg class="boot-mark" width="56" height="56" viewBox="0 0 100 100" role="img" aria-label="Iris">
+          <defs><linearGradient id="boot-holo" gradientUnits="userSpaceOnUse" x1="9.54" y1="26.64" x2="90.46" y2="73.36"><stop offset="0" stop-color="#8f9bff"/><stop offset=".4" stop-color="#b07af2"/><stop offset=".75" stop-color="#ff5cd6"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs>
+          <path fill="#1a1a1a" d="M42.29 36.65L42.83 36.6L42.51 37.03L46.49 36.73L46.81 36.32A73.9 73.9 0 0 1 57.71 36.65L58.02 37.09L57.49 37.03L59.73 40.33L60.26 40.4A73.9 73.9 0 0 1 65.41 50L65.19 50.49L64.97 50L63.25 53.59L63.44 54.08A73.9 73.9 0 0 1 57.71 63.35L57.17 63.4L57.49 62.97L53.51 63.27L53.19 63.68A73.9 73.9 0 0 1 42.29 63.35L41.98 62.91L42.51 62.97L40.27 59.67L39.74 59.6A73.9 73.9 0 0 1 34.59 50L34.81 49.51L35.03 50L36.75 46.41L36.56 45.92A73.9 73.9 0 0 1 42.29 36.65Z"/>
+          <path class="boot-blades" fill="url(#boot-holo)" d="M46.49 36.73A70.5 70.5 0 0 1 76.62 14.34A44.5 44.5 0 0 1 94.47 51.63A73.5 73.5 0 0 0 46.49 36.73ZM59.73 40.33A70.5 70.5 0 0 1 94.19 55.22A44.5 44.5 0 0 1 70.82 89.33A73.5 73.5 0 0 0 59.73 40.33ZM63.25 53.59A70.5 70.5 0 0 1 67.58 90.88A44.5 44.5 0 0 1 26.35 87.7A73.5 73.5 0 0 0 63.25 53.59ZM53.51 63.27A70.5 70.5 0 0 1 23.38 85.66A44.5 44.5 0 0 1 5.53 48.37A73.5 73.5 0 0 0 53.51 63.27ZM40.27 59.67A70.5 70.5 0 0 1 5.81 44.78A44.5 44.5 0 0 1 29.18 10.67A73.5 73.5 0 0 0 40.27 59.67ZM36.75 46.41A70.5 70.5 0 0 1 32.42 9.12A44.5 44.5 0 0 1 73.65 12.3A73.5 73.5 0 0 0 36.75 46.41Z"/>
         </svg>
+        <b class="boot-name">Iris</b>
         <p>Starting Iris…</p>
       </div>
     </div>

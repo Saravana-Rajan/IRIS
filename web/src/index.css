@@ -430,12 +430,22 @@ h3 { font-size: 12.5px; margin: 0; display: flex; align-items: center; gap: 6px;
 .ibtn.on { background: var(--accent-soft); color: var(--accent-ink); }
 .ibtn:disabled { color: var(--muted); opacity: .4; cursor: default; }
 .spin { animation: spin 1s linear infinite; }
-/* Every spinner is Iris's split-O at its optical small size (assets/brand/iris/icons/iris-symbol-micro.svg), in the
-   accent colour, turning at the kit's Orbit speed. */
+/* Every spinner is the Aperture mark in one colour (web/public/brand/iris-spinner.svg), in the accent colour, turning. */
 .spinner { width: 14px; height: 14px; display: inline-block; flex: none; background: var(--accent); animation: spin 1.6s linear infinite;
   -webkit-mask: url("/brand/iris-spinner.svg") center / contain no-repeat; mask: url("/brand/iris-spinner.svg") center / contain no-repeat; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .spin { animation-duration: 3s; } }
+/* The Aperture mark (Brand.tsx): while Iris works its blades close a little and open again around the pupil; the
+   lockup sets "Iris" in the page's type beside it. */
+.aperture-mark { flex: none; overflow: visible; }
+.aperture-mark.working .aperture-blades { transform-box: view-box; transform-origin: 50% 50%; animation: aperture-work 1.8s cubic-bezier(.45, 0, .2, 1) infinite; }
+.aperture-mark.working .aperture-pupil { transform-box: view-box; transform-origin: 50% 50%; animation: aperture-pupil 1.8s cubic-bezier(.45, 0, .2, 1) infinite; }
+@keyframes aperture-work { 0%, 100% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(-38deg) scale(.82); } }
+@keyframes aperture-pupil { 0%, 100% { transform: scale(1); } 50% { transform: scale(.72); } }
+.lockup { display: inline-flex; align-items: center; gap: .3em; line-height: 1; color: var(--ink); white-space: nowrap; }
+.lockup-name { font-weight: 500; letter-spacing: -.015em; }
+.lockup-by { font-size: .43em; color: var(--muted); font-weight: 400; margin-left: .2em; align-self: flex-end; padding-bottom: .12em; }
+.app-icon { display: inline-grid; place-items: center; flex: none; background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .spin { animation-duration: 3s; } .aperture-mark.working .aperture-blades, .aperture-mark.working .aperture-pupil { animation: none; } }
 
 /* Tooltips: data-tip on any element; side from data-tip-side; drawn by Tooltips (ui.tsx), kept inside the window */
 [data-tip] { position: relative; }

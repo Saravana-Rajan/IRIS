@@ -1,28 +1,66 @@
-// Iris's identity in the app (docs/brand-assets.md): the mark, the wordmark, the notch at the top of the model and the
-// loading card. The geometry is the kit's (assets/brand/iris/svg): an eye's ring and pupil with a six-bladed aperture,
-// and "Iris" drawn in strokes; index.html's boot splash draws the same lockup.
+// Iris's identity in the app (docs/brand-assets.md): the Aperture mark (six holographic blades closing around an ink
+// hexagonal pupil: the camera's iris and the eye's in one), the lockup with "Iris" in live text, the app icon, the
+// loading card and the kept-fix toast. web/public/favicon.svg and web/public/brand/ carry the same mark; index.html's
+// boot splash draws the same lockup. The older split-O (`IrisMark`, `MarkShapes`) is kept for the notch and the old
+// landing only, which App no longer shows.
 
 import { HoloRibbon } from "./Holo";
 
 /** The pupil with its hexagonal aperture cut out (even-odd), in the mark's 100 x 100 box. */
 const PUPIL = "M 26 50 A 24 24 0 1 0 74 50 A 24 24 0 1 0 26 50 Z M 60 50 L 55 58.66 L 45 58.66 L 40 50 L 45 41.34 L 55 41.34 Z";
-const LETTERS = ["M 128 8 L 128 92", "M 156 92 L 156 40 M 156 62 C 156 48 166 40 182 40", "M 200 40 L 200 92"];
-const S = "M 250 48 C 246 42 239 40 232 40 C 222 40 216 45 216 52 C 216 60 224 63 232 66 C 241 69 248 72 248 80 C 248 88 241 92 232 92 C 224 92 217 89 214 84";
 
 function MarkShapes() {
   return <><circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" strokeWidth="9" /><path fillRule="evenodd" d={PUPIL} /></>;
 }
 
-/** The Iris lockup (the mark and "Iris") in the current text colour; `height` in px. */
-export function Wordmark({ height = 28, title = "Iris" }: { height?: number; title?: string }) {
+/** The Aperture mark's paths in its 100 × 100 box: the ink hexagonal pupil and the six blades around it. */
+export const APERTURE_PUPIL = "M42.29 36.65L42.83 36.6L42.51 37.03L46.49 36.73L46.81 36.32A73.9 73.9 0 0 1 57.71 36.65L58.02 37.09L57.49 37.03L59.73 40.33L60.26 40.4A73.9 73.9 0 0 1 65.41 50L65.19 50.49L64.97 50L63.25 53.59L63.44 54.08A73.9 73.9 0 0 1 57.71 63.35L57.17 63.4L57.49 62.97L53.51 63.27L53.19 63.68A73.9 73.9 0 0 1 42.29 63.35L41.98 62.91L42.51 62.97L40.27 59.67L39.74 59.6A73.9 73.9 0 0 1 34.59 50L34.81 49.51L35.03 50L36.75 46.41L36.56 45.92A73.9 73.9 0 0 1 42.29 36.65Z";
+export const APERTURE_BLADES = "M46.49 36.73A70.5 70.5 0 0 1 76.62 14.34A44.5 44.5 0 0 1 94.47 51.63A73.5 73.5 0 0 0 46.49 36.73ZM59.73 40.33A70.5 70.5 0 0 1 94.19 55.22A44.5 44.5 0 0 1 70.82 89.33A73.5 73.5 0 0 0 59.73 40.33ZM63.25 53.59A70.5 70.5 0 0 1 67.58 90.88A44.5 44.5 0 0 1 26.35 87.7A73.5 73.5 0 0 0 63.25 53.59ZM53.51 63.27A70.5 70.5 0 0 1 23.38 85.66A44.5 44.5 0 0 1 5.53 48.37A73.5 73.5 0 0 0 53.51 63.27ZM40.27 59.67A70.5 70.5 0 0 1 5.81 44.78A44.5 44.5 0 0 1 29.18 10.67A73.5 73.5 0 0 0 40.27 59.67ZM36.75 46.41A70.5 70.5 0 0 1 32.42 9.12A44.5 44.5 0 0 1 73.65 12.3A73.5 73.5 0 0 0 36.75 46.41Z";
+let apertures = 0;
+const HOLO_STOPS: [string, string][] = [["0", "#8f9bff"], [".4", "#b07af2"], [".75", "#ff5cd6"], ["1", "#7dd3fc"]];
+
+/** The blades' holographic gradient, under an id of the caller's (several marks can share a page). */
+function HoloGradient({ id }: { id: string }) {
   return (
-    <svg className="wordmark" width={Math.round(height * 2.6)} height={height} viewBox="0 0 260 100" fill="currentColor"
-      role="img" aria-label={title}>
-      <MarkShapes />
-      <g fill="none" stroke="currentColor" strokeWidth="14">{LETTERS.map((d) => <path key={d} d={d} />)}</g>
-      <circle cx="200" cy="17" r="8" /><path d={S} fill="none" stroke="currentColor" strokeWidth="12" />
+    <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="9.54" y1="26.64" x2="90.46" y2="73.36">
+      {HOLO_STOPS.map(([o, c]) => <stop key={o} offset={o} stopColor={c} />)}
+    </linearGradient>
+  );
+}
+
+/**
+ * The Aperture mark. `working`: the blades open and close (the "Iris is working" indicator), still under reduced motion.
+ * `mono`: one colour (the current text colour) for small or single-colour places. Decorative unless given a `title`.
+ */
+export function ApertureMark({ size = 24, working = false, mono = false, title, className = "" }: {
+  size?: number; working?: boolean; mono?: boolean; title?: string; className?: string;
+}) {
+  const id = `aperture-${++apertures}`;   // its own gradient id: several marks share a page (no hook: drawable anywhere)
+  return (
+    <svg className={`aperture-mark${working ? " working" : ""}${className ? ` ${className}` : ""}`} width={size} height={size} viewBox="0 0 100 100"
+      role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true}>
+      {!mono && <defs><HoloGradient id={id} /></defs>}
+      <path className="aperture-pupil" fill={mono ? "currentColor" : "#1a1a1a"} d={APERTURE_PUPIL} />
+      <path className="aperture-blades" fill={mono ? "currentColor" : `url(#${id})`} d={APERTURE_BLADES} />
     </svg>
   );
+}
+
+/** The lockup: the Aperture mark, "Iris" in live text (IBM Plex Sans 500, the page's ink) and, with `by`, the small grey
+ *  "by Techjays". `height` in px (the mark's size). */
+export function Lockup({ height = 28, by = false, title = "Iris" }: { height?: number; by?: boolean; title?: string }) {
+  return (
+    <span className="lockup" role="img" aria-label={by ? `${title} by Techjays` : title} style={{ fontSize: Math.round(height * 0.74) }}>
+      <ApertureMark size={height} />
+      <span className="lockup-name" aria-hidden>{title}</span>
+      {by && <span className="lockup-by" aria-hidden>by Techjays</span>}
+    </span>
+  );
+}
+
+/** The Iris lockup (the Aperture mark and "Iris") for the places that still ask for the wordmark; `height` in px. */
+export function Wordmark({ height = 28, title = "Iris" }: { height?: number; title?: string }) {
+  return <Lockup height={height} title={title} />;
 }
 
 /** The mark. `motion`: orbit (indeterminate work), settle (once, after a confirmed action) or none. */
@@ -34,13 +72,12 @@ export function IrisMark({ size = 24, motion = "none" }: { size?: number; motion
   );
 }
 
-/** The app icon: the white mark on a navy tile (phones and tablets, where the wordmark has no room). */
+/** The app icon: the Aperture mark on a white rounded tile (web/public/brand/apple-touch-icon.png is the same). */
 export function AppIcon({ size = 30 }: { size?: number }) {
   return (
-    <svg className="app-icon" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Iris">
-      <rect width="100" height="100" rx="22" fill="var(--navy)" />
-      <g transform="translate(20 20) scale(.6)" fill="#fff" color="#fff"><MarkShapes /></g>
-    </svg>
+    <span className="app-icon" role="img" aria-label="Iris" style={{ width: size, height: size, borderRadius: Math.round(size * 0.22) }}>
+      <ApertureMark size={Math.round(size * 0.7)} />
+    </span>
   );
 }
 
@@ -163,11 +200,11 @@ export function LoadCard({ load, now, onCancel }: { load: LoadProgress; now: num
   );
 }
 
-/** A confirmed, completed action (a fix kept in the model): the mark settles once beside the words. */
+/** A confirmed, completed action (a fix kept in the model): the mark beside the words. */
 export function KeptToast({ text, detail }: { text: string; detail?: string }) {
   return (
     <div className="toast kept" role="status">
-      <IrisMark size={28} motion="settle" />
+      <ApertureMark size={28} />
       <span><b>{text}</b>{detail && <><br /><span className="why">{detail}</span></>}</span>
     </div>
   );
