@@ -1180,3 +1180,20 @@ Android and maskable icons, the pinned tab and a white manifest theme; the boot 
 the shell: Review fixes is Clash review's primary action at the right of the top bar, with Export beside it as a
 secondary, and the queue covers the shell's body, so the sidebar and the top bar stay
 ([docs/review-queue.md](../review-queue.md), "Mounting it in `App.tsx`").
+
+Later on Nov 22 (2026-11-22), three of the owner's calls. **The sidebar's footer** (9434dda, f3b1bbb): the user block
+(avatar, name, Reviewer, Edit) is gone; the sidebar ends with `BuiltBy`, the small Aperture mark and "Built by
+Techjays" (the mark alone, with that tip, on the rail), and the brand at the top and in the phone's top bar is the mark
+and "Iris". The reviewer's name (`iris.reviewer`) is asked above the proposals again (always) and in Settings ("Your
+name for review decisions"); Home's greeting still uses it. **White and pink on every screen** (84e3d61: `index.css`'s
+tokens, the end of `frame.css`, `viewer/Viewer.ts`): white surfaces with lavender-grey hairlines (`--panel` #f5f4f8
+only for tracks and header bands), `--pink` #ff5cd6 and a pink-magenta `--accent-ink` #b0269a, primary buttons on
+`--holo-cta` (#d3249c → #9a46dd → #5f62e0, each stop 4.5:1 or more with white text) with a pink glow on hover and an
+ink focus ring, secondary buttons pink on hover, the selected clash row a pink tint with a pink edge, chips and badges
+on white or pink, pink form controls, every spinner the Aperture in the holo colours, white dock tabs underlined in
+pink, and the 3D background #f3f1f8. **Home** lost "See it work" (`DemoClips.tsx` and `demoClips.css` deleted; the
+clips stay in `web/public/demos/` for the submission video) for **How Iris works** (`HowIrisWorks.tsx`,
+`howIrisWorks.css`, 4edc4cb): eight cards in four phases (Bring in, Find, Fix, Share) with icon tiles, step pills and
+measured proof chips, Propose with the AI holo edge and Validate with a green "Geometry" badge, "AI proposes → geometry
+proves" between them; a card opens its step on the sample building (`onSampleStep` → `trySample(step)`). Tests:
+`sidebar.test.mjs` (the footer), `shell.test.mjs`, `start-screen.test.mjs` and `how-iris-works.test.mjs`.

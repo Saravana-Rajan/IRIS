@@ -104,8 +104,8 @@ New files (each self-contained, props only, no direct App state):
 |---|---|
 | `web/src/projectsApi.ts` | Typed calls for the routes above (uses `api.ts`'s request helper) |
 | `web/src/projectRoute.ts` | Parse/format `/projects` and `/projects/<pid>/<step>` (pure; mirrors `aboutRoute.ts`); the first `#project/…` hashes still read |
-| `web/src/AppShell.tsx` + `shellNav.ts` | The sidebar (Home, Projects, the open project's steps with counts, Help, Settings, the reviewer's name), the top bar and its search box |
-| `web/src/StartScreen.tsx` | Home (`/home`): New project, the sample building and drawings, recent projects, See it work, How Iris works |
+| `web/src/AppShell.tsx` + `shellNav.ts` | The sidebar (the mark and "Iris", Home, Projects, the open project's steps with counts, Help, Settings, "Built by Techjays"), the top bar and its search box. The reviewer's name is asked above the proposals and in Settings |
+| `web/src/StartScreen.tsx` | Home (`/home`): New project, the sample building and drawings, How Iris works (`HowIrisWorks.tsx`: eight cards, each opening its step on the sample building), recent projects |
 | `web/src/ProjectsHome.tsx` | The projects table (status tabs with counts, a status pill per project, a ⋮ menu: Open, Rename, Remove from this browser) and `NewProjectDialog`, the New project dialog opened from Home's tile, the top bar and the empty state |
 | `web/src/ProjectOverview.tsx` | One project: four stat cards (models, clashes, open, resolved), the models, the coordination tally, the next step, recent activity, reports; `SaveButton` |
 | `web/src/importRows.ts` + `ImportPanel.tsx` | Per-file import rows from the existing upload events; Retry |
