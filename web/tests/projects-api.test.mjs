@@ -210,78 +210,175 @@ test("the next step follows the project's real state", () => {
 /* ---------------------------------------------------------------------------------------------------------------- */
 /* The pages render real state (server render; React, lucide and the modules above are the real ones)              */
 
-/** A component compiled with its own modules; its stylesheet import is dropped (Vite's job, not Node's). */
-async function component(path) {
-  const url = await compiled(path, { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
-    "lucide-react": import.meta.resolve("lucide-react"), "./projectsApi": projectsUrl, "./projectRoute": routeUrl });
-  const js = Buffer.from(url.slice(url.indexOf(",") + 1), "base64").toString().replace('import "./projects.css";', "");
-  return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
+
+const REAL = { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
+  "lucide-react": import.meta.resolve("lucide-react"), "./projectsApi": projectsUrl, "./projectRoute": routeUrl };
+
+/** A module compiled with its own modules (`deps` on top of the real ones above); its stylesheet imports are dropped
+ *  (Vite's job, not Node's). Returns the module's URL. */
+async function module(path, deps = {}) {
+  const url = await compiled(path, { ...REAL, ...deps });
+  const js = Buffer.from(url.slice(url.indexOf(",") + 1), "base64").toString().replace(/^import "\.\/[\w.-]+\.css";$/gm, "");
+  return `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
 }
-const { ProjectsHome, PROJECT_FLOW } = await component("../src/ProjectsHome.tsx");
-const { ProjectOverview, ProjectSteps } = await component("../src/ProjectOverview.tsx");
-const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ");
+const pages = { "./Holo": await module("../src/Holo.tsx"), "./PageHeader": await module("../src/PageHeader.tsx") };
+const { ProjectsHome, ProjectRow, NewProjectDialog, PROJECT_FLOW, projectStatus } = await import(await module("../src/ProjectsHome.tsx", pages));
+const { ProjectOverview } = await import(await module("../src/ProjectOverview.tsx", pages));
+const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const noop = () => {};
+const home = (over = {}) => renderToStaticMarkup(h(ProjectsHome, { projects: [], loading: false, onNew: noop, onOpen: noop, ...over }));
 
-test("the projects home lists each project's models, numbers and last save, and claims nothing it doesn't know", () => {
-  const fresh = project({ id: "bb", name: "Empty site", files: [], counts: null, reviews: {}, saved: [], updated: sec(NOW + 60_000) });   // fixed time, not the clock: newest regardless of time zone
-  const html = renderToStaticMarkup(h(ProjectsHome, { projects: [project(), fresh], loading: false, onCreate: noop, onOpen: noop, onDemo: noop }));
-  const t = text(html);
-  assert.match(t, /2 projects in this browser/);
-  assert.ok(t.indexOf("Empty site") < t.indexOf("Riverside Block C"), "most recently updated first");
-  assert.match(t, /IFC 2 .*STEP 1/);
-  assert.match(t, /5 open .*4 resolved .*3 reviewed .*of 12/);
-  assert.match(t, /No models/);
-  assert.match(t, /Not saved/);
-  assert.match(t, /4 edits/);
-  assert.match(t, /Open the sample building/);
-  assert.doesNotMatch(t, /No projects yet/);
-});
-
-test("with no projects the home explains the workflow and offers the sample building", () => {
-  const t = text(renderToStaticMarkup(h(ProjectsHome, { projects: [], loading: false, error: "Server unreachable", onCreate: noop, onOpen: noop, onDemo: noop })));
-  assert.match(t, /No projects yet/);
-  assert.match(t, /Server unreachable/);
+test("the workflow a project follows is still exported for Home", () => {
   assert.deepEqual(PROJECT_FLOW.map((s) => s.name), ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"]);
-  for (const s of PROJECT_FLOW) assert.ok(t.includes(s.name), s.name);
-  assert.match(t, /Open the sample building/);
-  const loading = text(renderToStaticMarkup(h(ProjectsHome, { projects: [], loading: true, onCreate: noop, onOpen: noop })));
-  assert.match(loading, /Loading projects/);
-  assert.doesNotMatch(loading, /No projects yet|sample building/);
 });
 
-test("the overview shows models, unresolved against resolved, reports, activity, the next step and the future row", () => {
-  const props = { project: project(), step: "overview", onStep: noop, reports: project().reports,
-    activity: [{ at: Date.now() - 60000, text: "Accepted fix for #42" }], onImport: noop, onOpenWorkspace: noop, onSave: noop };
-  const t = text(renderToStaticMarkup(h(ProjectOverview, props)));
-  for (const s of ["Overview", "Models", "Coordination", "Clash review", "Reports", "Activity"]) assert.ok(t.includes(s), s);
+test("a project's status pill says only what is known: models, the last numbers, else the decisions", () => {
+  const s = (over) => projectStatus(project(over));
+  assert.deepEqual(s({}), { key: "open", label: "Open issues" });
+  assert.deepEqual(s({ counts: { clashes: 0, open: 0, resolved: 0, reviewed: 0 } }), { key: "clear", label: "All clear" });
+  assert.deepEqual(s({ counts: { clashes: 12, open: 0, resolved: 9, reviewed: 3 } }), { key: "resolved", label: "Resolved" });
+  assert.deepEqual(s({ counts: null }), { key: "review", label: "In review" }, "decisions recorded, no numbers");
+  assert.deepEqual(s({ counts: null, reviews: {} }), { key: "unchecked", label: "Not checked" });
+  assert.deepEqual(s({ counts: null, reviews: {}, files: [] }), { key: "none", label: "No models" });
+});
+
+test("the projects table: newest first, models, clashes, open, a status pill, the last save; nothing it doesn't know", () => {
+  const fresh = project({ id: "bb", name: "Empty site", files: [], counts: null, reviews: {}, saved: [], updated: sec(NOW + 60_000) });   // fixed time, not the clock: newest regardless of time zone
+  const html = home({ projects: [project(), fresh], onDemo: noop, hrefOf: (id) => `/projects/${id}` });
+  const t = text(html);
+  assert.match(t, /Projects 2 projects in this browser/);
+  assert.ok(t.indexOf("Empty site") < t.indexOf("Riverside Block C"), "most recently updated first");
+  assert.match(t, /Name Models Clashes Open Status Last saved/);
+  assert.match(t, /Riverside Block C Updated [^·]+? 3 IFC 2 STEP 1 12 5 Open issues [^·]+ · 4 edits/);   // times are relative to the clock
+  assert.match(t, /Empty site Updated [^—]+ — — — No models Not saved/, "no numbers claimed: dashes, not zeros");
+  assert.match(html, /<span class="pchip open">Open issues<\/span>/);
+  assert.match(html, /<span class="proj-num mono proj-open has">5<\/span>/, "open shows red only above zero");
+  assert.match(html, /<a class="proj-name" href="\/projects\/3f9a1c0b2d4e5f6a7b8c9d0e"/);
+  assert.match(t, /Open the sample building/);
+  assert.doesNotMatch(t, /Start your first project|Create project/, "no inline create form: the shell's top bar has New project");
+});
+
+test("tabs filter by status and count each one", () => {
+  const clear = project({ id: "c1", name: "Clear one", counts: { clashes: 4, open: 0, resolved: 4, reviewed: 0 } });
+  const unchecked = project({ id: "u1", name: "Unchecked", counts: null, reviews: {} });
+  const html = home({ projects: [project(), clear, unchecked] });
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /role="tab" aria-selected="true"[^>]*>All<span class="proj-tab-n">3</);
+  assert.match(text(html), /Needs review 1 Clear 1 Not checked 1/);
+});
+
+test("each row has a menu: Open (a link), Rename and Remove from this browser, closed until asked", () => {
+  const html = home({ projects: [project()], onRename: noop, onRemove: noop, hrefOf: (id) => `/projects/${id}` });
+  assert.match(html, /aria-label="Actions for Riverside Block C" aria-haspopup="menu" aria-expanded="false"/);
+  assert.match(html, /role="menu" aria-label="Actions for Riverside Block C" hidden=""/);
+  const items = [...html.matchAll(/role="menuitem"[^>]*>(.*?)<\/(a|button)>/g)].map((m) => text(m[1]).trim());
+  assert.deepEqual(items, ["Open", "Rename", "Remove from this browser"]);
+  assert.match(html, /<a role="menuitem" tabindex="-1" class="proj-menu-item" href="\/projects\/3f9a1c0b2d4e5f6a7b8c9d0e"/);
+  const bare = home({ projects: [project()] });
+  assert.deepEqual([...bare.matchAll(/role="menuitem"[^>]*>(.*?)<\/(a|button)>/g)].map((m) => text(m[1]).trim()), ["Open"],
+    "no rename or remove without their handlers");
+});
+
+test("renaming puts the name in a field; removing asks first and says the server keeps it", () => {
+  const row = (mode) => renderToStaticMarkup(h("table", null, h("tbody", null,
+    h(ProjectRow, { p: project(), mode, onOpen: noop, onRename: noop, onRemove: noop }))));
+  const renaming = row("rename");
+  const field = renaming.match(/<input[^>]*class="proj-input"[^>]*>/)?.[0] ?? "";
+  assert.match(field, /value="Riverside Block C"/);
+  assert.match(field, /maxLength="120"/i);
+  assert.match(text(renaming), /Enter to save · Esc to cancel/);
+  const removing = text(row("remove"));
+  assert.match(removing, /Remove “Riverside Block C” from this browser\? The project stays on the server/);
+  assert.match(removing, /Cancel Remove/);
+  assert.doesNotMatch(text(row("idle")), /from this browser\?/);
+});
+
+test("with no projects: an empty state with New project and the sample building", () => {
+  const t = text(home({ error: "Server unreachable", onDemo: noop }));
+  assert.match(t, /Start your first project/);
+  assert.match(t, /Server unreachable/);
+  assert.match(t, /New project Try the sample building/);
+  assert.doesNotMatch(t, /Open the sample building/, "the header doesn't repeat the empty state's offer");
+  assert.doesNotMatch(text(home()), /sample building/);
+  const loading = text(home({ loading: true }));
+  assert.match(loading, /Loading projects/);
+  assert.doesNotMatch(loading, /Start your first project|sample building/);
+});
+
+test("the new project dialog: a light modal with one required name, Cancel and Create project", () => {
+  const html = renderToStaticMarkup(h(NewProjectDialog, { onCreate: noop, onClose: noop }));
+  assert.match(html, /class="proj-veil"/);
+  assert.match(html, /role="dialog" aria-modal="true"/);
+  assert.match(text(html), /New project .*Project name/);
+  assert.match(html, /<input[^>]*maxLength="120" required=""/i);
+  assert.match(html, /type="button" class="btn"[^>]*>Cancel</);
+  assert.match(html, /type="submit" class="btn primary" disabled="">\s*Create project/, "empty name: nothing to create");
+  const busy = renderToStaticMarkup(h(NewProjectDialog, { onCreate: noop, onClose: noop, busy: true, error: "Too many projects" }));
+  assert.match(text(busy), /Too many projects .*Creating…/);
+  assert.match(busy, /role="alert"/);
+});
+
+const overview = (over = {}) => ({ project: project(), step: "overview", onStep: noop, reports: project().reports,
+  activity: [{ at: Date.now() - 60000, text: "Accepted fix for #42" }], onImport: noop, onOpenWorkspace: noop, onSave: noop, ...over });
+
+test("the overview header: breadcrumb, the project's name, its dates and Save; no step bar", () => {
+  const html = renderToStaticMarkup(h(ProjectOverview, overview({ onProjects: noop, projectsHref: "/projects" })));
+  assert.match(html, /<nav class="page-crumbs" aria-label="Breadcrumb">/);
+  assert.match(html, /<a class="page-crumb" href="\/projects">Projects<\/a>/);
+  assert.match(html, /<span class="page-crumb here" aria-current="page">Riverside Block C<\/span>/);
+  assert.match(html, /<h1 class="page-title">Riverside Block C<\/h1>/);
+  assert.match(text(html), /Created [^·]+? Updated [^·]+? Saved state 2, [^·]+? \(4 edits\)/);   // times are relative to the clock
+  assert.match(text(html), /Save/);
+  assert.doesNotMatch(html, /proj-step|Project steps/, "the sidebar has the steps");
+  assert.doesNotMatch(text(html), /Open workspace →|Import models Open/, "the top bar has the primary action");
+  const reports = renderToStaticMarkup(h(ProjectOverview, overview({ step: "reports", onProjects: noop, projectsHref: "/projects",
+    stepHref: (s) => `/projects/x/${s}` })));
+  assert.match(reports, /href="\/projects\/x\/overview">Riverside Block C<\/a>/);
+  assert.match(reports, /<span class="page-crumb here" aria-current="page">Reports<\/span>/);
+  assert.match(reports, /<h1 class="page-title">Reports<\/h1>/);
+  for (const step of ["reports", "activity", "models", "coordination"]) {
+    assert.match(text(renderToStaticMarkup(h(ProjectOverview, overview({ step, saving: true })))), /Saving…/, step);
+  }
+  const none = renderToStaticMarkup(h(ProjectOverview, overview({ project: project({ files: [] }) })));
+  assert.match(none, /<button type="button" class="btn" disabled=""[^>]*>.*Save<\/button>/, "nothing to save without models");
+});
+
+test("the stat cards show the known numbers and where they come from, and a dash (never 0) when not known", () => {
+  const stats = (o) => text(renderToStaticMarkup(h(ProjectOverview, overview(o))).match(/<ul class="proj-stats".*?<\/ul>/)[0]);
+  assert.match(stats({}), /Models 3 2 IFC · 1 STEP Clashes 12 last known Open 5 last known Resolved 4 last known · 3 reviewed/);
+  assert.match(stats({ counts: { clashes: 7, open: 2, resolved: 5, reviewed: 0 } }), /Clashes 7 from the open session Open 2 .*Resolved 5 from the open session/);
+  assert.match(stats({ project: project({ counts: null }) }), /Clashes — not checked yet Open — not checked yet Resolved — not checked yet/);
+  assert.match(stats({ project: project({ files: [], counts: null }) }), /Models 0 none imported yet/);
+});
+
+test("the overview body: models, the coordination tally, the next step, recent activity and recent reports", () => {
+  const html = renderToStaticMarkup(h(ProjectOverview, overview()));
+  const t = text(html);
   assert.match(t, /Structure\.ifc .*MEP\.ifc .*Pump\.step/);
   assert.match(t, /Unresolved 5 .*Resolved 4 .*Reviewed 3/);
-  assert.match(t, /last known/);
+  assert.match(t, /last known, as of the last session/);
   assert.match(t, /Next step Review clashes 5 of 12 clashes are open/);
+  assert.match(t, /Recent activity 1 View all Accepted fix for #42/);
   assert.match(t, /Level 02 clashes/);
-  assert.match(renderToStaticMarkup(h(ProjectOverview, props)), /href="\/api\/projects\/3f9a1c0b2d4e5f6a7b8c9d0e\/reports\/d1"/);
-  assert.match(t, /Accepted fix for #42/);
-  assert.doesNotMatch(t, /Not yet supported/, "PDF drawings are read on the Drawings step");
-  assert.match(t, /Saved state 2/);
-  const live = text(renderToStaticMarkup(h(ProjectOverview, { ...props, counts: { clashes: 12, open: 0, resolved: 12, reviewed: 0 } })));
-  assert.match(live, /Next step Create report/);
-  assert.match(live, /from the open session/);
-  const empty = text(renderToStaticMarkup(h(ProjectOverview, { ...props, project: project({ files: [], counts: null, reviews: {}, saved: [] }), reports: [], activity: [] })));
-  assert.match(empty, /Next step Import models/);
-  assert.match(empty, /Not checked yet/);
-  assert.match(empty, /No reports yet/);
-  assert.match(empty, /Not saved yet/);
+  assert.match(html, /href="\/api\/projects\/3f9a1c0b2d4e5f6a7b8c9d0e\/reports\/d1"/);
+  assert.match(text(renderToStaticMarkup(h(ProjectOverview, overview({ counts: { clashes: 12, open: 0, resolved: 12, reviewed: 0 } })))),
+    /Next step Create report/);
 });
 
-test("the step bar marks the current step and counts models, open clashes and reports", () => {
-  const html = renderToStaticMarkup(h(ProjectSteps, { step: "clash", onStep: noop, project: project(), counts: project().counts, onProjects: noop }));
-  assert.match(html, /aria-current="page"[^>]*>Clash review<span class="proj-step-n open">5</);
-  assert.match(html, />Models<span class="proj-step-n">3</);
-  assert.match(html, />Reports<span class="proj-step-n">1</);
-  assert.match(text(html), /Projects .*Riverside Block C/);
-  for (const step of ["reports", "activity", "models", "coordination"]) {
-    const t = text(renderToStaticMarkup(h(ProjectOverview, { project: project(), step, onStep: noop, reports: project().reports,
-      onImport: noop, onOpenWorkspace: noop, onSave: noop, saving: true })));
-    assert.match(t, /Saving…/, step);
-  }
+test("empty states: no models, no reports, no activity", () => {
+  const bare = project({ files: [], counts: null, reviews: {}, saved: [] });
+  const t = text(renderToStaticMarkup(h(ProjectOverview, overview({ project: bare, reports: [], activity: [] }))));
+  assert.match(t, /Next step Import models/);
+  assert.match(t, /No models yet .*Import models/);
+  assert.match(t, /No activity yet/);
+  assert.match(t, /Not saved yet/);
+  assert.doesNotMatch(t, /Coordination/, "nothing to tally without models or numbers");
+  const reports = text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "reports", reports: [] }))));
+  assert.match(reports, /No reports yet PDF and BCF reports .* Open workspace/);
+  const noModels = text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "reports", reports: [], project: bare }))));
+  assert.doesNotMatch(noModels, /Open workspace/, "no workspace to open without models");
+  const activity = text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "activity", activity: [] }))));
+  assert.match(activity, /No activity yet .*Saved states 2/);
+  const kids = renderToStaticMarkup(h(ProjectOverview, overview({ step: "drawings" }), h("section", { className: "proj-card" }, "Drawings card")));
+  assert.match(kids, /<section class="proj-card">Drawings card<\/section>/, "App's cards follow the step's body");
 });

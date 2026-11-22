@@ -1,78 +1,23 @@
-import { ArrowRight, ChevronRight, Save, Upload } from "lucide-react";
-import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { PROJECT_STEPS, ownClick, stepBeside, type Step } from "./projectRoute";
+import { ArrowRight, Save, Upload } from "lucide-react";
+import { useId, type MouseEvent, type ReactNode } from "react";
+import { CountUp, EmptyState } from "./Holo";
+import { PageHeader, type Crumb } from "./PageHeader";
+import { ownClick, stepLabel, type Step } from "./projectRoute";
 import {
   REVIEW_LABEL, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
   type ActivityItem, type CoordCounts, type Project, type ReviewStatus,
 } from "./projectsApi";
 import "./projects.css";
 
-/**
- * The project's step bar: Overview · Models · Coordination · Clash review · Reports · Activity. Shown above the
- * project overview and, by App, above the workspace; `#project/<pid>/<step>` follows it (projectRoute.ts). Left and
- * right arrow keys move between steps. Counts on a step come from what is passed: models and reports from `project`,
- * open clashes from `counts`.
- */
-export function ProjectSteps({ step, onStep, project, counts, onProjects, actions, hrefOf, projectsHref }: {
-  step: Step;
-  onStep(step: Step): void;
-  project?: Pick<Project, "name" | "files" | "reports"> | null;
-  counts?: CoordCounts | null;
-  onProjects?(): void;      // "Projects" crumb back to the list
-  actions?: ReactNode;      // controls at the right end (Save, Open workspace…)
-  /** Each step's address: the steps are then links (a new tab opens one), a plain click handled by `onStep`. */
-  hrefOf?: (step: Step) => string;
-  projectsHref?: string;
-}) {
-  const buttons = useRef<Partial<Record<Step, HTMLElement | null>>>({});
-  const badge: Partial<Record<Step, { n: number; tone?: "open" }>> = {
-    ...(project?.files.length ? { models: { n: project.files.length } } : {}),
-    ...(counts && counts.open > 0 ? { clash: { n: counts.open, tone: "open" as const } } : {}),
-    ...(project?.reports.length ? { reports: { n: project.reports.length } } : {}),
-  };
-  function key(e: KeyboardEvent<HTMLElement>) {
-    const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-    if (!d) return;
-    e.preventDefault();
-    const s = stepBeside(step, d);
-    onStep(s);
-    buttons.current[s]?.focus();
-  }
-  return (
-    <div className="proj-stepbar">
-      {(onProjects || project) && (
-        <div className="proj-crumbs">
-          {onProjects && <>
-            {projectsHref
-              ? <a className="proj-crumb" href={projectsHref} onClick={(e) => { if (!ownClick(e)) return; e.preventDefault(); onProjects(); }}>Projects</a>
-              : <button type="button" className="proj-crumb" onClick={onProjects}>Projects</button>}
-            <ChevronRight size={13} aria-hidden className="proj-crumb-sep" />
-          </>}
-          {project && <b className="proj-crumb-name" title={project.name}>{project.name || "Untitled project"}</b>}
-        </div>
-      )}
-      <nav className="proj-steps" aria-label="Project steps">
-        {PROJECT_STEPS.map((s) => {
-          const b = badge[s.id];
-          const body = <>{s.label}{b && <span className={`proj-step-n${b.tone ? ` ${b.tone}` : ""}`}>{b.n}</span>}</>;
-          const common = { className: `proj-step${s.id === step ? " on" : ""}`, "aria-current": s.id === step ? "page" as const : undefined,
-            onKeyDown: key };
-          return hrefOf
-            ? <a key={s.id} {...common} ref={(el) => { buttons.current[s.id] = el; }} href={hrefOf(s.id)}
-              onClick={(e) => { if (!ownClick(e)) return; e.preventDefault(); onStep(s.id); }}>{body}</a>
-            : <button key={s.id} type="button" {...common} ref={(el) => { buttons.current[s.id] = el; }} onClick={() => onStep(s.id)}>{body}</button>;
-        })}
-      </nav>
-      {actions && <div className="proj-stepbar-actions">{actions}</div>}
-    </div>
-  );
-}
+type Known = ReturnType<typeof knownCounts>;
 
 /**
- * One project (`#project/<pid>/<step>`): the step bar, then the step's body. Overview shows the models, the
- * coordination numbers (unresolved against resolved), the review decisions, the reports, recent activity and the next
- * step, decided from the project's real state. Reports and Activity are full lists here; Models, Coordination and
- * Clash review show what the project holds and send the engineer to the workspace, where that work happens.
+ * One project (`/projects/<pid>/<step>`), inside the app shell: the shell's sidebar holds the steps and its top bar the
+ * page's primary action, so this page is the header (breadcrumb, title, the project's dates, Save) and the step's body.
+ * Overview: four stat cards (models, clashes, open, resolved), the models and the coordination tally on the left, the
+ * next step (decided from the project's real state) and recent activity on the right. Reports and Activity are full
+ * lists here; Models, Coordination and Clash review are drawn by the workspace, with a simple body here as a fallback.
+ * `children` (App's cards for the step) follow the step's body.
  */
 export function ProjectOverview({ project, step, onStep, counts, reports, activity = [], onImport, onOpenWorkspace,
   onSave, saving, onProjects, children, stepHref, projectsHref }: {
@@ -87,9 +32,9 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   onSave(): void;
   saving?: boolean;
   onProjects?(): void;
-  /** More for the step shown, after its own body (App: building a report on Reports, the decisions on Activity). */
+  /** More for the step shown, after its own body (App: drawings, building a report, the decisions, the edit log). */
   children?: ReactNode;
-  /** The steps' and the projects' addresses (the step bar's links). */
+  /** The steps' and the projects' addresses (the breadcrumb's and the "View all" links). */
   stepHref?: (step: Step) => string;
   projectsHref?: string;
 }) {
@@ -97,48 +42,51 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   const view = { ...project, reports };
   const saved = lastSaved(project);
   const hasModels = project.files.length > 0;
-  const actions = (
-    <>
-      <button type="button" className="btn small" onClick={onSave} disabled={saving || !hasModels}
-        data-tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"}
-        data-tip-side="bottom">
-        {saving ? <span className="spinner" aria-hidden /> : <Save size={14} aria-hidden />} {saving ? "Saving…" : "Save"}
-      </button>
-      <button type="button" className="btn primary small" onClick={hasModels ? onOpenWorkspace : onImport}>
-        {hasModels ? <>Open workspace <ArrowRight size={14} aria-hidden /></> : <><Upload size={14} aria-hidden /> Import models</>}
-      </button>
-    </>
+  const name = project.name || "Untitled project";
+  const overview = step === "overview";
+
+  const crumbs: Crumb[] = [
+    ...(onProjects || projectsHref ? [{ label: "Projects", href: projectsHref, onClick: onProjects }] : []),
+    overview ? { label: name } : { label: name, href: stepHref?.("overview"), onClick: () => onStep("overview") },
+    ...(overview ? [] : [{ label: stepLabel(step) }]),
+  ];
+  const sub = (
+    <span className="proj-meta">
+      <span title={fullTime(project.created)}>Created {whenText(project.created)}</span>
+      <span title={fullTime(project.updated)}>Updated {whenText(project.updated)}</span>
+      {saved
+        ? <span title={fullTime(saved.at)}>Saved state {saved.n}, {whenText(saved.at)} ({plural(saved.edits, "edit")})</span>
+        : <span>Not saved yet</span>}
+    </span>
   );
+  const actions = (
+    <button type="button" className="btn" onClick={onSave} disabled={saving || !hasModels}
+      data-tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"}
+      data-tip-side="bottom">
+      {saving ? <span className="spinner" aria-hidden /> : <Save size={15} aria-hidden />} {saving ? "Saving…" : "Save"}
+    </button>
+  );
+  const toStep = (s: Step) => ({ href: stepHref?.(s), go: () => onStep(s) });
 
   return (
     <div className="proj-page">
-      <ProjectSteps step={step} onStep={onStep} project={view} counts={known?.counts} onProjects={onProjects} actions={actions}
-        hrefOf={stepHref} projectsHref={projectsHref} />
       <div className="proj-scroll">
         <div className="proj-body">
-          <header className="proj-headrow">
-            <div className="proj-title">
-              <h1>{project.name || "Untitled project"}</h1>
-              <p className="proj-meta">
-                <span title={fullTime(project.created)}>Created {whenText(project.created)}</span>
-                <span title={fullTime(project.updated)}>Updated {whenText(project.updated)}</span>
-                {saved
-                  ? <span title={fullTime(saved.at)}>Saved state {saved.n}, {whenText(saved.at)} ({plural(saved.edits, "edit")})</span>
-                  : <span>Not saved yet</span>}
-              </p>
-            </div>
-          </header>
+          <PageHeader crumbs={crumbs} title={overview ? name : stepLabel(step)} sub={sub} actions={actions} />
 
-          {step === "overview" && <>
-            <NextStep project={view} counts={known?.counts ?? null} onImport={onImport} onOpenWorkspace={onOpenWorkspace} onStep={onStep} />
+          {overview && <>
+            <StatCards project={project} known={known} />
             <div className="proj-grid">
               <div className="proj-col">
                 <ModelsCard project={project} onImport={onImport} />
-                <ReportsCard pid={project.id} reports={reports} limit={5} onAll={() => onStep("reports")} />
+                {(hasModels || known) && (
+                  <CoordinationCard project={project} known={known} onOpenWorkspace={onOpenWorkspace} more={toStep("coordination")} />
+                )}
               </div>
               <div className="proj-col">
-                <CoordinationCard project={project} known={known} onOpenWorkspace={onOpenWorkspace} onMore={() => onStep("coordination")} />
-                <ActivityCard activity={activity} limit={6} onAll={() => onStep("activity")} />
+                <NextStep project={view} counts={known?.counts ?? null} onImport={onImport} onOpenWorkspace={onOpenWorkspace} onStep={onStep} />
+                <ActivityCard activity={activity} limit={6} all={toStep("activity")} />
+                {reports.length > 0 && <ReportsCard pid={project.id} reports={reports} limit={4} all={toStep("reports")} />}
               </div>
             </div>
           </>}
@@ -155,19 +103,24 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
                 their geometry validation. Decisions made there are recorded on the project.</p>
               <Tally known={known} />
               <div className="proj-card-foot">
-                <button type="button" className="btn primary small" disabled={!hasModels} onClick={onOpenWorkspace}>
-                  Open workspace <ArrowRight size={14} aria-hidden /></button>
+                <button type="button" className="btn" disabled={!hasModels} onClick={onOpenWorkspace}>
+                  Open workspace <ArrowRight size={15} aria-hidden /></button>
               </div>
             </Card>
           )}
 
           {step === "reports" && (
-            <ReportsCard pid={project.id} reports={reports} footer={hasModels && (
-              <div className="proj-card-foot">
-                <span className="hint">PDF and BCF reports are exported from the clash review in the workspace.</span>
-                <button type="button" className="btn small" onClick={onOpenWorkspace}>Open workspace <ArrowRight size={14} aria-hidden /></button>
-              </div>
-            )} />
+            <ReportsCard pid={project.id} reports={reports}
+              empty={<EmptyState compact title="No reports yet"
+                line="PDF and BCF reports made from the clash review are listed here."
+                action={hasModels && <button type="button" className="btn primary" onClick={onOpenWorkspace}>
+                  Open workspace <ArrowRight size={15} aria-hidden /></button>} />}
+              footer={hasModels && reports.length > 0 && (
+                <div className="proj-card-foot">
+                  <span className="hint">PDF and BCF reports are exported from the clash review in the workspace.</span>
+                  <button type="button" className="btn small" onClick={onOpenWorkspace}>Open workspace <ArrowRight size={14} aria-hidden /></button>
+                </div>
+              )} />
           )}
 
           {step === "activity" && <>
@@ -182,16 +135,53 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   );
 }
 
-function Card({ title, count, aside, children }: { title: string; count?: ReactNode; aside?: ReactNode; children: ReactNode }) {
+function Card({ title, count, aside, className = "", children }: {
+  title: string; count?: ReactNode; aside?: ReactNode; className?: string; children: ReactNode;
+}) {
   const id = useId();
   return (
-    <section className="proj-card" aria-labelledby={id}>
+    <section className={`proj-card${className ? ` ${className}` : ""}`} aria-labelledby={id}>
       <div className="proj-card-head">
         <h2 id={id}>{title}{count != null && <span className="proj-count">{count}</span>}</h2>
         {aside}
       </div>
       {children}
     </section>
+  );
+}
+
+/** "View all" to a step: a link when the step has an address (a new tab opens it), a plain click to `onStep`. */
+function AllLink({ to, label }: { to: { href?: string; go(): void }; label: string }) {
+  return to.href
+    ? <a className="proj-link" href={to.href} onClick={(e: MouseEvent) => { if (!ownClick(e)) return; e.preventDefault(); to.go(); }}>{label}</a>
+    : <button type="button" className="proj-link" onClick={to.go}>{label}</button>;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------- */
+
+/** Models, Clashes, Open, Resolved: what is known, and where it comes from; "—" (never 0) for a number not known. */
+function StatCards({ project, known }: { project: Project; known: Known }) {
+  const mix = modelMix(project.files);
+  const c = known?.counts;
+  const from = known ? (known.live ? "from the open session" : "last known") : "not checked yet";
+  const stats: { key: string; label: string; value: number | null; sub: string; tone?: string }[] = [
+    { key: "models", label: "Models", value: project.files.length,
+      sub: mix.length ? mix.map((k) => `${k.n} ${k.kind}`).join(" · ") : "none imported yet" },
+    { key: "clashes", label: "Clashes", value: c ? c.clashes : null, sub: from },
+    { key: "open", label: "Open", value: c ? c.open : null, sub: from, tone: c && c.open > 0 ? "open" : undefined },
+    { key: "resolved", label: "Resolved", value: c ? c.resolved : null,
+      sub: c && c.reviewed > 0 ? `${from} · ${c.reviewed} reviewed` : from, tone: c && c.resolved > 0 ? "resolved" : undefined },
+  ];
+  return (
+    <ul className="proj-stats" aria-label="Project numbers">
+      {stats.map((s) => (
+        <li key={s.key} className={`proj-stat ${s.key}${s.tone ? ` tone-${s.tone}` : ""}`}>
+          <span className="proj-stat-label">{s.label}</span>
+          <span className="proj-stat-value mono">{s.value == null ? <span aria-label="not known">—</span> : <CountUp value={s.value} />}</span>
+          <span className="proj-stat-sub">{s.sub}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -207,12 +197,12 @@ function NextStep({ project, counts, onImport, onOpenWorkspace, onStep }: {
   };
   return (
     <section className={`proj-next ${next.kind}`} aria-label="Next step">
-      <div className="proj-next-text">
-        <span className="proj-eyebrow">Next step</span>
-        <b>{next.title}</b>
-        <span className="proj-text">{next.detail}</span>
+      <span className="proj-eyebrow">Next step</span>
+      <b className="proj-next-title">{next.title}</b>
+      <span className="proj-text">{next.detail}</span>
+      <div className="proj-next-act">
+        <button type="button" className="btn primary" onClick={go}>{next.action} <ArrowRight size={15} aria-hidden /></button>
       </div>
-      <button type="button" className="btn primary small" onClick={go}>{next.action} <ArrowRight size={14} aria-hidden /></button>
     </section>
   );
 }
@@ -220,27 +210,31 @@ function NextStep({ project, counts, onImport, onOpenWorkspace, onStep }: {
 function ModelsCard({ project, onImport }: { project: Project; onImport(): void }) {
   const mix = modelMix(project.files);
   const total = project.files.reduce((s, f) => s + (f.size || 0), 0);
+  if (!project.files.length) {
+    return (
+      <Card title="Models">
+        <EmptyState compact title="No models yet"
+          line="Import the IFC or STEP models to coordinate: structure, services and architecture together."
+          action={<button type="button" className="btn primary" onClick={onImport}><Upload size={15} aria-hidden /> Import models</button>} />
+      </Card>
+    );
+  }
   return (
-    <Card title="Models" count={project.files.length || undefined}
-      aside={mix.length > 0 && <span className="proj-sub">{mix.map((k) => `${k.n} ${k.kind}`).join(" · ")} · {sizeText(total)}</span>}>
-      {project.files.length ? (
-        <table className="proj-mini">
-          <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col" className="num">Size</th><th scope="col" className="proj-hash">SHA-256</th></tr></thead>
-          <tbody>
-            {project.files.map((f) => (
-              <tr key={`${f.name}|${f.sha256}`}>
-                <td className="proj-file" title={f.name}>{f.name}</td>
-                <td><span className="chip small">{f.kind}</span></td>
-                <td className="num mono">{sizeText(f.size)}</td>
-                <td className="mono proj-hash" title={f.sha256}>{f.sha256.slice(0, 10)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="proj-text proj-empty-line">No models yet. Import the IFC or STEP models to coordinate: structure, services and
-          architecture together.</p>
-      )}
+    <Card title="Models" count={project.files.length}
+      aside={<span className="proj-sub">{mix.map((k) => `${k.n} ${k.kind}`).join(" · ")} · {sizeText(total)}</span>}>
+      <table className="proj-mini">
+        <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col" className="num">Size</th><th scope="col" className="proj-hash">SHA-256</th></tr></thead>
+        <tbody>
+          {project.files.map((f) => (
+            <tr key={`${f.name}|${f.sha256}`}>
+              <td className="proj-file" title={f.name}>{f.name}</td>
+              <td><span className="proj-kind">{f.kind}</span></td>
+              <td className="num mono">{sizeText(f.size)}</td>
+              <td className="mono proj-hash" title={f.sha256}>{f.sha256.slice(0, 10)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <div className="proj-card-foot">
         <button type="button" className="btn small" onClick={onImport}><Upload size={14} aria-hidden /> Import models</button>
       </div>
@@ -249,20 +243,20 @@ function ModelsCard({ project, onImport }: { project: Project; onImport(): void 
 }
 
 /** Unresolved against resolved: open, resolved by geometry and reviewed (by design, sent to author), as one bar. */
-function Tally({ known }: { known: ReturnType<typeof knownCounts> }) {
+function Tally({ known }: { known: Known }) {
   if (!known) return <p className="proj-text proj-empty-line">Not checked yet. Run the clash tests in the workspace; the numbers appear here.</p>;
   const c = known.counts;
-  if (!c.clashes) return <p className="proj-text"><span className="pchip resolved">No clashes</span> The last check found none.</p>;
+  if (!c.clashes) return <p className="proj-text proj-tally-none"><span className="pchip clear">No clashes</span> The last check found none.</p>;
   const total = Math.max(c.clashes, c.open + c.resolved + c.reviewed) || 1;
   const pct = (n: number) => `${(100 * n) / total}%`;
   const closed = c.resolved + c.reviewed;
   return (
     <div className="proj-tally">
-      <dl className="proj-stats">
-        <div><dt>Clashes</dt><dd className="proj-num">{c.clashes}</dd></div>
-        <div className="open"><dt>Unresolved</dt><dd className="proj-num">{c.open}</dd></div>
-        <div className="resolved"><dt>Resolved</dt><dd className="proj-num">{c.resolved}</dd></div>
-        <div className="reviewed"><dt>Reviewed</dt><dd className="proj-num">{c.reviewed}</dd></div>
+      <dl className="proj-tally-nums">
+        <div><dt>Clashes</dt><dd className="mono">{c.clashes}</dd></div>
+        <div className="open"><dt>Unresolved</dt><dd className="mono">{c.open}</dd></div>
+        <div className="resolved"><dt>Resolved</dt><dd className="mono">{c.resolved}</dd></div>
+        <div className="reviewed"><dt>Reviewed</dt><dd className="mono">{c.reviewed}</dd></div>
       </dl>
       <div className="proj-bar" role="img"
         aria-label={`${c.open} unresolved, ${c.resolved} resolved, ${c.reviewed} reviewed of ${c.clashes}`}>
@@ -280,20 +274,20 @@ function Tally({ known }: { known: ReturnType<typeof knownCounts> }) {
 const REVIEW_ORDER: ReviewStatus[] = ["open", "resolved", "by_design", "author"];
 const REVIEW_TONE: Record<ReviewStatus, string> = { open: "open", resolved: "resolved", by_design: "reviewed", author: "reviewed" };
 
-function CoordinationCard({ project, known, onOpenWorkspace, onMore }: {
-  project: Project; known: ReturnType<typeof knownCounts>; onOpenWorkspace(): void; onMore?(): void;
+function CoordinationCard({ project, known, onOpenWorkspace, more }: {
+  project: Project; known: Known; onOpenWorkspace(): void; more?: { href?: string; go(): void };
 }) {
   const tally = reviewTally(project.reviews);
   const recorded = REVIEW_ORDER.reduce((s, k) => s + tally[k], 0);
   return (
-    <Card title="Coordination" aside={onMore && known && <button type="button" className="proj-link" onClick={onMore}>Details</button>}>
+    <Card title="Coordination" aside={more && known && <AllLink to={more} label="Details" />}>
       <Tally known={known} />
       {recorded > 0 && (
         <div className="proj-reviews">
           <h3>Review decisions <span className="proj-count">{recorded}</span></h3>
           <ul>
             {REVIEW_ORDER.filter((k) => tally[k] > 0).map((k) => (
-              <li key={k}><span className={`pchip ${REVIEW_TONE[k]}`}>{REVIEW_LABEL[k]}</span><span className="proj-num">{tally[k]}</span></li>
+              <li key={k}><span className={`pchip ${REVIEW_TONE[k]}`}>{REVIEW_LABEL[k]}</span><span className="proj-num mono">{tally[k]}</span></li>
             ))}
           </ul>
         </div>
@@ -307,50 +301,49 @@ function CoordinationCard({ project, known, onOpenWorkspace, onMore }: {
   );
 }
 
-function ReportsCard({ pid, reports, limit, onAll, footer }: {
-  pid: string; reports: Project["reports"]; limit?: number; onAll?(): void; footer?: ReactNode;
+function ReportsCard({ pid, reports, limit, all, empty, footer }: {
+  pid: string; reports: Project["reports"]; limit?: number; all?: { href?: string; go(): void }; empty?: ReactNode; footer?: ReactNode;
 }) {
   const sorted = [...reports].sort((a, b) => b.at - a.at);
   const shown = limit ? sorted.slice(0, limit) : sorted;
   return (
-    <Card title="Reports" count={reports.length || undefined}
-      aside={onAll && limit && reports.length > limit && <button type="button" className="proj-link" onClick={onAll}>All {reports.length}</button>}>
+    <Card title={limit ? "Recent reports" : "Reports"} count={reports.length || undefined}
+      aside={all && limit && reports.length > limit && <AllLink to={all} label={`View all ${reports.length}`} />}>
       {shown.length ? (
         <ul className="proj-list">
           {shown.map((r) => (
             <li key={`${r.doc_id}|${r.kind}|${r.at}`}>
-              <span className="chip small">{r.kind.toUpperCase()}</span>
+              <span className="proj-kind">{r.kind.toUpperCase()}</span>
               <a className="proj-list-text proj-report" href={projectReportUrl(pid, r.doc_id)} title={`Download ${r.name}`}
                 download>{r.name}</a>
               <span className="proj-when mono" title={fullTime(r.at)}>{whenText(r.at)}</span>
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="proj-text proj-empty-line">No reports yet. PDF and BCF reports made from the clash review are listed here.</p>
-      )}
+      ) : empty ?? <p className="proj-text proj-empty-line">No reports yet. PDF and BCF reports made from the clash review are listed here.</p>}
       {footer}
     </Card>
   );
 }
 
-function ActivityCard({ activity, limit, onAll }: { activity: ActivityItem[]; limit?: number; onAll?(): void }) {
+function ActivityCard({ activity, limit, all }: { activity: ActivityItem[]; limit?: number; all?: { href?: string; go(): void } }) {
   const sorted = [...activity].sort((a, b) => b.at - a.at);
   const shown = limit ? sorted.slice(0, limit) : sorted;
   return (
     <Card title={limit ? "Recent activity" : "Activity"} count={activity.length || undefined}
-      aside={onAll && limit && activity.length > limit && <button type="button" className="proj-link" onClick={onAll}>All {activity.length}</button>}>
+      aside={all && activity.length > 0 && <AllLink to={all} label={activity.length > (limit ?? 0) ? `View all ${activity.length}` : "View all"} />}>
       {shown.length ? (
-        <ul className="proj-list">
+        <ul className="proj-list proj-activity">
           {shown.map((a, i) => (
             <li key={`${a.at}|${i}`}>
-              <span className="proj-when mono" title={fullTime(a.at)}>{whenText(a.at)}</span>
+              <span className="proj-dot" aria-hidden />
               <span className="proj-list-text">{a.text}</span>
+              <span className="proj-when mono" title={fullTime(a.at)}>{whenText(a.at)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="proj-text proj-empty-line">No activity recorded yet. Imports, checks, decisions and saves are listed here.</p>
+        <EmptyState compact title="No activity yet" line="Imports, checks, decisions and saves are listed here." />
       )}
     </Card>
   );
