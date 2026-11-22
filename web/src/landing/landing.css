@@ -22,21 +22,10 @@
 .lp-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lp-teal { color: var(--teal); }
 
-/* The app's own chrome over the landing: the notch steps aside for the page's header, the corner (Watch Iris fix a
-   clash, Menu) sits in the header's right end, and the phone and tablet bar takes the hero's night. */
+/* The app's own chrome over the first screen: light, like the rest of the app (light only). The notch steps aside and
+   the corner (Menu) sits at the top right; the bar, menu button and buttons keep the app's own light styles. */
 .app.landing .notch { display: none; }
 .app.landing .corner { top: 12px; right: 16px; }
-.app.landing .corner .btn.primary { background: #fff; border-color: #fff; color: #052640; box-shadow: 0 8px 26px -6px rgba(18, 181, 203, .55); }
-.app.landing .corner .btn.primary:hover:not(:disabled) { background: #e8f9fb; border-color: #e8f9fb; }
-.app.landing .corner .menu-btn { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .2); color: #fff; box-shadow: none;
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-.app.landing .corner .menu-btn:hover { background: rgba(255, 255, 255, .16); }
-.app.landing .bar { background: #041321; border-bottom-color: rgba(143, 183, 218, .16); color: #fff; }
-.app.landing .bar .brand { color: #fff; }
-.app.landing .bar .app-icon { box-shadow: 0 0 0 1px rgba(255, 255, 255, .22); border-radius: 8px; }
-.app.landing .bar .btn.ghost { color: #fff; }
-.app.landing .bar .btn.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, .1); }
-.app.landing .bar .btn.primary { background: #fff; border-color: #fff; color: #052640; }
 
 /* Header */
 .lp-nav { position: sticky; top: 0; z-index: 20; height: var(--nav-h); margin-bottom: calc(-1 * var(--nav-h)); display: flex; align-items: center;
