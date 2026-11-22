@@ -35,7 +35,7 @@ from starlette.requests import HTTPConnection
 from starlette.routing import Route
 
 from . import (agents, built, chat, checks, context_planner, demos, detect, document, domains, drawings, edits,
-               escalation, faces, journal, manual, mcp_server, model_client, origins, owner, plans, projects,
+               escalation, faces, journal, manual, mcp_server, model_client, origins, owner, plans, prepare, projects,
                property_edits, requirements, settings, spend, step, titles, triage, voice_live)
 from .model_client import escalation_info, labels as model_labels, transcribe, triage_model, triage_model_info
 from .limits import ProposeLimit, client_id, env_float, env_int
@@ -336,6 +336,13 @@ class PlanRequest(BaseModel):
     clash_ids: list[str] = []   # fix these together
     hub: str | None = None      # or: fix the root cause around this element
     fixed: list[str] = []
+
+
+class PrepareRequest(BaseModel):
+    report_id: str
+    clash_ids: list[str] = []   # the clashes to prepare (pick "ids")
+    pick: Literal["ids", "deepest"] = "ids"   # "deepest": the server picks (prepare.deepest)
+    fixed: list[str] = []       # already fixed or reviewed: never picked
 
 
 class PlanApply(BaseModel):
@@ -2452,6 +2459,46 @@ def plan_stream(scene_id: str, body: PlanRequest, request: Request):
                                            charge=lambda k: None if owner.no_caps() else propose_limit.take_many(who, k)) if body.hub
                     else plans.build_batch(ws, scene_id, body.report_id, body.clash_ids, events.put))
             events.put({"type": "plan", **json.loads(plans.to_json(plan))})
+        except Exception as e:
+            events.put({"type": "error", "detail": f"{type(e).__name__}: {e}"})
+        events.put(None)
+
+    owner.spawn(work)
+
+    def stream():
+        while (event := events.get()) is not None:
+            yield json.dumps(event, default=str) + "\n"
+
+    return _ndjson(stream())
+
+
+@app.post("/api/scenes/{scene_id}/prepare/stream")
+def prepare_stream(scene_id: str, body: PrepareRequest, request: Request):
+    """The review queue's prepared fixes (docs/review-queue.md): the fix agent on each clash pair, one card each,
+    streamed as newline-delimited JSON (prepare_start, item, prepared, done; or error). Each pair prepared live costs
+    one proposal from the allowance, all or none before the stream; a pair replayed from a saved set is free."""
+    _scene(scene_id)
+    _report(body.report_id)
+    who = client_id(request.headers, request.client.host if request.client else None)
+    fixed = set(body.fixed)
+    try:
+        ids = (prepare.deepest(ws, scene_id, body.report_id, body.fixed) if body.pick == "deepest"
+               else [c for c in body.clash_ids if c not in fixed])
+        items, _ = prepare.pairs(ws, scene_id, body.report_id, ids)
+    except KeyError as e:
+        raise HTTPException(404, f"Clash {e} is not in this report.")
+    if not items:
+        raise HTTPException(422, "Nothing to prepare.")
+    saved = prepare.load_saved(ws, scene_id)
+    n_live = prepare.live_count(items, saved)
+    refused = None if owner.no_caps() or not n_live else propose_limit.take_many(who, n_live)
+    if refused:
+        raise HTTPException(429, refused)
+    events: queue.Queue = queue.Queue()
+
+    def work():
+        try:
+            prepare.run(ws, scene_id, body.report_id, ids, events.put, saved)
         except Exception as e:
             events.put({"type": "error", "detail": f"{type(e).__name__}: {e}"})
         events.put(None)
