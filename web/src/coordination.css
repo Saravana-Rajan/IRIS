@@ -12,10 +12,11 @@
 
 .coord-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .coord-total { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 8px;
-  background: var(--raised); border: 1px solid var(--line-soft); min-width: 0; cursor: pointer; }
-.coord-total b { font-size: 20px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  background: var(--raised); border: 1px solid var(--line-soft); min-width: 0; cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.coord-total b { font-size: 20px; font-weight: 500; font-family: var(--mono); letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .coord-total span { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.coord-total:hover:not(:disabled):not(.static) { border-color: var(--accent); }
+.coord-total:hover:not(:disabled):not(.static) { border-color: var(--accent); background: var(--surface); box-shadow: var(--shadow-soft); transform: translateY(-1px); }
 .coord-total:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .coord-total:disabled, .coord-total.static { cursor: default; }
 .coord-total:disabled b { color: var(--muted); }
@@ -54,7 +55,7 @@ button.coord-n:disabled { color: var(--muted); opacity: .6; cursor: default; }
 /* ---- Clash header: the investigation's first lines ---- */
 .clash-head { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .clash-head-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.clash-head-num { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.clash-head-num { font-size: 15px; font-weight: 600; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .clash-head-id { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .clash-head-ref { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .clash-head-nav { margin-left: auto; display: inline-flex; gap: 2px; flex: none; }
