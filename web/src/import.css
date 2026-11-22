@@ -17,7 +17,7 @@
 .imp-row.st-failed { background: color-mix(in srgb, var(--fail-soft) 45%, transparent); }
 
 .imp-type { display: inline-block; min-width: 38px; text-align: center; font: 600 10.5px/18px var(--mono); border-radius: 4px;
-  padding: 0 5px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); }
+  padding: 0 5px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
 .imp-type.k-ifc { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
 .imp-type.k-step { background: var(--spark-soft); color: var(--spark); border-color: var(--spark-line); }
 .imp-type.k-nw { background: var(--warn-soft); color: var(--warn); border-color: transparent; }

@@ -1,6 +1,6 @@
 /* The Drawings step (DrawingsPanel.tsx, docs/drawings.md): AI reads, data checks, the engineer decides. The proof
    grammar of docs/ui-design.md §1 and §3.2: AI-read = dashed indigo, confirmed by data = solid teal, text layer only =
-   dotted grey, mismatch = amber (differs) or red (missing), the engineer's choice = navy. Colours come from the app's
+   dotted grey, mismatch = amber (differs) or red (missing), the engineer's choice = the accent, filled. Colours come from the app's
    tokens only (index.css :root); each new token falls back to its legacy alias until index.css carries it. Light
    theme only (owner decision): no dark-mode block here. */
 .dwg {
@@ -9,9 +9,9 @@
   --d-failed: var(--failed, var(--fail)); --d-failed-soft: var(--failed-soft, var(--fail-soft)); --d-failed-line: var(--failed-line, var(--fail));
   --d-warn-line: var(--warn-line, var(--warn));
   --d-control: var(--control-border, var(--muted)); --d-line-strong: var(--line-strong, var(--line));
-  --d-sunken: var(--sunken, var(--bg)); --d-ink2: var(--ink-2, var(--ink)); --d-faint: var(--faint, var(--muted));
+  --d-sunken: var(--sunken, var(--panel)); --d-ink2: var(--ink-2, var(--ink)); --d-faint: var(--faint, var(--muted));
   --d-accent-line: var(--accent-line, var(--line)); --d-on-accent: var(--on-accent, var(--surface)); --d-focus: var(--focus, var(--accent));
-  --d-stage: var(--stage-bg, var(--bg));
+  --d-stage: var(--stage-bg, var(--panel));
   display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 12px 16px;
   background: var(--surface); color: var(--ink); font-size: 13px; line-height: 18px;
 }
@@ -106,7 +106,7 @@
 .dwg-sheets ul { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
 .dwg-sheet { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent;
   color: var(--ink); text-align: left; cursor: pointer; }
-.dwg-sheet:hover { background: var(--raised); }
+.dwg-sheet:hover { background: var(--hover); }
 .dwg-sheet[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 .dwg-sheet:focus-visible { outline-offset: -2px; }
 .dwg-sheet-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
@@ -117,7 +117,7 @@
 .dwg-pager { display: inline-flex; align-items: center; gap: 2px; color: var(--d-ink2); font-size: 12px; white-space: nowrap; }
 .dwg-ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent;
   color: var(--ink); cursor: pointer; }
-.dwg-ibtn:hover:not(:disabled) { background: var(--raised); }
+.dwg-ibtn:hover:not(:disabled) { background: var(--hover); }
 .dwg-ibtn:disabled { color: var(--disabled-ink, var(--d-faint)); cursor: default; }
 
 /* The sheet viewer */
@@ -182,7 +182,7 @@
 .dwg-table td:first-child { max-width: 112px; overflow: hidden; text-overflow: ellipsis; }
 .dwg-table .num { text-align: right; }
 .dwg-table tbody tr { cursor: pointer; }
-.dwg-table tbody tr:hover { background: var(--raised); }
+.dwg-table tbody tr:hover { background: var(--hover); }
 .dwg-table tbody tr.picked { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 .dwg-table tbody tr:focus-visible { outline-offset: -2px; }
 

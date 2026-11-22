@@ -18,7 +18,7 @@
 .msum-table thead th.num { font-family: inherit; font-size: 11px; }
 
 .msum-row { cursor: pointer; }
-.msum-row:hover td { background: var(--raised); }
+.msum-row:hover td { background: var(--hover); }
 .msum-row.on td { background: var(--accent-soft); }
 .msum-row.on .msum-name { color: var(--accent-ink); font-weight: 600; }
 .msum-row.empty { cursor: default; color: var(--muted); }
@@ -37,7 +37,7 @@
 .msum-name:disabled { cursor: default; color: inherit; }
 .msum-toggle { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0;
   border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
-.msum-toggle:hover { background: var(--bg); color: var(--ink); }
+.msum-toggle:hover { background: var(--hover); color: var(--ink); }
 .msum-toggle svg { transition: transform .12s; }
 .msum-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .msum-pad { flex: none; width: 20px; }
