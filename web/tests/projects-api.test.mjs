@@ -223,7 +223,7 @@ const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").rep
 const noop = () => {};
 
 test("the projects home lists each project's models, numbers and last save, and claims nothing it doesn't know", () => {
-  const fresh = project({ id: "bb", name: "Empty site", files: [], counts: null, reviews: {}, saved: [], updated: sec(Date.now()) });
+  const fresh = project({ id: "bb", name: "Empty site", files: [], counts: null, reviews: {}, saved: [], updated: sec(NOW + 60_000) });   // fixed time, not the clock: newest regardless of time zone
   const html = renderToStaticMarkup(h(ProjectsHome, { projects: [project(), fresh], loading: false, onCreate: noop, onOpen: noop, onDemo: noop }));
   const t = text(html);
   assert.match(t, /2 projects in this browser/);
