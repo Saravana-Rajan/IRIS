@@ -1,7 +1,8 @@
 # 00 · Iris architecture map
 
 > **Covers:** the whole repository · **Checked against code:** re-branded on 2026-11-11; the system diagram, "Where
-> the code is" and the change table re-checked for split hosting and CI on 2026-11-22
+> the code is" and the change table re-checked for split hosting and CI on 2026-11-22; the feature designs list: review
+> queue 2026-11-22
 
 These docs map Iris end to end: what it does, how the parts fit together, where each thing lives in the code, and
 how data and requests move through it. They are written for engineers and agents who need to understand or change
@@ -14,7 +15,7 @@ How this set relates to the other docs:
   work.
 - **The feature designs in [`docs/`](../)** ([connections](../connections.md), [detection](../detection.md), [edits](../edits.md),
   [engineer workflow](../engineer-workflow.md), [escalation](../escalation.md), [filters](../filters.md), [mcp](../mcp.md), [measure](../measure.md), [mobile](../mobile.md), [panels](../panels.md), [requirements](../requirements.md),
-  [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [views](../views.md), [voice](../voice.md),
+  [review queue](../review-queue.md), [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [views](../views.md), [voice](../voice.md),
   [workings](../workings.md)) hold
   the reasoning and measurements behind each feature. This map summarises them and links to them; it does not copy
   them.
@@ -86,7 +87,7 @@ Validate → Review → Report, with every decision recorded and the work saved 
 | [06 · Geometry engine and detection](06-geometry-and-detection.md) | Loading scenes, the geometric check, Iris's own clash detection |
 | [07 · Fixes and model edits](07-fixes-and-edits.md) | The fix-kind registry, each kind of edit, trial and keep, accept in place |
 | [08 · AI models, prompts and spend](08-ai-models-prompts-and-spend.md) | Which feature uses which model where, the model client, every prompt, the money |
-| [09 · Agent workflows](09-agent-workflows.md) | The propose loop, plans and root causes, triage, titles, chat, escalation, built views |
+| [09 · Agent workflows](09-agent-workflows.md) | The propose loop, plans and root causes, prepared fixes for the review queue, triage, titles, chat, escalation, built views |
 
 ### Interfaces
 
@@ -176,7 +177,7 @@ assets/brand/iris/    approved identity, motion, exports and rebuild/check scrip
 | Scene loading, units, the check, what counts as physical, detection tests or rules | 06 |
 | A fix kind or its geometry, the registries (`TRIES`, `KEEP`, …), accept in place | 07, then 09, 10, 12 as they change |
 | A model, host, endpoint, effort rule, price, or a prompt in `domain_packs/` | 08 (the test checks prompts), 15 for env vars |
-| The agent loop, plans, root causes, patterns, triage, titles, chat tools, escalation, built views | 09, plus 10 for new events |
+| The agent loop, plans, root causes, patterns, prepared fixes and saved sets, triage, titles, chat tools, escalation, built views | 09, plus 10 for new events; [review queue](../review-queue.md) |
 | A route, a stream event type, a header, an error code, the voice socket | 10 (the test checks routes) |
 | Pairing links or an MCP tool | 11 (the test checks tools) |
 | A file in `web/src/`, App's state, a client module, a layout breakpoint | 12 or 13 (the test checks files) |
@@ -187,7 +188,7 @@ assets/brand/iris/    approved identity, motion, exports and rebuild/check scrip
 | `deploy/deploy.sh`, `deploy/env.yaml`, image packages, secrets, deploy steps, operational quirks | 17 |
 | `.github/workflows/`, `deploy/github-setup.sh`, `firebase.json`, how the page is hosted or reaches the server | 17, 18 for CI, 02 for hosting |
 | A test harness, a new eval, the delivery checklist | 18 |
-| Demo models, the answer key, tour recordings, demo pictures | 19 |
+| Demo models, the answer key, saved AI proposals (`samples/prepared/`), tour recordings, demo pictures | 19 |
 | An owner decision, a rejected approach, a known limit, the roadmap | 20 |
 | A new term, or a name users see | 21 |
 | The approved identity, brand masters, exports or motion library | 12, 18, 20, 21; [brand asset design](../brand-assets.md) |

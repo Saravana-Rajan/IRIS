@@ -1,11 +1,12 @@
 # 09 · Agent workflows
 
-> **Covers:** `server/iris/agent.py`, `plans.py`, `triage.py`, `titles.py`, `chat.py`, `hosts.py` (reading),
-> `escalation.py`, `built.py`, `context_planner.py`, the suggest path of `requirements.py`, and the AI parts of
-> `service.py` (`Workspace.propose`, `escalate`, `fix_settings`, `clash_for`, `last_try`) ·
-> **Checked against code:** re-branded 2026-11-11 · **Deeper design:** [docs/edits.md](../edits.md),
+> **Covers:** `server/iris/agent.py`, `plans.py`, `prepare.py`, `triage.py`, `titles.py`, `chat.py`, `hosts.py`
+> (reading), `escalation.py`, `built.py`, `context_planner.py`, the suggest path of `requirements.py`, and the AI parts
+> of `service.py` (`Workspace.propose`, `escalate`, `fix_settings`, `clash_for`, `last_try`) ·
+> **Checked against code:** re-branded 2026-11-11; review queue 2026-11-22 (`prepare.py`, the `_resolve_items`
+> overrides) · **Deeper design:** [docs/edits.md](../edits.md),
 > [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md),
-> [docs/requirements.md](../requirements.md)
+> [docs/requirements.md](../requirements.md), [docs/review-queue.md](../review-queue.md)
 
 Every AI workflow in Iris has the same shape: the server gathers facts from the geometry, asks a model for a
 judgement, and checks or bounds what comes back before anyone sees it. A fix is never shown until `verify.check`
@@ -22,6 +23,7 @@ kind of fix is [07](07-fixes-and-edits.md); the wire format of every event is [1
 | Propose fixes for one clash | `Workspace.propose` → `agent.resolve` | Gemini Pro | `POST /api/scenes/{scene_id}/propose[/stream]`, chat `propose_fixes`, MCP | `thinking`, `reasoning`, `ideas`, `checking`, `trial`, `attempt`, `note`, then `result` |
 | Second try | `Workspace.escalate` → `agent.resolve` | the escalation model | the same routes with `escalate: true`, automatic mode, chat, MCP | `escalating`, then as above with `model` |
 | Fix together | `plans.build_batch` | Gemini Pro, one agent per item | `POST /api/scenes/{scene_id}/plan/stream` (`clash_ids`), chat `plan_fixes_together` | `plan_items`, `item`, `checking_plan`, then `plan` |
+| Prepare fixes for review | `prepare.run` → `plans._resolve_items` | Gemini Pro, one agent per clash pair; a saved set's replies replayed (`prepare.ReplayModel`) for the pairs it holds | `POST /api/scenes/{scene_id}/prepare/stream` (the review queue's "Prepare fixes") | `prepare_start`, `item`, `prepared`, then `done` |
 | Root cause | `plans.root_causes`, `plans.build_root_cause` | Gemini Pro | `GET .../root_causes/{scene_id}`, plan stream (`hub`), chat | `thinking`, `root_cause`, then as Fix together |
 | Patterns | `plans.patterns`, `plans.read_patterns` → `triage_patterns` | Gemini Pro (one call, once) | `GET .../patterns/{scene_id}`, `POST .../patterns/{scene_id}/triage`, chat and MCP `find_patterns` | none (one reply) |
 | Bulk triage | `triage.Job` → `triage.triage_report` | the fast model (`GEMINI_FAST_MODEL`) | `POST /api/reports/{report_id}/triage/stream`, `POST .../triage/stop` | `start`, `clash`, `reasoning`, `audit`, `done`, `ping` |
@@ -363,6 +365,95 @@ So the page's automatic reading also answers the chat and an agent, and asking a
 
 The route ends with `{"type": "plan", ...Plan}` (`kind`, `title`, `root_cause`, `strategy`, `hub`, `items`, `check`,
 `seconds`, `advice`).
+
+## Prepared fixes: `prepare.py`
+
+The review queue ([docs/review-queue.md](../review-queue.md)) runs the fix agent ahead of review, so the reviewer
+walks the clashes one at a time with a verified fix already waiting. It is Fix together's loop with three
+differences: every clash pair is its own card, a saved set's replies can stand in for the model, and the cards are not
+checked together (each is accepted on its own). Nothing is kept here: Accept goes through `POST .../fix/apply` →
+`plans.apply`, which tries the option again on the model as it is then ([07](07-fixes-and-edits.md)).
+
+### The items
+
+1. **Which clashes** (the route): the ids sent, less `fixed` (`pick: "ids"`), or `deepest(ws, scene_id, report_id,
+   fixed, n)` (`pick: "deepest"`): hard clashes that overlap (distance < 0), not in `fixed`, with both elements in the
+   open model and physical; clashes between two models before clashes within one, deepest first; at most `n`
+   (`plans.MAX_ITEMS`, 8) distinct pairs, with every clash id of each pair.
+2. **One card per pair** (`pairs`): `plans.pairs_for(..., merge=False)` gives one `Item` per distinct physical pair and
+   never merges pairs that share an element (a duct through two columns is two cards; Fix together makes it one item).
+   The first `limit` are kept (`MAX_ITEMS` from the route; the generator takes all); the clashes that cannot be
+   prepared come back as `skipped`. No item is told about the others: no plan note, no `others`.
+3. **Saved first, then live** (`run`): the pairs a matching saved set holds (`Saved.items`) are resolved first, on
+   `ReplayModel(saved)` with no host reading; then the rest, on `live_model` (else `ws.model`) with `live_hosts` (else
+   `ws.hosts_model`). Each group is one `plans._resolve_items` call: `PLAN_WORKERS` (4) at a time, `PLAN_ROUNDS` (2)
+   rounds each, each result remembered for a second try (`Workspace._remember`).
+
+`_resolve_items` takes three keyword overrides for this. Their defaults keep Fix together as it was.
+
+| Override | Default | Prepared fixes pass |
+|---|---|---|
+| `model` | `None`: `ws.model` | `ReplayModel(saved)` for saved pairs; the live model for the rest (a `Recorder` around it when a set is made) |
+| `hosts_model` | `_WS_HOSTS`: `ws.hosts_model` | `None` for saved pairs and when a set is made: no reading, walls and slabs only |
+| `label` | `""`: from the model's id | the set's `model_label` for saved pairs; the live model's own `label`, if it has one |
+
+### Ready or failed
+
+`run` passes the loop's events on. When an item's last `item` event (`status` done) comes, it emits that item's card
+straight after it, under one lock, so no other event falls between them; cards are numbered as they finish (`done` of
+`total`).
+
+- **`ready`**: at least one option passed the geometry check of its kind in this run (`Item.option`, then its
+  `alternatives`, best first). What a saved set says it found when it was made is never shown.
+- **`failed`**, with `why`: `plans.failure_summary` (one line per idea, then the agent's advice); the recommendation
+  when the requirements allow no edit ("Not edited: ..."); or `prepare.MISS` for a saved pair whose question the set
+  does not hold (the exception's name taken off, in `why` and in the `item` event's `title`).
+
+The events, in order: `prepare_start` (the items, `skipped`, and the saved set's `info()` when a pair is replayed),
+the loop's `item` events, a `prepared` per item, then `done` (`ready`, `failed`, `total`, `seconds`). Every field is in
+[10](10-http-api-and-streams.md). The route runs `run` on a worker thread (`owner.spawn`) and charges one proposal per
+pair prepared live before the stream starts (`live_count`); a replayed pair is free ([16](16-security-caps-and-cost.md)).
+
+### Saved sets: replies, not results
+
+A saved set (`samples/prepared/*.json`, or `IRIS_PREPARED_DIR`; [19](19-demo-data.md)) holds the model's recorded
+replies, never what the geometry made of them. A replayed reply goes back through `agent.resolve` like a live one, so
+every option is tried, checked and ranked on this server before anyone sees it. A tampered reply that no longer passes
+is not shown.
+
+- **Per question.** `question_hash` is the sha256 of the system prompt, a NUL and the question text.
+  `ReplayModel.complete_json` answers only the exact question a reply was recorded for (a copy of it); any other
+  raises `ReplayMiss` (`MISS`) and that item fails plainly. It is never asked live behind the reviewer's back:
+  "Request another" asks live.
+- **No images in the hash.** Sets are made from model data alone (Iris's own detection has no pictures).
+- **No host reading.** Saved runs pass `hosts_model=None` when made and when replayed, so both ask the same questions:
+  a service may pass through walls and slabs only, and each opening is reviewed by its host's team.
+- **The key** (`saved_key`). A set is used only when its `key` equals the scene's: `VERSION`, the files by name and
+  sha256 (`Workspace.original_paths`, each hashed once per path, size and modified time), no coordination
+  requirements, the default clearance (`requirements.DEFAULT_CLEARANCE_M`), `plans.PLAN_ROUNDS`, `agent.OPTIONS`, the
+  proposal model's id and thinking level, the domain prompt's sha256, and no hosts. There is no key (so no set) after
+  an edit is kept (revision 0 only), with requirements in force, or when a file cannot be read. Any difference is a
+  miss, and every pair is prepared live. `load_saved` takes the first file in `saved_dir` (sorted by name) of `FORMAT`
+  1 whose key matches; each file is parsed once per path, size and modified time.
+- **Making one** (`generate`): `run` with every pair live on the given model, wrapped in a `Recorder` (each reply kept
+  by its `question_hash`; a pair whose question raised goes in `failed` and is left out of `items`, so it is prepared
+  live), with no host reading. The key names the recording model's id and thinking level, so a set is used only where
+  that model is the configured one. The file is written atomically: a temp file in the same folder, made 0644, then
+  `os.replace`. `evals/prepare_saved.py` drives it for Northbank ([18](18-testing-and-evals.md),
+  [19](19-demo-data.md)).
+- **`ScriptedModel`**: a free, offline, deterministic stand-in for the proposal model (id `scripted`, "Scripted test
+  model"). It moves the side that is a service (else element A): up 0.40, down 0.40 and up 0.60 m in the first round;
+  up 0.80, down 0.80 and up 1.00 m in the second. In the first round it also offsets the service's middle piece
+  through an opening the question names. It is used only when passed in (tests, the generator's `--model scripted`, a local
+  click-through); nothing in the environment selects it.
+
+**Measured with `ScriptedModel`, not Gemini** (Northbank, 2026-11-22, free and offline): detection found 464 clashes;
+the generator's pick (the answer key's pairs plus `deepest(8)`) gave 8 pairs, the answer key among the deepest 8; 6
+ready and 2 failed, 13 replies recorded, about 55 s. A fresh process replaying that set, with a model that raises if
+called, matched the key, made no live call and gave the same 6 and 2, every option checked again (about 60 s: the
+geometry). A whole-run raise of #042 by 0.40 m now fails: the move keeps its joints and carries the tee, branch and
+damper, which hit secondary beams. Of the scripted ideas, only offsets passed for #042, #057 and #061. Gemini's
+results are not measured yet.
 
 ## Bulk triage: `triage.py`
 
@@ -789,9 +880,15 @@ Two smaller model uses, owned by [14](14-files-in-and-out.md):
 - A change to `agent.resolve`'s loop, stop rule, ranking (`TIERS`, the sort key), `want`, `max_rounds`, or what
   `_describe` and its helpers tell the model.
 - A new kind in `agent.TRIES` (also [07](07-fixes-and-edits.md)), or a change to what a try checks.
-- A new event type or field from `agent.resolve`, `Workspace.propose` / `escalate`, `plans`, `triage.Job`,
-  `titles.Job`, `chat.Chat`, `context_planner` or `built` (also [10](10-http-api-and-streams.md)).
-- A change to plans: `merge_shared`, `MAX_ITEMS`, `verify_together`, root-cause ranking or strategies, patterns.
+- A new event type or field from `agent.resolve`, `Workspace.propose` / `escalate`, `plans`, `prepare.run`,
+  `triage.Job`, `titles.Job`, `chat.Chat`, `context_planner` or `built` (also [10](10-http-api-and-streams.md)).
+- A change to plans: `merge_shared`, `MAX_ITEMS`, `verify_together`, root-cause ranking or strategies, patterns, or
+  the `_resolve_items` overrides (`model`, `hosts_model`, `label`).
+- A change to prepared fixes: how `deepest` picks, one card per pair, saved pairs before live ones, what makes a card
+  `ready` or `failed`, or `ScriptedModel`'s moves.
+- A change to the replay: what `saved_key` holds (bump `prepare.VERSION` when what a prepared fix is made of
+  changes), `question_hash`, the no-hosts rule, or how `generate` and `Recorder` write a set (also
+  [19](19-demo-data.md)).
 - A change to triage: a new `basis`, the rule order, alike grouping, the order groups are asked in, workers, retries,
   stopping or going on, the Job's keys, donor, stale or learn behaviour, or the audit.
 - A new or removed chat tool, a change to `MAX_STEPS`, `MAX_HISTORY`, sessions, or what a tool costs.

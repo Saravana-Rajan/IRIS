@@ -70,6 +70,8 @@ A saved file replays the AI's replies, never the geometry's results: every saved
 ranked on the server exactly as live ones are before anyone sees it.
 
 - **Where:** `samples/prepared/*.json` (`IRIS_PREPARED_DIR` overrides); the first whose `key` equals the scene's.
+  None is in the repo yet. `.gitignore` un-ignores `samples/prepared/` and `.dockerignore` ships `samples/**/*.json`,
+  so a set, once made and committed, deploys with the samples.
 - **The file:** `{"format": 1, "key": {...}, "label": "Saved AI proposals for this sample", "model": id,
   "model_label": label, "made": ISO date, "calls": {sha256(system + "\0" + question): reply}, "items": {"a|b":
   {"clash_key", "clash_ids", "label", "options": n verified when made}}}`. `items` says which pairs are replayed
@@ -94,11 +96,30 @@ ranked on the server exactly as live ones are before anyone sees it.
   `prepare.deepest`. `--dry-run` counts the calls and prices them with no model call; without `--yes` it prints the
   plan and the estimate and calls nothing; every mode but `--model gemini --yes` runs offline (credentials dropped
   after the package reads `.env`, `make_client` refuses). It needs the owner's approval before it runs on Gemini:
-  `uv run --directory server python ../evals/prepare_saved.py --model gemini --yes`.
+  `uv run --directory server python ../evals/prepare_saved.py --model gemini --yes`. It writes
+  `samples/prepared/Northbank.json` (`--out` elsewhere; `--samples` reads the models from another folder): a temp
+  file in the same folder, made readable (0644: the server's image may run as another user), then renamed into place,
+  so a reader never sees half a file.
 - **Scripted:** `prepare.ScriptedModel` (id `scripted`, "Scripted test model") is a free, offline, deterministic
   stand-in: it moves the side that is a service up or down by set amounts and offsets it through an opening the
   question names. Only passed in explicitly (tests, `--model scripted`, a local click-through with
   `IRIS_PREPARED_DIR=<its folder> GEMINI_MODEL=scripted GEMINI_THINKING_LEVEL=`); nothing in the environment selects it.
+
+## Measured so far (scripted model only)
+
+These are `prepare.ScriptedModel` results, free and offline (`evals/prepare_saved.py --model scripted`, Northbank,
+2026-11-22). They are not Gemini's; nothing here has been run on Gemini yet.
+
+- Detection found 464 clashes. The generator's pick (the answer key's pairs plus `deepest(8)`) gave 8 pairs: the answer
+  key falls within the deepest 8.
+- Made with the scripted model: 6 ready, 2 failed, 13 replies recorded, about 55 s.
+- Replayed in a fresh process whose model raises if called: the key matched, 0 live calls, the same 6 ready and 2
+  failed, every option checked again (about 60 s: the geometry checks).
+- A whole-run raise of #042 by 0.40 m now fails: the move keeps its joints and carries the tee, branch and damper,
+  which hit secondary beams. Of the scripted ideas, only offsets passed for #042, #057 and #061.
+- `--dry-run` for Gemini: at most 16 calls (8 pairs x 2 rounds), about 43,976 input tokens (characters / 4), 32,000
+  output tokens assumed (2,000 a call), no images: about $0.31 on the model `.env` and `deploy/deploy.sh` set for
+  proposals (gemini-3.8-flash at thinking low), about $0.41 on gemini-4-argon. An estimate, not a bill.
 
 ## Web
 

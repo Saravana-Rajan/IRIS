@@ -2,7 +2,8 @@
 
 > **Covers:** `server/iris/model_client.py`, `server/iris/spend.py`, the model parts of `settings.py`,
 > `owner.py`, `built.py`, `voice_live.py`, `hosts.py` and `step.py`, and every prompt in
-> `server/iris/domain_packs/` and `domains.py` · **Checked against code:** re-branded on 2026-11-11 ·
+> `server/iris/domain_packs/` and `domains.py` · **Checked against code:** re-branded on 2026-11-11; the prepared-fixes row:
+> review queue 2026-11-22 ·
 > **Deeper design:** [docs/escalation.md](../escalation.md), [docs/show-it-built.md](../show-it-built.md),
 > [docs/voice.md](../voice.md)
 
@@ -52,6 +53,7 @@ call. Env var meanings are in [15](15-requirements-settings-and-config.md); caps
 |---|---|---|---|---|---|
 | Proposals (one clash) | `agent.resolve` via `Workspace.propose` | Gemini Pro | `GEMINI_MODEL` | `default`, `GEMINI_THINKING_LEVEL` | JSON, no schema; thoughts streamed when someone watches and `GEMINI_INCLUDE_THOUGHTS` allows |
 | Fix together, root-cause fixes | `plans._resolve_items` → `agent.resolve` | Gemini Pro | as above | `default` | JSON, not streamed (plans run without `trials`) |
+| Prepared fixes (the review queue) | `prepare.run` → `plans._resolve_items` → `agent.resolve` | Gemini Pro for the pairs prepared live; none for pairs a saved set replays (`prepare.ReplayModel` answers with recorded replies) | as above; a saved set is used only while its key names the configured proposal model and thinking level | `default` | JSON, not streamed; no host reading in saved runs ([09](09-agent-workflows.md), [docs/review-queue.md](../review-queue.md)) |
 | Root cause reading | `plans.build_root_cause` | Gemini Pro | as above | `default` | JSON, no schema |
 | Pattern verdicts | `plans.triage_patterns` | Gemini Pro | as above | `default` | JSON, no schema |
 | Bulk triage | `triage.triage_report` in `triage.Job` (`IRIS_TRIAGE_WORKERS` calls at a time) | Gemini Flash (fast model), always | `GEMINI_FAST_MODEL` | `triage`, `GEMINI_FAST_THINKING_LEVEL` | Strict `triage.SCHEMA`, streamed with thoughts; images always sent |
@@ -254,7 +256,7 @@ was opened from STEP (`Workspace.sources` has an entry for each of its files) is
 STEP or no scene is `construction` (`domains.infer`). Callers never test for STEP themselves.
 
 - **The fix pack.** `agent.resolve(..., pack=)` reads `domain_packs/<pack>.md` whole. `Workspace.propose`,
-  `Workspace.escalate` and `plans.build_batch` (Fix together, root-cause partners) pass `pack=domains.of(...)`, so the
+  `Workspace.escalate` and `plans._resolve_items` (Fix together, root-cause partners, the review queue's prepared fixes) pass `pack=domains.of(...)`, so the
   cell gets `machines.md` and Northbank `construction.md`. The two packs share the seven fix kinds and the JSON contract
   (parsing is unchanged; `server/tests/test_domains.py` pins the kinds and the JSON keys); the opening, the rules of
   thumb and the examples differ. No example in either pack, nor in `escalation.md`, is a demo's answer (Northbank

@@ -8,8 +8,9 @@
 > variable on 2026-11-22 · **Deeper design:** [docs/requirements.md](../requirements.md)
 > `env_float`, every environment variable the server, deploy and evals read,
 > `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing in `web/src/api.ts` ·
-> **Checked against code:** 2026-11-22 (the projects and drawing variables; re-branded on 2026-11-11) · **Deeper design:**
-> [docs/requirements.md](../requirements.md)
+> **Checked against code:** 2026-11-22 (the projects and drawing variables; `IRIS_PREPARED_DIR`: review queue
+> 2026-11-22; re-branded on 2026-11-11) · **Deeper design:** [docs/requirements.md](../requirements.md),
+> [docs/review-queue.md](../review-queue.md)
 
 Three layers decide how Iris behaves for a request. **Coordination requirements** are a project's own standard
 (what is checked, how strictly, who may move), sent by the page as a file id. **Settings** are the owner's switches
@@ -373,6 +374,7 @@ its default, so a bad value fails the wider-fix run with a `ValueError` rather t
 | `IRIS_BUILT_CACHE` | `$TMP/iris-built` | `built.CACHE` (import) | Built-view pictures |
 | `IRIS_PROJECTS_DIR` | `server/.iris-projects` (gitignored; empty is the default) | `projects.projects_dir` (each call) | Where projects are kept, one folder each ([14](14-files-in-and-out.md)); on Cloud Run `deploy/deploy.sh` sets `/mnt/iris/projects` when `BUCKET` is set |
 | `IRIS_WEB_DIST` | `web/dist` | `app.WEB_DIST` | The built web app served at `/` when its `index.html` exists |
+| `IRIS_PREPARED_DIR` | `samples/prepared` (the samples folder's `prepared/`; empty is the default) | `prepare.saved_dir` (each prepare request, through `load_saved`; `prepare.generate`) | Where the review queue's saved AI proposal sets (`*.json`) are read from; the first whose key equals the scene's is replayed ([docs/review-queue.md](../review-queue.md), [19](19-demo-data.md)). `prepare.generate` with no `out` writes `saved.json` there; `evals/prepare_saved.py` writes `samples/prepared/Northbank.json` unless given `--out` |
 | `DEMO_MODELS` | `../demo-models` beside the repo | `evals/step_cell.py`, `detection_cell.py`, `detection_navisworks.py`, `escalation.py` | A clone of the team's private demo-models repo, for the evals ([18](18-testing-and-evals.md)) |
 
 **Deploy**

@@ -6,7 +6,8 @@
 > `KEEPS_CONTACTS`, `KEEP`, `CANDIDATE`, `recheck`, `apply`), `server/iris/service.py` (`Workspace.apply*`, `check_*`, `patch`, `export`),
 > `server/iris/requirements.py` (`SIZED`, `change_size`, `blocked`, `can_cut`, `meets`), the prompts
 > `domain_packs/construction.md`, `escalation.md`, `penetrations.md`, `context.md`, and `web/src/fixKinds.ts`,
-> `web/src/ContextPlan.tsx`, `api.accept` in `web/src/api.ts` · **Checked against code:** re-branded 2026-11-11 ·
+> `web/src/ContextPlan.tsx`, `api.accept` in `web/src/api.ts` · **Checked against code:** re-branded 2026-11-11;
+> review queue 2026-11-22 (keeping) ·
 > **Deeper design:** [docs/edits.md](../edits.md), [docs/escalation.md](../escalation.md) (combined fixes)
 
 Every fix Iris offers is an edit to the real IFC elements. It is made inside an IfcOpenShell transaction, checked by
@@ -561,6 +562,12 @@ is verified against the clash it claims (cleared by that pair's clearance, nothi
 proposal verified. Re-checking costs one trial per option (0.4-0.6 s per check on Northbank) plus, for a plan, one
 joint check.
 
+The review queue ([docs/review-queue.md](../review-queue.md)) keeps through the same door. Preparing fixes keeps
+nothing; only the reviewer's Accept keeps, and it sends the one option shown to `POST /api/scenes/{scene_id}/fix/apply`
+(`api.accept`), so it goes through `plans.apply`. A prepared option, and one replayed from a saved set, is tried again
+there like any other, on the model as it is then: a card accepted after another is checked with the earlier fix in
+place, and one that no longer passes is a 409 ([09](09-agent-workflows.md), "Prepared fixes").
+
 ### Accept in place: `Workspace.patch`
 
 `app._with_patch(scene_id, kept)` holds `Workspace.lock` from reading `revision_before` until the patch is taken, so
@@ -736,6 +743,8 @@ memory: a restart means generating again.
 - A change to the hosts layers, `hosts.NEVER`, the transfer-element rule, `check_hole` limits or the reading's schema.
 - A change to the transaction helpers, `Workspace.apply_*`, `Workspace.patch`, `_with_patch`, the keep routes, or
   what `plans.recheck` / `plans.apply` check before keeping (`option_pair`, `NotVerified`, the together check).
+- A new place that keeps fixes (like the review queue's Accept): it must go through `plans.apply`; name it under
+  "Keeping a fix".
 - A change to the wider-fix planner or evaluator: its tools, limits (`IRIS_CONTEXT_*`,
   `IRIS_WIDER_FIX_MAX_MB`), checks, ranking, review conditions or accept rules.
 - New measured results for a kind (the answer key, the cell's planted cases).
