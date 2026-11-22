@@ -39,7 +39,7 @@ const react = url("export const useState=(v)=>[typeof v==='function'?v():v,()=>{
 const TRIAGE = url(`export const TRIAGE={${["real_clash", "modelling_error", "by_design", "non_physical", "unknown"]
   .map((k) => `${k}:{label:"${k}",cls:"",tip:"",colour:"",long:"${k}"}`).join(",")}};`);
 const { ReportList, rowWindow, FIRST_ROWS, OVERSCAN } = await import(await compiled("../src/ReportList.tsx", { react, "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
-  "lucide-react": stub(["CircleCheck", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]), "./api": url("export const api={imageUrl:()=>''};"),
+  "lucide-react": stub(["CircleCheck", "EllipsisVertical", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]), "./api": url("export const api={imageUrl:()=>''};"),
   "./ClashPanel": stub(["ClashThumb"]), "./Triage": TRIAGE, "./noClash": await compiled("../src/noClash.ts", {}),
   "./aiNames": await compiled("../src/aiNames.ts", {}) }));
 
@@ -94,4 +94,63 @@ test("a long list draws its first rows until measured, and keeps its full height
   const body = find(tree, (n) => n.props?.["data-rows"] === "Structure (within)");
   assert.equal(body.props["data-count"], 2471);
   assert.deepEqual(body.props.style, { paddingTop: 0, paddingBottom: (2471 - FIRST_ROWS) * 40 }, "the rest of the group's height");
+});
+
+// ---------------------------------------------------------------- the status tabs over the list
+
+// A React stand-in with real useState slots, so a tab can be picked and the list drawn again.
+const stateful = url(`const slots = []; let i = 0;
+export const __render = (fn) => { i = 0; return fn(); };
+export const useState = (v) => { const k = i++; if (!(k in slots)) slots[k] = typeof v === "function" ? v() : v;
+  return [slots[k], (n) => { slots[k] = typeof n === "function" ? n(slots[k]) : n; }]; };
+export const useMemo = (fn) => fn(); export const useEffect = () => {}; export const useRef = (v) => ({ current: v ?? null });`);
+const R = await import(stateful);
+const Live = (await import(await compiled("../src/ReportList.tsx", { react: stateful, "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
+  "lucide-react": stub(["CircleCheck", "EllipsisVertical", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]),
+  "./api": url("export const api={imageUrl:()=>''};"), "./ClashPanel": stub(["ClashThumb"]), "./Triage": TRIAGE,
+  "./noClash": await compiled("../src/noClash.ts", {}), "./aiNames": await compiled("../src/aiNames.ts", {}) }))).ReportList;
+
+const text = (n) => typeof n === "string" || typeof n === "number" ? String(n)
+  : Array.isArray(n) ? n.map(text).join("") : n && typeof n === "object" ? text(n.props?.children) : "";
+const idsOf = (tree) => { const out = []; const walk = (n) => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) { n.forEach(walk); return; }
+  if (n.props?.["data-clash"]) out.push(n.props["data-clash"]); [n.props?.children].flat(Infinity).forEach(walk); }; walk(tree); return out; };
+const tabs = (tree) => find(tree, (n) => n.props?.role === "tablist" && n.props["aria-label"] === "Clashes by status");
+const tab = (tree, name) => [tabs(tree).props.children].flat(Infinity).find((b) => text(b).startsWith(name));
+
+test("the status tabs count from the report and the page's records only, and a fixed clash counts once", () => {
+  const four = { ...report, clashes: [clash("a", 1), clash("b", 2), clash("c", 3), clash("d", 4)] };
+  const list = (fixes, reviewed) => ReportList({ report: four, matches: null, selected: null, onSelect() {}, onImage() {}, fixes, reviewed,
+    checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false, triage: {}, triageFilter: null });
+  const tree = list({ a: "Raise it" }, { a: { kind: "by_design", note: "x" }, b: { kind: "author", note: "y" } });
+  assert.deepEqual([tabs(tree).props.children].flat(Infinity).map(text), ["All4", "Open2", "Fixed1", "Reviewed1"]);
+  assert.equal(tab(tree, "All").props["aria-selected"], true, "All to start with");
+  const none = list({}, {});
+  assert.deepEqual([tabs(none).props.children].flat(Infinity).map(text), ["All4", "Open4", "Fixed0", "Reviewed0"], "nothing invented");
+  assert.ok(tab(none, "Fixed").props.disabled && tab(none, "Reviewed").props.disabled, "an empty tab can't be picked");
+  assert.ok(!tab(none, "Open").props.disabled && !tab(none, "All").props.disabled);
+});
+
+test("picking a tab narrows the list, along with the other filters (a focus from Insights, the coordination filter)", () => {
+  const four = { ...report, clashes: [clash("a", 1), clash("b", 2), clash("c", 3), clash("d", 4)] };
+  const props = { report: four, matches: null, selected: null, onSelect() {}, onImage() {}, fixes: { a: "Raise it" },
+    reviewed: { b: { kind: "by_design", note: "x" } }, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false,
+    triage: {}, triageFilter: null };
+  let extra = {};
+  const draw = () => R.__render(() => Live({ ...props, ...extra }));
+  assert.deepEqual(idsOf(draw()), ["a", "b", "c", "d"]);
+  tab(draw(), "Open").props.onClick();
+  assert.deepEqual(idsOf(draw()), ["c", "d"], "open: neither fixed nor reviewed");
+  assert.equal(tab(draw(), "Open").props["aria-selected"], true);
+  extra = { focus: { label: "Clashes with the girder", ids: ["a", "c"] } };
+  assert.deepEqual(idsOf(draw()), ["c"], "and only the focused clashes");
+  extra = { coord: { label: "Hard clashes", keep: (c) => c.id !== "d" } };
+  assert.deepEqual(idsOf(draw()), ["c"], "and only what the coordination filter keeps");
+  extra = {};
+  tab(draw(), "Fixed").props.onClick();
+  assert.deepEqual(idsOf(draw()), ["a"]);
+  tab(draw(), "Reviewed").props.onClick();
+  assert.deepEqual(idsOf(draw()), ["b"]);
+  extra = { reviewed: {} };
+  assert.deepEqual(idsOf(draw()), ["a", "b", "c", "d"], "its tab emptied (the mark undone): back to every clash");
+  assert.equal(tab(draw(), "All").props["aria-selected"], true);
 });

@@ -13,7 +13,7 @@ const react = url("export const useState=(v)=>[typeof v==='function'?v():v,()=>{
 const TRIAGE = url(`export const TRIAGE={${["real_clash", "modelling_error", "by_design", "non_physical", "unknown"]
   .map((k) => `${k}:{label:"${k}",cls:"",tip:"",colour:"",long:"${k}"}`).join(",")}};`);
 const list = await import(await compiled("../src/ReportList.tsx", { react, "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
-  "lucide-react": stub(["CircleCheck", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]), "./api": url("export const api={imageUrl:()=>''};"),
+  "lucide-react": stub(["CircleCheck", "EllipsisVertical", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]), "./api": url("export const api={imageUrl:()=>''};"),
   "./ClashPanel": stub(["ClashThumb"]), "./Triage": TRIAGE, "./noClash": await compiled("../src/noClash.ts", {}),
   "./aiNames": await compiled("../src/aiNames.ts", {}) }));
 
@@ -65,14 +65,14 @@ test("a row offers Propose fixes, Mark as not a clash and its same-element clash
     reviewed: { c9: { kind: "by_design", note: "joint" } }, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false,
     triage: {}, triageFilter: null, onPropose: (c) => calls.push(["propose", c.id]), onSetAside: (c, note) => calls.push(["aside", c.id, note]),
     onFocus: (f) => calls.push(["focus", f.label, f.ids]) }));
-  const labels = (id) => rowButtons(tree, id).map((b) => b.props["aria-label"]).filter((l) => !l.startsWith("Open the images"));
+  const labels = (id) => rowButtons(tree, id).map((b) => b.props["aria-label"]).filter((l) => !l.startsWith("Open the images") && !l.startsWith("More actions"));
   assert.deepEqual(labels("c1"), ["Propose fixes for #1 Supply air main × Transfer plate girder 1000 deep - grid 3",
     "Mark #1 Supply air main × Transfer plate girder 1000 deep - grid 3 as not a clash",
     "2 more clashes with the same elements as #1 Supply air main × Transfer plate girder 1000 deep - grid 3"]);
   assert.deepEqual(labels("c3"), ["2 more clashes with the same elements as #3 Cold water main × Transfer plate girder 1000 deep - grid 3"],
     "fixed: nothing to propose or set aside");
   assert.deepEqual(labels("c9"), [], "reviewed and sharing nothing: no actions");
-  const [propose, aside, same] = rowButtons(tree, "c1").filter((b) => !b.props["aria-label"].startsWith("Open the images"));
+  const [propose, aside, same] = rowButtons(tree, "c1").filter((b) => !/^(Open the images|More actions)/.test(b.props["aria-label"]));
   propose.props.onClick(); aside.props.onClick(); same.props.onClick();
   assert.deepEqual(calls, [["propose", "c1"], ["aside", "c1", "Set aside from the clash list"],
     ["focus", "Clashes with Supply air main or Transfer plate girder 1000 deep", ["c1", "c2", "c3"]]]);
@@ -80,6 +80,28 @@ test("a row offers Propose fixes, Mark as not a clash and its same-element clash
     onImage() {}, fixes: {}, reviewed: {}, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false, triage: {},
     triageFilter: null, onPropose() {}, onSetAside() {}, onFocus() {} }));
   assert.ok(!rowButtons(unlinked, "c2").some((b) => b.props["aria-label"].startsWith("Propose")), "one side not in the model: no proposal");
+});
+
+test("a row's actions are not inline: icons at its end on hover, or a ⋮ menu that names them (touch screens)", () => {
+  const tree = draw(list.ReportList({ report, matches, selected: null, onSelect() {}, onImage() {}, fixes: { c3: "Raise it" },
+    reviewed: { c9: { kind: "by_design", note: "joint" } }, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false,
+    triage: {}, triageFilter: null, onPropose() {}, onSetAside() {}, onFocus() {} }));
+  const row = find(tree, (n) => n.props?.["data-clash"] === "c1");
+  const group = find(row, (n) => n.props?.role === "group");
+  assert.equal(group.props.className.trim(), "row-actions", "one group, closed: the CSS shows it on hover and focus only");
+  const more = find(group, (n) => n.type === "button" && n.props["aria-label"] === "More actions for #1 Supply air main × Transfer plate girder 1000 deep - grid 3");
+  assert.ok(more, "⋮ opens them on a touch screen");
+  assert.equal(more.props["aria-expanded"], false);
+  const acts = find(group, (n) => n.props?.className === "row-acts");
+  assert.ok(find(acts, (n) => n.props?.className === "ra-label" && n.props.children === "Propose fixes"), "named in the menu");
+  assert.equal(rowButtons(tree, "c9").length, 0, "nothing to do: no ⋮ either");
+  // The main button holds only the number, the title and the distance (and a pill when there is something to say).
+  const main = find(row, (n) => n.props?.className === "clash-main");
+  const badge = find(main, (n) => typeof n.props?.className === "string" && n.props.className.includes("dist-badge"));
+  assert.equal(badge.props.children, "−300 mm", "the distance with a true minus");
+  assert.ok(badge.props.className.includes("over"), "an overlap: the red badge");
+  const fixed = find(find(tree, (n) => n.props?.["data-clash"] === "c3"), (n) => n.props?.className === "fixed-label pill");
+  assert.equal(fixed.props.children, "Fixed");
 });
 
 test("on the page: Propose fixes from a row proposes for it; Mark sets it aside; same elements narrow the list", async () => {

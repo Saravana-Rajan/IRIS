@@ -1,4 +1,4 @@
-import { CircleCheck, Focus, Network, Search, Sparkles, Wand2, X } from "lucide-react";
+import { CircleCheck, EllipsisVertical, Focus, Network, Search, Sparkles, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type Matches, type Report, type ReportClash, type TriageKind, type TriageVerdict } from "./api";
 import { ClashThumb } from "./ClashPanel";
@@ -27,6 +27,21 @@ const LINK_TITLE = { both: "Both elements are in the open model", one: "One elem
 
 /** "#39 Cold-water main clips the transfer girder": its number across the report, and Gemini's title or its plain name. */
 export const clashLabel = (c: ReportClash) => `#${c.number} ${c.title ?? c.name}`;
+
+/** A row's distance badge: as `mm`, with a true minus ("−300 mm"). */
+export const badgeMm = (m: number | null | undefined) => mm(m).replace(/^-/, "−");
+
+/** Which clashes the list shows by where they stand (the tabs over the list). */
+export type StatusTab = "all" | "open" | "fixed" | "reviewed";
+
+/** How many clashes each status tab holds, from the report and the page's own records only: a fixed clash counts as
+ * fixed even when it was also reviewed, as the list files it. */
+export function statusCounts(clashes: ReportClash[], fixes: Record<string, string>, reviewed: Record<string, Review>): Record<StatusTab, number> {
+  const fixed = clashes.filter((c) => fixes[c.id]).length;
+  const done = clashes.filter((c) => !fixes[c.id] && reviewed[c.id]).length;
+  return { all: clashes.length, open: clashes.length - fixed - done, fixed, reviewed: done };
+}
+const STATUS_TABS: [StatusTab, string][] = [["all", "All"], ["open", "Open"], ["fixed", "Fixed"], ["reviewed", "Reviewed"]];
 
 function ImpactBar({ total, triage, fixes, reviewed }: { total: number; triage: Record<string, TriageVerdict>; fixes: Record<string, string>; reviewed: Record<string, Review> }) {
   const triaged = Object.keys(triage).length;
@@ -115,12 +130,12 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 }) {
   const [query, setQuery] = useState("");
   const [onlyLinked, setOnlyLinked] = useState(false);
-  // Which clashes by where they stand: all, those still to fix, the fixed, the reviewed (owner request, Oct 31).
-  const [show, setShow] = useState<"all" | "open" | "fixed" | "reviewed">("all");
-  const fixedCount = report.clashes.filter((c) => fixes[c.id]).length;
-  const reviewedCount = report.clashes.filter((c) => !fixes[c.id] && reviewed[c.id]).length;
-  // Nothing fixed or reviewed (another report, a fresh check): the filter has nothing to choose from, so it is off.
-  const by = fixedCount + reviewedCount > 0 ? show : "all";
+  // Which clashes by where they stand: all, those still to fix, the fixed, the reviewed (owner request, Oct 31), as
+  // tabs with their counts over the list.
+  const [show, setShow] = useState<StatusTab>("all");
+  const counts = statusCounts(report.clashes, fixes, reviewed);
+  // A tab left with nothing in it (another report, a fresh check) gives way to All.
+  const by: StatusTab = (show === "fixed" && !counts.fixed) || (show === "reviewed" && !counts.reviewed) ? "all" : show;
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -268,13 +283,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 
       <div className="left-view" data-left-view="clashes" hidden={view !== "clashes"}>
       <div className="report-head" data-tour="detected">
-        <div className="row"><h2>{report.title}</h2>
-          <span className="chips">{fixedCount > 0 && <button type="button" className={`chip ok as-filter ${by === "fixed" ? "on" : ""}`} aria-pressed={by === "fixed"}
-              data-tip={by === "fixed" ? "Show every clash" : "Show only the fixed clashes"} data-tip-side="bottom" onClick={() => setShow(by === "fixed" ? "all" : "fixed")}>
-              <CircleCheck size={12} aria-hidden /> {fixedCount} fixed</button>}
-            {reviewedCount > 0 && <button type="button" className={`chip as-filter ${by === "reviewed" ? "on" : ""}`} aria-pressed={by === "reviewed"}
-              data-tip={by === "reviewed" ? "Show every clash" : "Show only the reviewed clashes"} data-tip-side="bottom" onClick={() => setShow(by === "reviewed" ? "all" : "reviewed")}>
-              {reviewedCount} reviewed</button>}</span></div>
+        <div className="row"><h2>{report.title}</h2></div>
         <p className="hint report-meta"><span>{new Set(report.clashes.map((c) => c.test)).size} tests
           {linked != null ? ` · ${linked} in the model` : " · open the models to link them"}</span>
           {/* A short pill, so the line never wraps while the titles land; the tip names the model */}
@@ -285,20 +294,20 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
       </div>
       {triageCard}
       <div className="report-head list-head">
+        {/* Where the clashes stand, with their counts: picking one narrows the list along with every other filter */}
+        <div className="status-tabs" role="tablist" aria-label="Clashes by status">
+          {STATUS_TABS.map(([v, label]) => (
+            <button key={v} type="button" role="tab" aria-selected={by === v} className={by === v ? "on" : ""}
+              disabled={v !== "all" && v !== "open" && !counts[v]} onClick={() => setShow(v)}>
+              {label}<span className="n mono">{counts[v]}</span></button>))}
+        </div>
         <div className="search-box">
           <Search size={15} aria-hidden />
           <input type="search" placeholder="Filter by #, title, element, level…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter clashes" />
         </div>
         {/* The search has the row to itself; the filters, when there are any, go under it */}
-        {(linkFilter || fixedCount + reviewedCount > 0 || shown !== report.clashes.length) && <div className="filters">
+        {(linkFilter || shown !== report.clashes.length) && <div className="filters">
           {linkFilter && <label className="check"><input type="checkbox" checked={onlyLinked} onChange={(e) => setOnlyLinked(e.target.checked)} /> In the model</label>}
-          {fixedCount + reviewedCount > 0 && (
-            <select className="status-pick" value={by} onChange={(e) => setShow(e.target.value as typeof show)} aria-label="Show clashes by status">
-              <option value="all">All · {report.clashes.length}</option>
-              <option value="open">To fix · {report.clashes.length - fixedCount - reviewedCount}</option>
-              {fixedCount > 0 && <option value="fixed">Fixed · {fixedCount}</option>}
-              {reviewedCount > 0 && <option value="reviewed">Reviewed · {reviewedCount}</option>}
-            </select>)}
           {shown !== report.clashes.length && <span className="hint shown">{shown} shown</span>}
         </div>}
         {coord && <div className="list-focus coord-focus" role="status">
@@ -348,19 +357,27 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
                       : thumbs && onThumb
                         ? <LazyThumb clash={c} url={thumbs[c.id]} onNeed={onThumb} onOpen={() => onSelect(c)} />
                         : anyImages && <span className="row-thumb none" aria-hidden />}
+                    {/* The number, the title and the distance; a pill when there is something to say (its status, a
+                        proposal, a triage verdict). Its actions show on hover and focus, or from ⋮ on a touch screen. */}
                     <button className="clash-main" onClick={() => onSelect(c)} title={fixes[c.id] ? `Fixed: ${fixes[c.id]}` : rv ? rv.note : link ? LINK_TITLE[link] : undefined}>
-                      {fixes[c.id] ? <i className="tick" aria-label="Fixed">✓</i> : rv ? <i className="tick muted" aria-label="Reviewed">✓</i> : link ? <i className={`dot ${link}`} /> : <i />}
-                      <span className="clash-name">#{c.number}</span>
-                      <span className={`clash-pair ${c.title ? "titled" : ""}`}>{c.title ?? c.name}</span>
-                      {nc && !tv && <span className="tv muted" title={nc.why}>{nc.label}</span>}
-                      {tv && !fixes[c.id] && !rv && <span className={`tv ${TRIAGE[tv.verdict].cls}`} title={tv.understanding || TRIAGE[tv.verdict].tip}
-                        aria-label={`Triage: ${TRIAGE[tv.verdict].label}`}>{TRIAGE[tv.verdict].label}</span>}
-                      {fixes[c.id] ? <span className="fixed-label">fixed</span>
-                        : rv ? <span className={`review-label ${rv.kind}`}>{rv.kind === "by_design" ? "by design" : "for author"}</span>
-                          : proposing === c.id ? <span className="row-status run" role="status"><i className="spinner" aria-hidden /> Proposing…</span>
-                            : ready[c.id] != null ? <span className={`row-status ${ready[c.id] ? "ok" : ""}`}>{ready[c.id]
-                              ? `${ready[c.id]} fix${ready[c.id] === 1 ? "" : "es"} ready` : "No fix found"}</span>
-                              : <span className="mono dist">{mm(c.distance_m)}</span>}
+                      <span className="cm-title">
+                        {fixes[c.id] ? <i className="tick" aria-label="Fixed">✓</i> : rv ? <i className="tick muted" aria-label="Reviewed">✓</i> : link ? <i className={`dot ${link}`} /> : <i />}
+                        <span className="clash-name mono">#{c.number}</span>
+                        <span className={`clash-pair ${c.title ? "titled" : ""}`}>{c.title ?? c.name}</span>
+                      </span>
+                      <span className="cm-meta">
+                        <span className={`mono dist dist-badge ${c.distance_m == null ? "none" : c.distance_m < 0 ? "over" : "gap"}`}
+                          aria-label={`Distance ${mm(c.distance_m)}`}>{badgeMm(c.distance_m)}</span>
+                        {nc && !tv && <span className="tv muted" title={nc.why}>{nc.label}</span>}
+                        {tv && !fixes[c.id] && !rv && <span className={`tv ${TRIAGE[tv.verdict].cls}`} title={tv.understanding || TRIAGE[tv.verdict].tip}
+                          aria-label={`Triage: ${TRIAGE[tv.verdict].label}`}>{TRIAGE[tv.verdict].label}</span>}
+                        {fixes[c.id] ? <span className="fixed-label pill">Fixed</span>
+                          : rv ? <span className={`review-label pill ${rv.kind}`}>{rv.kind === "by_design" ? "By design" : "For author"}</span>
+                            : proposing === c.id ? <span className="row-status pill run" role="status"><i className="spinner" aria-hidden /> Proposing…</span>
+                              : ready[c.id] != null ? <span className={`row-status pill ${ready[c.id] ? "ok" : ""}`}>{ready[c.id]
+                                ? `${ready[c.id]} fix${ready[c.id] === 1 ? "" : "es"} ready` : "No fix found"}</span>
+                                : null}
+                      </span>
                     </button>
                     {/* Bring its proposal up when it is not on screen (another clash, or another panel in front) */}
                     {onViewProposal && !fixes[c.id] && !rv && (proposing === c.id || ready[c.id] != null) && !(selected === c.id && panel) &&
@@ -381,7 +398,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
             </details>
           );
         })}
-        {!shown && <p className="hint">No clash matches the filter.</p>}
+        {!shown && <p className="hint">{by === "open" && !counts.open ? "Every clash is fixed or reviewed." : "No clash matches the filter."}</p>}
       </div>
       </div>
 
@@ -398,30 +415,50 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 
 const shortName = (e: ReportClash["a"]) => (e.name || e.ifc_class || "an element").split(/\s+-\s+/)[0];
 
-/** A row's quick actions (docs/architecture/12-web-app.md, ReportList): shown on hover, keyboard focus, and on the
- * selected row, so a touch screen has them too. Each is left out when it cannot apply. */
+/** A row's quick actions (docs/architecture/12-web-app.md, ReportList): icons at the row's end on hover and keyboard
+ * focus; on a touch screen (no hover) a ⋮ button that is always there opens them as a small labelled menu. Each is left
+ * out when it cannot apply. */
 function RowActions({ clash, label, related, canFix, canSetAside, note, onPropose, onSetAside, onSame, onView, onIsolate, isolated = false }: {
   clash: ReportClash; label: string; related: string[]; canFix: boolean; canSetAside: boolean; note: string;
   onPropose?: (c: ReportClash) => void; onSetAside?: (c: ReportClash, note: string) => void; onSame?: (ids: string[]) => void;
   onView?: (c: ReportClash) => void;   // it has a proposal (running or finished): View fixes instead of Propose
   onIsolate?: (c: ReportClash) => void; isolated?: boolean;   // its elements alone are drawn now
 }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement | null>(null);
+  // The ⋮ menu closes on a press anywhere else, and on Escape (in the list's own document: a panel may be popped out).
+  useEffect(() => {
+    if (!open) return;
+    const doc = box.current?.ownerDocument ?? document;
+    const off = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    doc.addEventListener("pointerdown", off);
+    doc.addEventListener("keydown", esc);
+    return () => { doc.removeEventListener("pointerdown", off); doc.removeEventListener("keydown", esc); };
+  }, [open]);
   if (!onView && !(onPropose && canFix) && !(onSetAside && canSetAside) && !(onSame && related.length) && !onIsolate) return null;
+  /** An action, then the menu closes. */
+  const run = (fn: () => void) => () => { setOpen(false); fn(); };
   return (
-    <span className="row-actions" role="group" aria-label={`Actions for ${label}`}>
-      {onIsolate && <button className={`ibtn ${isolated ? "on" : ""}`} aria-pressed={isolated}
-        aria-label={isolated ? "Show everything again" : `Isolate the clashing elements of ${label}`}
-        data-tip={isolated ? "Show everything again" : "Isolate the clashing elements (each clash you open after, too)"}
-        data-tip-side="left" onClick={() => onIsolate(clash)}><Focus size={14} aria-hidden /></button>}
-      {/* The row's View stays where it was when the actions cover the row's end */}
-      {onView ? <button className="row-view" aria-label={`View the fixes for ${label}`} onClick={() => onView(clash)}>View</button>
-        : onPropose && canFix && <button className="ibtn" aria-label={`Propose fixes for ${label}`} data-tip="Propose fixes"
-          data-tip-side="left" onClick={() => onPropose(clash)}><Sparkles size={14} aria-hidden /></button>}
-      {onSetAside && canSetAside && <button className="ibtn" aria-label={`Mark ${label} as not a clash`} data-tip="Mark as not a clash"
-        data-tip-side="left" onClick={() => onSetAside(clash, note)}><CircleCheck size={14} aria-hidden /></button>}
-      {onSame && related.length > 0 && <button className="ibtn same" aria-label={`${related.length} more clash${related.length === 1 ? "" : "es"} with the same elements as ${label}`}
-        data-tip={`${related.length} more with the same elements`} data-tip-side="left" onClick={() => onSame(related)}>
-        <Network size={14} aria-hidden /><span className="n">{related.length}</span></button>}
+    <span ref={box} className={`row-actions ${open ? "open" : ""}`} role="group" aria-label={`Actions for ${label}`}>
+      <button type="button" className="ibtn row-more" aria-label={`More actions for ${label}`} aria-haspopup="menu" aria-expanded={open}
+        onClick={() => setOpen(!open)}><EllipsisVertical size={15} aria-hidden /></button>
+      <span className="row-acts">
+        {onIsolate && <button type="button" className={`ibtn ${isolated ? "on" : ""}`} aria-pressed={isolated}
+          aria-label={isolated ? "Show everything again" : `Isolate the clashing elements of ${label}`}
+          data-tip={isolated ? "Show everything again" : "Isolate the clashing elements (each clash you open after, too)"}
+          data-tip-side="left" onClick={run(() => onIsolate(clash))}><Focus size={14} aria-hidden />
+          <span className="ra-label">{isolated ? "Show everything" : "Isolate"}</span></button>}
+        {/* The row's View stays where it was when the actions cover the row's end */}
+        {onView ? <button type="button" className="row-view" aria-label={`View the fixes for ${label}`} onClick={run(() => onView(clash))}>View</button>
+          : onPropose && canFix && <button type="button" className="ibtn" aria-label={`Propose fixes for ${label}`} data-tip="Propose fixes"
+            data-tip-side="left" onClick={run(() => onPropose(clash))}><Sparkles size={14} aria-hidden /><span className="ra-label">Propose fixes</span></button>}
+        {onSetAside && canSetAside && <button type="button" className="ibtn" aria-label={`Mark ${label} as not a clash`} data-tip="Mark as not a clash"
+          data-tip-side="left" onClick={run(() => onSetAside(clash, note))}><CircleCheck size={14} aria-hidden /><span className="ra-label">Not a clash</span></button>}
+        {onSame && related.length > 0 && <button type="button" className="ibtn same" aria-label={`${related.length} more clash${related.length === 1 ? "" : "es"} with the same elements as ${label}`}
+          data-tip={`${related.length} more with the same elements`} data-tip-side="left" onClick={run(() => onSame(related))}>
+          <Network size={14} aria-hidden /><span className="n">{related.length}</span><span className="ra-label">with the same elements</span></button>}
+      </span>
     </span>
   );
 }
