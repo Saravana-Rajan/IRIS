@@ -64,6 +64,8 @@ nav.rail .more-views kbd { font: 10px var(--mono); color: var(--muted, #6a6a6a);
 .report .status-tabs button:disabled { opacity: .45; cursor: default; }
 .report .status-tabs button:focus-visible { outline: 2px solid var(--accent, #b07af2); outline-offset: 1px; }
 .report .list-head { gap: 8px; }
+.report .report-meta { flex-wrap: wrap; gap: 4px 8px; }
+.report .report-meta > span:first-child { flex: 1 1 auto; min-width: 0; overflow: visible; white-space: normal; }
 .report .list-head .search-box { border-radius: 8px; height: 34px; background: var(--surface, #fff); }
 
 /* A row: the number (mono) and the title, then the distance badge and a pill when there is something to say */
@@ -171,12 +173,16 @@ header.clash-head .clash-head-facts dd { display: inline; }
 
 /* The panel: what the header does not show, in a few short lines */
 section.clash-panel { gap: 6px; margin-top: 8px; }
-section.clash-panel .fixed-line { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 13px;
-  color: var(--ok, #1d7f47); background: color-mix(in srgb, var(--green, #2fb153) 9%, #fff); border: 1px solid color-mix(in srgb, var(--green, #2fb153) 25%, #fff); }
-section.clash-panel .fixed-line svg { color: var(--green, #2fb153); flex: none; }
-section.clash-panel .fixed-line b { font-weight: 500; }
-section.clash-panel .fixed-line .fixed-what { color: var(--ink, #1a1a1a); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-section.clash-panel .fixed-line .fixed-what::before { content: "· "; color: var(--muted, #6a6a6a); }
+/* A fixed clash: a calm card (green check, what was kept), Undo and proposing again small beside it; never a big Propose */
+section.clash-panel .fixed-state { margin: 0; gap: 4px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--green, #2fb153) 7%, #fff); border: 1px solid color-mix(in srgb, var(--green, #2fb153) 24%, #fff); }
+section.clash-panel .fixed-state > b { font-size: 14px; font-weight: 500; color: var(--ok, #1d7f47); }
+section.clash-panel .fixed-state > p { font-size: 12.5px; color: var(--ink, #1a1a1a); }
+section.clash-panel .fixed-state .fixed-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+section.clash-panel .fixed-state .link { all: unset; cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--accent-ink, #7a3fc7); }
+section.clash-panel .fixed-state .link:hover:not(:disabled) { text-decoration: underline; }
+section.clash-panel .fixed-state .link:disabled { opacity: .5; cursor: default; }
+section.clash-panel .fixed-state .link:focus-visible { outline: 2px solid var(--accent, #b07af2); outline-offset: 2px; border-radius: 4px; }
 section.clash-panel .clash-glance { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* The A/B/C pictures: one row of small squares on a light ground, the letter on a white chip */
 section.clash-panel .thumbs { display: flex; gap: 6px; flex: none; }

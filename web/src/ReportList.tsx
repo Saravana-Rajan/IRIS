@@ -286,7 +286,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
         <div className="row"><h2>{report.title}</h2></div>
         <p className="hint report-meta"><span>{new Set(report.clashes.map((c) => c.test)).size} tests
           {linked != null ? ` · ${linked} in the model` : " · open the models to link them"}</span>
-          {/* A short pill, so the line never wraps while the titles land; the tip names the model */}
+          {/* A short pill while the titles land (it wraps under a narrow panel's line, never clipped); the tip names the model */}
           {naming > 0 && <span className="naming" role="status" data-tip={`${aiName("triage")} is giving each clash a short title`} data-tip-side="bottom">
             <Sparkles size={12} aria-hidden /> Naming {naming}…</span>}</p>
         {picker}

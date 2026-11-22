@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { api, type Matches, type Measure, type ReportClash, type TriageVerdict } from "./api";
 import { mm } from "./ReportList";
 import { oneElement, sameWhy } from "./noClash";
@@ -23,11 +23,16 @@ const BASIS: Record<NonNullable<TriageVerdict["basis"]>, string> = {
 /** What the clash header (ClashHeader.tsx) does not show: the A/B/C pictures, the distance Iris measures now, whether
  * the open model has each element, the "one element" note and the triage reading (folded to one line). The number,
  * title, status, the report's distance and A and B are the header's, shown once. Compact, so Propose fixes stays on
- * screen; a fixed clash says so in one calm line. */
-export function ClashPanel({ reportId, clash, match, measure, onImage, fix, triage, origin = "navisworks", capturing = false }: {
+ * screen; a fixed clash says so calmly, with Undo and proposing again. */
+export function ClashPanel({ reportId, clash, match, measure, onImage, fix, resolved = false, onUndo, onProposeAgain, busy = false,
+  triage, origin = "navisworks", capturing = false }: {
   reportId: string; clash: ReportClash; match: Matches[string] | undefined; measure: Measure | null | "busy";
   onImage: (index: number) => void; fix?: string; triage?: TriageVerdict; origin?: "navisworks" | "iris";
   capturing?: boolean;  // the A/B/C views of a clash Iris found are being taken
+  /** Fixed (a fix kept, `fix`, or the re-run check no longer finds it, `resolved`): a calm "Fixed ✓" state in place of
+   * the propose actions, with Undo when the newest kept edit is this fix (coordination.undoableFix) and proposing
+   * again as a secondary. */
+  resolved?: boolean; onUndo?: () => void; onProposeAgain?: () => void; busy?: boolean;
 }) {
   const found = origin === "iris";  // Iris detected it: its depth is how far one must move to clear the other
   const now = measure === "busy" ? "measuring…"
@@ -39,9 +44,17 @@ export function ClashPanel({ reportId, clash, match, measure, onImage, fix, tria
   const alert = !!triage && (triage.audit === "disputed" || !!triage.error);
   return (
     <section className="clash-panel">
-      {fix && <p className="fixed-line" role="status"
-        data-tip={`Fixed in this session. The ${found ? "views show the clash as found" : "Navisworks images show the clash as reported"}.`}>
-        <Check size={14} strokeWidth={2.4} aria-hidden /><b>Fixed</b><span className="fixed-what">{fix}</span></p>}
+      {(fix || resolved) && (
+        <div className="noclash-card fixed-state" role="status">
+          <b>Fixed ✓</b>
+          <p>{fix ? <>Kept in this session: {fix}.</> : "Iris's check, run again, no longer finds it."} The {found
+            ? "views show the clash as found" : "Navisworks images show the clash as reported"}.</p>
+          {(onUndo || onProposeAgain) && <span className="fixed-actions">
+            {onUndo && <button type="button" className="btn small" disabled={busy} onClick={onUndo}
+              data-tip="Take this fix back out of the model (the newest kept edit)"><RotateCcw size={13} aria-hidden /> Undo</button>}
+            {onProposeAgain && <button type="button" className="link" disabled={busy} onClick={onProposeAgain}>Propose a different fix</button>}
+          </span>}
+        </div>)}
       <div className="clash-glance">
         {clash.images.length > 0 && (
           <div className={`thumbs n${clash.images.length}`}>
