@@ -1,10 +1,9 @@
-import { Building2, CircleCheck, FileText, FolderKanban, History, Plus } from "lucide-react";
+import { Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
 import type { CSSProperties, MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
-import { DemoClips } from "./DemoClips";
 import { HoloRibbon, TextReveal } from "./Holo";
-import { PROJECT_FLOW } from "./ProjectsHome";
-import { ownClick, projectPath } from "./projectRoute";
+import { HowIrisWorks } from "./HowIrisWorks";
+import { ownClick, projectPath, type ProjectStep } from "./projectRoute";
 import { plural, whenText, type Project } from "./projectsApi";
 import "./home.css";
 
@@ -36,13 +35,13 @@ function ProjectStatus({ p }: { p: Project }) {
 /**
  * Home (`/home`, docs/ui-design.md §10.1): the first page inside the app shell, light and calm, Synthesia-like. A
  * greeting that reveals word by word beside the holographic ribbon, Iris's principle and what it does; the last session
- * to resume; three ways to start (a new project, the sample building, the sample drawings); the recent projects; the two
- * demo clips (DemoClips); and Iris's eight steps (PROJECT_FLOW). No brand header or chrome of its own: the shell has
+ * to resume; three ways to start (a new project, the sample building, the sample drawings); Iris's eight steps as cards
+ * (HowIrisWorks); and the recent projects. No brand header or chrome of its own: the shell has
  * them. It scrolls inside its container. Props only; nothing here calls the server.
  */
 export function StartScreen({
   name = "", now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
-  onSample, sampleBusy = false, onSampleDrawings, sampleDrawingsBusy = false,
+  onSample, sampleBusy = false, onSampleDrawings, sampleDrawingsBusy = false, onSampleStep,
   recent = [], recentLoading = false, onOpenProject, projectHref = projectPath, resume,
 }: {
   /** The reviewer's name (localStorage `iris.reviewer`); the greeting says "there" without one. */
@@ -61,6 +60,8 @@ export function StartScreen({
    * readings replay at no cost). Absent when the server lists no sample drawings. */
   onSampleDrawings?: () => void;
   sampleDrawingsBusy?: boolean;
+  /** "How Iris works": a step's card opens that step on the sample building. Absent: the cards are static. */
+  onSampleStep?: (step: ProjectStep) => void;
   /** This browser's projects, newest first; the first RECENT_MAX show. */
   recent?: Project[];
   /** The projects are still being listed: light placeholder cards until the first arrive. */
@@ -128,6 +129,8 @@ export function StartScreen({
             </button>)}
         </section>
 
+        <HowIrisWorks onStep={onSampleStep} />
+
         <section className="home-section" aria-labelledby="home-recent-title" aria-busy={recentLoading || undefined}>
           <div className="home-section-head">
             <h2 className="home-h2" id="home-recent-title">Recent projects</h2>
@@ -164,22 +167,6 @@ export function StartScreen({
             </div>
           )}
           {recentLoading && !shown.length && <span className="home-sr" role="status">Loading your projects…</span>}
-        </section>
-
-        <section className="home-section">
-          <DemoClips />
-        </section>
-
-        <section className="home-section" aria-labelledby="home-how-title">
-          <div className="home-section-head"><h2 className="home-h2" id="home-how-title">How Iris works</h2></div>
-          <ol className="home-steps">
-            {PROJECT_FLOW.map((s, i) => (
-              <li key={s.name} className={`home-step${s.name === "Propose" ? " holo-edge" : ""}`} data-step={s.name}>
-                <span className="home-step-n mono">{i + 1}</span>
-                <b className="home-step-name">{s.name}{s.name === "Validate" && <CircleCheck size={14} className="home-step-ok" aria-hidden />}</b>
-                <span className="home-step-t">{s.text}</span>
-              </li>))}
-          </ol>
         </section>
       </div>
     </div>

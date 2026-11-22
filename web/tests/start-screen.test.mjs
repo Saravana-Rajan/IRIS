@@ -8,8 +8,8 @@ import { appHost, compiled, projectOf } from "./app-host.mjs";
 
 /** Home (StartScreen.tsx) and its ways in: the greeting, the start tiles ("Try the sample drawings" opens the sample
  * building as a project on its Drawings step with the sample PDF sheets attached, POST .../drawings/samples, in the order
- * sampleDrawings.ts keeps), the recent projects, "See it work" (DemoClips.tsx, the two demo clips side by side) and
- * Iris's eight steps. */
+ * sampleDrawings.ts keeps), Iris's eight steps (HowIrisWorks.tsx, stubbed here; its own test is how-iris-works) and
+ * the recent projects. */
 
 const url = (js) => `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
 const react = { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
@@ -24,14 +24,14 @@ async function moduleUrl(path, css, deps = {}) {
   for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`);
   return url(outputText);
 }
-const clipsUrl = await moduleUrl("../src/DemoClips.tsx", "demoClips.css");
-const clips = await import(clipsUrl);
 const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css");
 const holo = await import(holoUrl);
 const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
-const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./DemoClips": clipsUrl, "./Holo": holoUrl,
+/** HowIrisWorks stands in as one section that names the steps in order, so Home's order shows in its markup. */
+const howStub = url(`import { jsx } from ${JSON.stringify(import.meta.resolve("react/jsx-runtime"))};
+export function HowIrisWorks() { return jsx("section", { className: "hiw", children: "How Iris works: ${FLOW.join(", ")}" }); }`);
+const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./HowIrisWorks": howStub, "./Holo": holoUrl,
   "./About": url("export const projectName = (files) => files.join(' + ');"),
-  "./ProjectsHome": url(`export const PROJECT_FLOW = ${JSON.stringify(FLOW.map((name) => ({ name, text: `${name} text.` })))};`),
   "./projectRoute": await compiled("../src/projectRoute.ts"),
   "./projectsApi": await compiled("../src/projectsApi.ts", {
     "./api": url("export class ApiError extends Error {}; export const apiFetch = async () => null; export const apiUrl = (p) => p;") }) }));
@@ -42,7 +42,6 @@ const NOW = new Date(2026, 10, 22, 15, 10).getTime();
 const props = (p = {}) => ({ onProjects: noop, onNewProject: noop, now: NOW, ...p });
 const markup = (p) => renderToStaticMarkup(h(start.StartScreen, props(p)));
 const startButton = (html, which) => html.match(new RegExp(`<button[^>]*data-start="${which}"[^>]*>.*?</button>`))?.[0];
-const entity = (t) => t.replaceAll("'", "&#x27;");
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 /** The elements StartScreen returns (its own, not its children components'), to call their handlers without a DOM. */
 function elements(node, out = []) {
@@ -180,18 +179,24 @@ test("no projects yet: one inline line and 'Create one'; while listing: light pl
   assert.doesNotMatch(listed, /home-skeleton|Loading your projects/, "cards already there stay while the list refreshes");
 });
 
-test("Home shows the demo clips and then Iris's eight steps, in order, Propose with the AI's edge and Validate the check", () => {
+test("Home's order: the hero, the start tiles, Iris's eight steps (HowIrisWorks), then the recent projects", () => {
   const html = markup({});
-  assert.match(html, /<figure[^>]*data-start="see-it-work"/);
-  assert.doesNotMatch(html, /northbank\.webp|start-pic/, "the still they replaced is gone");
-  assert.ok(html.indexOf("Recent projects") < html.indexOf('data-start="see-it-work"'));
-  assert.ok(html.indexOf('data-start="see-it-work"') < html.indexOf("How Iris works"));
-  const steps = html.match(/<li class="home-step[^"]*" data-step="[^"]+">.*?<\/li>/g);
-  assert.deepEqual(steps.map((s) => s.match(/data-step="([^"]+)"/)[1]), FLOW);
-  steps.forEach((s, i) => assert.match(s, new RegExp(`home-step-n mono">${i + 1}<.*${FLOW[i]} text\\.`)));
-  assert.match(steps[4], /class="home-step holo-edge"/);
-  assert.match(steps[5], /home-step-ok/);
-  assert.equal(steps.filter((s) => /holo-edge|home-step-ok/.test(s)).length, 2);
+  assert.doesNotMatch(html, /see-it-work|demo-clip|northbank\.webp|start-pic/, "no demo clips on Home");
+  assert.match(html, /<section class="hiw">How Iris works: Import, Understand, Detect, Investigate, Propose, Validate, Review, Report<\/section>/);
+  const at = (s) => { const n = html.indexOf(s); assert.ok(n >= 0, s); return n; };
+  assert.ok(at('class="home-hero"') < at('data-start="new-project"'));
+  assert.ok(at('data-start="new-project"') < at('class="hiw"'));
+  assert.ok(at('class="hiw"') < at("Recent projects"));
+});
+
+test("a step's card opens it on the sample building: onSampleStep goes to HowIrisWorks as onStep, absent without it", () => {
+  const steps = [];
+  const onSampleStep = (step) => steps.push(step);
+  const how = (p) => tree(p).find((e) => e.type?.name === "HowIrisWorks");
+  assert.equal(how({ onSampleStep }).props.onStep, onSampleStep);
+  how({ onSampleStep }).props.onStep("coordination");
+  assert.deepEqual(steps, ["coordination"]);
+  assert.equal(how({}).props.onStep, undefined, "static cards without the sample");
 });
 
 test("the last session: Resume (primary) and Start fresh (ghost), with what was kept and when, in the server's seconds", () => {
@@ -223,41 +228,6 @@ test("the ribbon: its size in pixels or any CSS length, fewer threads when small
   assert.equal(renderToStaticMarkup(h(holo.TextReveal, { text: "Good morning, Ana", once: "t" })), "<span class=\"\">Good morning, Ana</span>");
   const css = await readFile(new URL("../src/holo.css", import.meta.url), "utf8");
   assert.match(css, /prefers-reduced-motion: reduce\)[^}]*\.holo-glow, \.holo-sway, \.holo-fan[^}]*animation: none/, "still under reduced motion");
-});
-
-test("'See it work': the 3D check and the 2D reader side by side, each lazily, sized, captioned, its still under reduced motion", () => {
-  assert.deepEqual(clips.DEMO_CLIPS.map((c) => [c.id, c.label, c.src, c.still]), [
-    ["check", "3D clash check", "/demos/check.webp", "/demos/check-still.webp"],
-    ["drawings", "2D drawing reader", "/demos/drawings.webp", "/demos/drawings-still.webp"]]);
-  assert.equal(clips.DEMO_CLIPS[0].caption, "Northbank's check: the clashes found, numbered and listed.");
-  assert.equal(clips.DEMO_CLIPS[1].caption, "The sample sheets read by Gemini, checked against the PDF's own text, then compared with the 3D model.");
-  const html = renderToStaticMarkup(h(clips.DemoClips));
-  assert.match(html, /^<figure[^>]*data-start="see-it-work"/);
-  assert.match(html, />See it work</);
-  assert.equal(html.match(/<img[^>]*>/g).length, 2, "both clips at once");
-  for (const c of clips.DEMO_CLIPS) {
-    const item = html.match(new RegExp(`<figure[^>]*data-clip="${c.id}"[^>]*>.*?</figure>`))?.[0];
-    assert.ok(item, `${c.id}: its own figure, by data-clip`);
-    assert.ok(item.includes(`>${c.label}<`), `${c.id}: its label`);
-    assert.ok(item.includes(`<source media="(prefers-reduced-motion: reduce)" srcSet="${c.still}"/>`), `${c.id}: its still under reduced motion`);
-    assert.ok(item.includes(`<picture class="demo-clip-frame" style="background-image:url(${c.still})">`),
-      `${c.id}: its still shows in the frame until the clip loads`);
-    const img = item.match(/<img[^>]*>/)[0];
-    for (const attr of [`src="${c.src}"`, 'width="1000"', 'height="625"', 'loading="lazy"', `alt="${entity(c.alt)}"`])
-      assert.ok(img.includes(attr), `${c.id}: ${attr}`);
-    assert.ok(c.alt.length > 60, `${c.id}: alt text that says what it shows`);
-    assert.ok(item.includes(`<figcaption class="demo-clip-caption">${entity(c.caption)}</figcaption>`), `${c.id}: its caption`);
-    assert.ok(item.indexOf("</picture>") < item.indexOf(`>${c.label}<`), `${c.id}: label and caption under the clip`);
-  }
-  assert.ok(html.indexOf('data-clip="check"') < html.indexOf('data-clip="drawings"'), "3D first");
-});
-
-test("the clips' stylesheet is light, on the page's tokens: white cards side by side, stacked when there is no room", async () => {
-  const css = await readFile(new URL("../src/demoClips.css", import.meta.url), "utf8");
-  assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|prefers-color-scheme|\bdark\b/i, "colours only from tokens, no dark mode");
-  assert.match(css, /\.demo-clips-row \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, \d+px\), 1fr\)\)/);
-  assert.match(css, /\.demo-clip \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 12px;[^}]*background: var\(--surface\)/);
-  assert.match(css, /\.demo-clip-frame \{[^}]*background-size: cover;/, "the still placeholder covers the frame");
 });
 
 // ------------------------------------------------------------------------------------------------- sampleDrawings.ts
