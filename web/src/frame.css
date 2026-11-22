@@ -56,6 +56,9 @@
 .shell .app.notched .measure-panel { top: 60px; }
 .shell .app.notched .overlay.gone { top: 12px; }
 
+/* The cover that holds the loading look while the dock arrives covers the workspace only, never the sidebar */
+.shell .load-cover { position: absolute; }
+
 /* A fixed clash: calm, not a big Propose fixes */
 .fixed-calm { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--green, #2fb153) 35%, transparent); background: var(--ok-soft, #eaf7ee); }

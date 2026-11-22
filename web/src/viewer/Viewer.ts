@@ -256,7 +256,7 @@ export class Viewer {
     this.cube = new ViewCube((dir) => this.lookFrom(dir), (dx, dy) => this.turn(dx, dy), () => this.home());
     this.pane3d.appendChild(this.cube.el);
     this.panes = [{ spec: { kind: "3d" }, el: this.pane3d, rect: { x: 0, y: 0, w: 1, h: 1 }, pinned: false, view: null, key: 0 }];
-    this.scene.background = new THREE.Color("#dfe6ee");
+    this.scene.background = new THREE.Color("#eceef2");   // light and neutral (index.css --viewer-bg)
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.position.set(30, 60, 20);

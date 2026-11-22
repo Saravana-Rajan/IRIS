@@ -2,6 +2,8 @@
 // loading card. The geometry is the kit's (assets/brand/iris/svg): an eye's ring and pupil with a six-bladed aperture,
 // and "Iris" drawn in strokes; index.html's boot splash draws the same lockup.
 
+import { HoloRibbon } from "./Holo";
+
 /** The pupil with its hexagonal aperture cut out (even-odd), in the mark's 100 x 100 box. */
 const PUPIL = "M 26 50 A 24 24 0 1 0 74 50 A 24 24 0 1 0 26 50 Z M 60 50 L 55 58.66 L 45 58.66 L 40 50 L 45 41.34 L 55 41.34 Z";
 const LETTERS = ["M 128 8 L 128 92", "M 156 92 L 156 40 M 156 62 C 156 48 166 40 182 40", "M 200 40 L 200 92"];
@@ -138,7 +140,7 @@ export function LoadCard({ load, now, onCancel }: { load: LoadProgress; now: num
   return (
     <section className="load-card" role="status" aria-live="polite" onClick={(e) => e.stopPropagation()}>
       <div className="load-head">
-        <IrisMark size={36} motion="orbit" />
+        <HoloRibbon size={48} className="load-ribbon" />
         <div><h2>{load.title}</h2>
           <p className="hint">{n} model{n === 1 ? "" : "s"} · {elapsed} s</p></div>
         {onCancel && <button type="button" className="btn small ghost load-cancel" onClick={onCancel}>Cancel</button>}
