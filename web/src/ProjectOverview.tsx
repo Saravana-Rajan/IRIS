@@ -1,11 +1,51 @@
 import { ArrowRight, ChevronRight, Save, Upload } from "lucide-react";
-import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { PROJECT_STEPS, ownClick, stepBeside, type Step } from "./projectRoute";
 import {
-  REVIEW_LABEL, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
+  REVIEW_LABEL, closedText, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
   type ActivityItem, type CoordCounts, type Project, type ReviewStatus,
 } from "./projectsApi";
 import "./projects.css";
+
+/** How long "Saved ✓" (and a failed save's "Not saved") stays on the button before it reads "Save" again. */
+export const SAVED_MS = 2000;
+const NOT_SAVED_MS = 5000;
+
+/**
+ * The project's Save button (the overview's header and the workspace's step bar). It says how the save went: "Saving…"
+ * while it runs, "Saved ✓" for about two seconds after, or "Not saved" (the reason in its tip) when `onSave` resolves
+ * `false` or throws.
+ */
+export function SaveButton({ onSave, saving = false, disabled = false, tip }: {
+  onSave(): Promise<boolean | void> | boolean | void;
+  saving?: boolean;          // a save started elsewhere (App's project work)
+  disabled?: boolean;
+  tip: string;
+}) {
+  const [state, setState] = useState<"idle" | "saving" | "saved" | { error: string }>("idle");
+  const timer = useRef(0);
+  useEffect(() => () => { window.clearTimeout(timer.current); }, []);
+  async function save() {
+    window.clearTimeout(timer.current);
+    setState("saving");
+    let next: "saved" | { error: string };
+    try { next = (await onSave()) === false ? { error: "The project was not saved: see the message, then try again." } : "saved"; }
+    catch (e) { next = { error: `The project was not saved: ${(e as Error).message}` }; }
+    setState(next);
+    timer.current = window.setTimeout(() => setState("idle"), next === "saved" ? SAVED_MS : NOT_SAVED_MS);
+  }
+  const busy = saving || state === "saving";
+  const failed = typeof state === "object" ? state.error : null;
+  return (
+    <button type="button" className={`btn small${failed ? " danger" : ""}`} onClick={() => void save()} disabled={busy || disabled}
+      data-tip={failed ?? tip} data-tip-side="bottom" aria-live="polite">
+      {busy ? <><span className="spinner" aria-hidden /> Saving…</>
+        : state === "saved" ? <>Saved <span className="ok" aria-hidden>✓</span></>
+        : failed ? "Not saved"
+        : <><Save size={14} aria-hidden /> Save</>}
+    </button>
+  );
+}
 
 /**
  * The project's step bar: Overview · Models · Coordination · Clash review · Reports · Activity. Shown above the
@@ -84,7 +124,8 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   activity?: ActivityItem[];
   onImport(): void;
   onOpenWorkspace(): void;
-  onSave(): void;
+  /** Resolves `false` (or throws) when the project was not saved: the button then says so. */
+  onSave(): Promise<boolean | void> | boolean | void;
   saving?: boolean;
   onProjects?(): void;
   /** More for the step shown, after its own body (App: building a report on Reports, the decisions on Activity). */
@@ -99,11 +140,8 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   const hasModels = project.files.length > 0;
   const actions = (
     <>
-      <button type="button" className="btn small" onClick={onSave} disabled={saving || !hasModels}
-        data-tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"}
-        data-tip-side="bottom">
-        {saving ? <span className="spinner" aria-hidden /> : <Save size={14} aria-hidden />} {saving ? "Saving…" : "Save"}
-      </button>
+      <SaveButton onSave={onSave} saving={saving} disabled={!hasModels}
+        tip={hasModels ? "Save the edited models, journal and decisions as a new saved state" : "Import models first"} />
       <button type="button" className="btn primary small" onClick={hasModels ? onOpenWorkspace : onImport}>
         {hasModels ? <>Open workspace <ArrowRight size={14} aria-hidden /></> : <><Upload size={14} aria-hidden /> Import models</>}
       </button>
@@ -271,7 +309,7 @@ function Tally({ known }: { known: ReturnType<typeof knownCounts> }) {
         {c.open > 0 && <span className="open" style={{ width: pct(c.open) }} />}
       </div>
       <p className="proj-sub">
-        {Math.round((100 * closed) / total)}% closed · {known.live ? "from the open session" : "last known, as of the last session"}
+        {closedText(closed, total)} · {known.live ? "from the open session" : "last known, as of the last session"}
       </p>
     </div>
   );

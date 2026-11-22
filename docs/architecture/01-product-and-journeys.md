@@ -265,8 +265,9 @@ code: [15](15-requirements-settings-and-config.md).
   decision (`ReviewBlock`, kept in `localStorage` per report). No sign-in yet.
 - **Report:** **Menu** › **Report: PDF and BCF** opens `ReportDialog`: scope (**One report**, **One per team**, **One per model**),
   the team that owns each model (guessed, confirmed here), **Include BCF issues**, **Build the report**, then
-  **Download**. It needs triage done (it offers Triage all otherwise) and costs one proposal. The PDF says DRAFT until
-  every page has a review from every team involved.
+  **Download**. Triage is optional: without it, reviewed or fixed clashes get their pages and the rest are listed by
+  clash test as "not triaged" (the dialog says how many and offers Triage all to sort them). It costs one proposal. The
+  PDF says DRAFT until every page has a review from every team involved and no clash is left not triaged.
 - **Export:** **Export IFC** (the model's top right corner) (or **Export STEP + IFC** when a STEP model is open) downloads every edited file,
   zipped when several changed. Details in [14](14-files-in-and-out.md).
 

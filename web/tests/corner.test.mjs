@@ -30,3 +30,15 @@ test("the owner's settings sit on their button's tip, not in a long chip in the 
   assert.equal(host.component("OwnerSettingsMenu").props.note, undefined);
   host.unmount();
 });
+
+test("the menu's More names only the sections it shows: nothing open has no session or layout section", async () => {
+  const summary = (host) => find(host.menu(), (n) => n.type === "summary");
+  const words = (node) => [node.props.children].flat(Infinity).join("");
+  const open = await appHost();
+  assert.equal(words(summary(open)), "More: models, coordinate, this session, layout");
+  open.unmount();
+  const empty = await appHost({ initial: { sceneId: null, a: null, b: null, stats: null, clash: null, report: null, matches: null } });
+  assert.equal(words(summary(empty)), "More: models, coordinate");
+  assert.equal(hasText(empty.menu(), "This session"), false, "the section it no longer names is not shown");
+  empty.unmount();
+});

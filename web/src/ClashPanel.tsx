@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { api, type Matches, type Measure, type ReportClash, type ReportElement, type TriageVerdict } from "./api";
 import { mm } from "./ReportList";
 import { oneElement, sameWhy } from "./noClash";
@@ -28,17 +29,30 @@ const BASIS: Record<NonNullable<TriageVerdict["basis"]>, string> = {
   requirement: "settled: by a requirements rule", strictness: "kept by strictness",
 };
 
-export function ClashPanel({ reportId, clash, match, measure, onImage, fix, triage, origin = "navisworks", capturing = false }: {
+export function ClashPanel({ reportId, clash, match, measure, onImage, fix, resolved = false, onUndo, onProposeAgain, busy = false,
+  triage, origin = "navisworks", capturing = false }: {
   reportId: string; clash: ReportClash; match: Matches[string] | undefined; measure: Measure | null | "busy";
   onImage: (index: number) => void; fix?: string; triage?: TriageVerdict; origin?: "navisworks" | "iris";
   capturing?: boolean;  // the A/B/C views of a clash Iris found are being taken
+  /** Fixed (a fix kept, `fix`, or the re-run check no longer finds it, `resolved`): a calm "Fixed ✓" state in place of
+   * the propose actions, with Undo when the newest kept edit is this fix (coordination.undoableFix) and proposing
+   * again as a secondary. */
+  resolved?: boolean; onUndo?: () => void; onProposeAgain?: () => void; busy?: boolean;
 }) {
   const found = origin === "iris";  // Iris detected it: its depth is how far one must move to clear the other
   return (
     <section className="clash-panel">
       <div className="row"><h2><span className="num">#{clash.number}</span> {clash.title ?? clash.name}</h2>{fix ? <span className="chip ok">✓ fixed</span> : clash.status && <span className="chip">{clash.status}</span>}</div>
       <p className="hint">{clash.title ? `${clash.name} · ` : ""}{clash.test}{clash.ref ? ` · imported from Navisworks, ${clash.ref}` : ""}</p>
-      {fix && <p className="fixed-note">Fixed in this session: {fix}. The {found ? "views show the clash as found" : "Navisworks images show the clash as reported"}.</p>}
+      {(fix || resolved) && (
+        <div className="noclash-card fixed-state" role="status">
+          <b>Fixed ✓</b>
+          <p>{fix ? <>Kept in this session: {fix}.</> : "Iris's check, run again, no longer finds it."} The {found
+            ? "views show the clash as found" : "Navisworks images show the clash as reported"}.</p>
+          {onUndo && <button type="button" className="btn small" disabled={busy} onClick={onUndo}
+            data-tip="Take this fix back out of the model (the newest kept edit)"><RotateCcw size={13} aria-hidden /> Undo</button>}
+          {onProposeAgain && <button type="button" className="link" disabled={busy} onClick={onProposeAgain}>Propose a different fix</button>}
+        </div>)}
       {triage && (
         <div className="triage-note">
           <span className={`chip small ${TRIAGE[triage.verdict].cls}`}>{TRIAGE[triage.verdict].label}</span>

@@ -169,7 +169,7 @@ address is written into the code.
 | `allow_call(link)` | always allowed | `agent_call_limit.take(link.id)` |
 | `start_triage(report_id, scene_id, link)` | `None` | `app._start_triage(…, charge one proposal)` |
 | `triage_state(report_id, scene_id)` | `None` | the `GET /api/reports/{report_id}/triage` route function, called directly |
-| `build_document(report_id, scene_id, scope)` | `None` | `app._build_document` with the server's finished triage verdicts (a `RuntimeError` when fewer than half the clashes have one) |
+| `build_document(report_id, scene_id, scope)` | `None` | `app._build_document` with the server's finished triage verdicts, if any (triage is optional: clashes without one are listed as not triaged) |
 | `spawn(fn)` | `None` (plain daemon threads) | `owner.spawn` |
 
 ### The `tool` decorator
@@ -252,7 +252,7 @@ call goes through `chat.Chat._run` under the same name.
 | `apply_fix` | no | Keeps option N of the last proposal for a clash, tried again first against that clash (a `ToolError` with why when it no longer passes); a penetration whose host may not be cut is only requested (`requested_only`) | `link.proposals`, `plans.apply`, `Workspace.patch` under `Workspace.lock` | `ui applied` (patch fields included) |
 | `apply_plan` | no | Keeps every verified fix of a plan, all or none, each tried again alone and all together first | `link.plans`, `plans.apply`, `Workspace.patch` | `ui applied` |
 | `triage` | no | Starts or follows the report's shared triage, waits up to `wait_s`, returns counts and the real clashes (at most 40), or a `job_id` for the rest. Starting a run costs one proposal | `hooks.start_triage`, `hooks.triage_state` | `ui follow_triage` (the page follows the run itself) |
-| `generate_report` | no | The PDF (combined, per team or per model) with BCF, from the server's finished triage; `check`: only one kept check's clashes, by name; a download URL (remote) or a file path (stdio). One proposal | `hooks.charge`, `hooks.build_document` in a job | none besides `agent_result` with the file name |
+| `generate_report` | no | The PDF (combined, per team or per model) with BCF, sorted by the server's finished triage when there is one (else the clashes with no fix or decision are listed as not triaged); `check`: only one kept check's clashes, by name; a download URL (remote) or a file path (stdio). One proposal | `hooks.charge`, `hooks.build_document` in a job | none besides `agent_result` with the file name |
 | `export_models` | no | The edited models: remote, the `/api/scenes/{scene_id}/export` URL; stdio, files written to a temp folder | `Workspace.export` | none |
 
 Notes on the table:

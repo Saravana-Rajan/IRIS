@@ -13,8 +13,10 @@ stays, then architecture, then site; services move). Same discipline on both sid
 
 Real clashes and clashes with a fix get a page each, with the model's explanation and review points (marked as
 AI-drafted), the Navisworks view zoomed to where the pair meets, and the original next to the fix. Modelling errors
-go in a table for the models' authors; noise (by design, not physical, touching) in a compact table. The report stays
-DRAFT until every page has a review from each team involved.
+go in a table for the models' authors; noise (by design, not physical, touching) in a compact table. Triage is
+optional: a clash with no verdict, no fix, no kept edit, no decision and no mark is "not triaged", listed by clash test
+in a table of its own (never called noise, never counted as needing action). The report stays DRAFT until every page
+has a review from each team involved and no clash is left untriaged.
 """
 from __future__ import annotations
 
@@ -139,7 +141,7 @@ class Row:
     reviewers: list[str]
     verdict: str | None
     reading: dict
-    section: str                  # "page" | "author" | "noise"
+    section: str                  # "page" | "author" | "noise" | "untriaged" (no verdict, fix, edit, decision or mark)
     evidence: dict | None = None  # the session's fix for this clash: accepted or proposed, with pictures
     reviews: list[dict] = field(default_factory=list)
     mark: str | None = None       # the session marked it "by_design" or "author"
@@ -229,6 +231,8 @@ def build_rows(report: Report, verdicts: dict[str, dict], model_teams: dict[str,
             section = "author"
         elif verdict == "real_clash":
             section = "page"
+        elif verdict is None:
+            section = "untriaged"   # triage is optional: listed as not triaged, never as noise
         else:
             section = "noise"
         row = Row(c, ma, mb, ta, tb, acting, reviewers, verdict, reading, section, ev,
@@ -1090,8 +1094,9 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
     pages = [r for r in rows if r.section == "page"]
     author = [r for r in rows if r.section == "author"]
     noise = [r for r in rows if r.section == "noise"]
+    untriaged = [r for r in rows if r.section == "untriaged"]
     reviewed = sum(1 for r in pages if all(any(v.get("team") == t for v in r.reviews) for t in r.reviewers))
-    final = bool(pages) and reviewed == len(pages)
+    final = bool(pages) and reviewed == len(pages) and not untriaged
     counts = Counter(VERDICT_LABEL.get(r.verdict, r.verdict) for r in rows)
     teams = sorted({t for r in pages for t in r.reviewers})
     actions = {a.get("team"): a.get("actions", []) for a in summary.get("team_actions", [])}
@@ -1119,7 +1124,7 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
         return (f"<p>{note}</p><table class='list'><thead><tr><th>Clash</th><th>Test</th><th>Elements</th><th>Distance</th>"
                 f"<th>Reading</th><th>Why</th></tr></thead><tbody>{body}</tbody></table>")
 
-    def grouped(items: list[Row], note: str) -> str:
+    def grouped(items: list[Row], note: str, why_col: bool = True) -> str:
         tests: dict[str, list[Row]] = {}
         for r in items:
             tests.setdefault(r.clash.test, []).append(r)
@@ -1130,15 +1135,18 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
             span = f"{_mm(min(ds))} to {_mm(max(ds))}" if ds else "—"
             why = next((r.reading.get("understanding") for r in rs if r.reading.get("understanding")), "")
             body += (f"<tr><td>{_e(test)}</td><td>{len(rs)}</td><td>{_e(', '.join(f'{k} {v}' for k, v in readings.most_common()))}</td>"
-                     f"<td>{span}</td><td>{_e(why[:160])}</td></tr>")
+                     f"<td>{span}</td>" + (f"<td>{_e(why[:160])}</td>" if why_col else "") + "</tr>")
         return (f"<p>{note}</p><table class='list'><thead><tr><th>Test</th><th>Results</th><th>Reading</th><th>Distance</th>"
-                f"<th>Typical reason</th></tr></thead><tbody>{body}</tbody></table>")
+                + ("<th>Typical reason</th>" if why_col else "") + f"</tr></thead><tbody>{body}</tbody></table>")
 
     meta = "".join(f"<tr><th>{_e(k)}</th><td>{_e(v)}</td></tr>" for k, v in context.items())
     from . import requirements
     clear_mm = f"{requirements.resolve(requirements_doc).fix_clearance_mm:.0f}" if requirements_doc is not None else f"{requirements.DEFAULT_CLEARANCE_MM}"
     stamp = (f"<div class='stamp ok'>REVIEWED · {reviewed} of {len(pages)}</div>" if final else
-             f"<div class='stamp'>DRAFT · AI-assisted · {reviewed} of {len(pages)} reviewed</div>")
+             f"<div class='stamp'>DRAFT · AI-assisted · {reviewed} of {len(pages)} reviewed"
+             f"{f' · {len(untriaged)} not triaged' if untriaged else ''}</div>")
+    not_triaged = (f" {len(untriaged)} of {len(rows)} results were not triaged when this report was built: they are listed"
+                   " by clash test under \"Not triaged\", neither as needing action nor as noise." if untriaged else "")
     return f"""<!doctype html><html><head><meta charset='utf-8'><title>{_e(title)}</title><style>{CSS}</style></head><body>
 <section class='cover'>
   {LOCKUP}
@@ -1155,6 +1163,7 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
     <div class='count'><b>{len(pages)}</b>need action</div>
     <div class='count'><b>{len(author)}</b>for the models' authors</div>
     <div class='count'><b>{len(noise)}</b>noise</div>
+    {f"<div class='count'><b>{len(untriaged)}</b>not triaged</div>" if untriaged else ""}
   </div>
   <p style='color:#5d6a7a;font-size:8.5pt'>Text marked AI-drafted was written by {_e(proposal_name())} (Google) from the clash data,
   the clash pictures and Iris's geometry checks, and must be reviewed by the teams named before anyone acts on it.
@@ -1178,12 +1187,13 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
   {table(author, 'Modelling errors: duplicated or misplaced elements. Not coordination clashes; the model author cleans them up.') if author else '<p>None.</p>'}
   <h2 style='margin-top:14pt'>Noise</h2>
   {grouped(noise, 'By design, not physical, or only touching, grouped by clash test. No action; most can be hidden with a clash rule.') if noise else '<p>None.</p>'}
+  {"<h2 style='margin-top:14pt'>Not triaged</h2>" + grouped(untriaged, 'Not sorted yet: no triage verdict, fix or review decision, so nothing here is called a real problem or noise. Grouped by clash test. Triage them in Iris and build again to sort them.', why_col=False) if untriaged else ''}
   <h2 style='margin-top:14pt'>How this report was made</h2>
   <p>Verdicts come from Iris's triage: sure cases by rule (spaces, ports and openings are not physical; results
   within 1 mm only touch), the rest by {_e(triage_by(triage_info))}. Fixes come from Iris's agent:
   {_e(proposal_name())} proposes edits to real IFC elements and a geometry engine (IfcOpenShell) checks each against the whole model.
   Who acts: the team whose element a fix changes, else the discipline triage named, else the coordination rule
-  (structure stays, then architecture, then site; services move). Every team with an element in a clash reviews it.</p>
+  (structure stays, then architecture, then site; services move). Every team with an element in a clash reviews it.{_e(not_triaged)}</p>
 </section>
 {requirements_html(requirements_doc) if requirements_doc is not None else ''}
 </body></html>"""

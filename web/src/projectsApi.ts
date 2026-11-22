@@ -176,6 +176,13 @@ export function sizeText(bytes: number): string {
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** The share of clashes closed, never rounded to a claim that isn't true: 1 of 464 is "<1% closed" (not 0%), 463 of
+ * 464 is ">99% closed" (not 100%). */
+export function closedText(closed: number, total: number): string {
+  const pct = total > 0 ? Math.round((100 * closed) / total) : 0;
+  return `${closed > 0 && pct === 0 ? "<1" : closed < total && pct === 100 ? ">99" : pct}% closed`;
+}
+
 /** How many models of each kind, IFC first: [{kind: "IFC", n: 3}, {kind: "STEP", n: 1}]. */
 export function modelMix(files: readonly Pick<ProjectFile, "kind">[]): { kind: ModelKind; n: number }[] {
   const order: ModelKind[] = ["IFC", "STEP"];

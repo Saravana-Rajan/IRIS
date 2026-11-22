@@ -228,7 +228,7 @@ def test_the_proposal_history_lists_each_decision_on_its_clash():
 def test_a_decision_alone_gives_its_clash_a_page():
     report = _report()
     rows = document.build_rows(report, {}, {}, None, None, {}, {}, {}, decisions=[_decision(clash_id="c2")])
-    assert {r.clash.id: r.section for r in rows} == {"c1": "noise", "c2": "page"}
+    assert {r.clash.id: r.section for r in rows} == {"c1": "untriaged", "c2": "page"}   # no verdict: not noise
 
 
 def test_a_navisworks_clash_is_found_by_its_key():

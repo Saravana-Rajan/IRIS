@@ -305,7 +305,7 @@ manager starts in the app's lifespan (`_lifespan`). Each tool call runs inside `
 
 **How errors are shaped.**
 - `HTTPException` → `{"detail": "<a sentence>"}` with its status: 403 (owner only, a feature switched off), 404 (not
-  loaded, expired), 409 (state: nothing to export, triage first, requirements unknown, nothing may be edited), 411,
+  loaded, expired), 409 (state: nothing to export, requirements unknown, nothing may be edited), 411,
   413, 415, 422 (an edit the shape cannot take), 429 (a cap or the budget, with the reason), 502 (the model or the
   transcriber failed).
 - Validation errors: FastAPI's 422 with a `detail` list.

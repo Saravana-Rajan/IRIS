@@ -58,11 +58,11 @@ import { applyDraw, applyEvent, drawnUpTo, failAll, initRows, removeRow, sendabl
 import { ModelSummary } from "./ModelSummaryPanel";
 import { CoordinationOverview } from "./CoordinationOverview";
 import { ClashHeader } from "./ClashHeader";
-import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, type CoordinationFilter } from "./coordination";
+import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, undoableFix, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { ProjectsHome } from "./ProjectsHome";
-import { ProjectOverview, ProjectSteps } from "./ProjectOverview";
+import { ProjectOverview, ProjectSteps, SaveButton } from "./ProjectOverview";
 import { PROJECT_STEPS, PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, ownClick, projectPath, showPath, showProjectRoute, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { addReport, attachScene, createProject, getProject, listProjects, myProjectIds, openProject, patchProject, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { DrawingsPanel } from "./DrawingsPanel";
@@ -1674,13 +1674,14 @@ export function App() {
       } else await runDetect(null, id);
     } catch (e) { setError(`Could not open the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
   }
-  /** Save: the edited models, the edit log and the decisions as the project's next saved state. */
-  async function saveProjectNow() {
+  /** Save: the edited models, the edit log and the decisions as the project's next saved state. Whether it saved, for
+   * the Save button ("Saved ✓" or "Not saved"). */
+  async function saveProjectNow(): Promise<boolean> {
     const p = projectHere;
-    if (!p || !sceneId || !projectOpen || projectBusy) return;
+    if (!p || !sceneId || !projectOpen || projectBusy) return false;
     setProjectBusy("Saving…");
-    try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); }
-    catch (e) { setError(`Could not save the project: ${(e as Error).message}`); } finally { setProjectBusy(null); }
+    try { setProject(await saveProject(p.id, sceneId)); flash("Saved: the edited models, the edit log and the decisions."); return true; }
+    catch (e) { setError(`Could not save the project: ${(e as Error).message}`); return false; } finally { setProjectBusy(null); }
   }
   /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
    * again), opened on its Clash review. Opening and checking it call no model. */
@@ -4093,11 +4094,10 @@ export function App() {
         hrefOf={(st) => projectPath(pid, st)} projectsHref={PROJECTS_PATH}
         counts={liveCounts ?? projectHere?.counts ?? null}
         actions={<>
-          {projectBusy && <span className="hint"><i className="spinner" aria-hidden /> {projectBusy}</span>}
+          {projectBusy && projectBusy !== "Saving…" && <span className="hint"><i className="spinner" aria-hidden /> {projectBusy}</span>}
           {projectError && <span className="bad small">{projectError}</span>}
-          <button type="button" className="btn small" disabled={!projectOpen || !!projectBusy || !!busy} onClick={() => void saveProjectNow()}
-            data-tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"}
-            data-tip-side="bottom">Save</button>
+          <SaveButton onSave={saveProjectNow} saving={projectBusy === "Saving…"} disabled={!projectOpen || !!projectBusy || !!busy}
+            tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"} />
           {report && <button type="button" className="btn small" onClick={() => { setDocOpen(true); setDocReady(false); }}>
             <FileText size={14} aria-hidden /> Report</button>}
         </>} />
@@ -4126,7 +4126,7 @@ export function App() {
           counts={liveCounts} reports={projectHere.reports} activity={projectActivity}
           onImport={() => goStep("models")} saving={projectBusy === "Saving…"}
           onOpenWorkspace={() => { if (!projectOpen && projectHere.files.length) void openProjectScene(projectHere); goStep(projectHere.files.length ? "coordination" : "models"); }}
-          onSave={() => { if (projectOpen) void saveProjectNow(); else setError("Open the project's models first: nothing of it is open to save."); }}>
+          onSave={() => { if (projectOpen) return saveProjectNow(); setError("Open the project's models first: nothing of it is open to save."); return false; }}>
           {projStep === "drawings" && (projectOpen && sceneId ? (
             <section className="proj-drawings" aria-label="Drawings">
               <DrawingsPanel sceneId={sceneId} drawings={drawings} items={drawingItemsBy} compare={drawingCompare} busy={!!busy}
@@ -4466,7 +4466,9 @@ export function App() {
               onFocus={() => goToClash(clash, matches?.[clash.id], true)}
               onPrev={listPrev ? () => selectClash(listPrev) : undefined} onNext={listNext ? () => selectClash(listNext) : undefined} />
               <ClashPanel reportId={report.id} clash={shownClash ?? clash} match={matches?.[clash.id]} measure={measure} onImage={(index) => setLightbox({ clash: shownClash ?? clash, index })} fix={fixes[clash.id]} triage={shownTriage[clash.id]}
-              origin={report.origin} capturing={capturing === clash.id} />
+              origin={report.origin} capturing={capturing === clash.id} resolved={resolvedIds.has(clash.id)} busy={!!busy || proposing}
+              onUndo={undoableFix(journal, clash.id, [matches?.[clash.id]?.a, matches?.[clash.id]?.b]) ? () => void stepEdit("undo") : undefined}
+              onProposeAgain={a && b && sceneId && !(running && running.id !== clash.id) ? () => void propose() : undefined} />
               {evidence[clash.id]?.status === "recommended" && evidence[clash.id].kind === "penetration" &&
                 <div className="recommended">
                   <h3>Opening requested</h3>
@@ -4506,7 +4508,8 @@ export function App() {
               <button className="link" data-tour="fix-anyway" onClick={() => setFixAnyway(true)}>Propose a fix anyway</button>
             </div>
           )}
-          <div className="actions">
+          {/* A fixed clash shows "Fixed ✓" in its panel (ClashPanel) instead of these. */}
+          {!(clash && (fixes[clash.id] || resolvedIds.has(clash.id))) && <div className="actions">
             {!hideFix && <button className="btn primary big" data-tour="propose" disabled={!a || !b || !sceneId || !!busy || proposing || (!!running && running.id !== clash?.id)} onClick={propose}>
               {proposing ? <><i className="spinner" aria-hidden /> Working…</>
                 : running && running.id !== clash?.id ? <><i className="spinner" aria-hidden /> {`Waiting for #${running.number}`}</>
@@ -4514,7 +4517,7 @@ export function App() {
             <button className="btn" disabled={!a || !b || a === b || !sceneId || !!busy || contextWorking || proposing || planning}
               onClick={() => void exploreContext()}><Network size={15} aria-hidden /> Explore wider fix</button>
             <button className="btn" disabled={!a && !b} onClick={focusNow}><LocateFixed size={15} aria-hidden /> Go to the clash</button>
-          </div>
+          </div>}
 
           {(proposal?.understanding || proposing) && <>
             <h2>Understanding</h2>
@@ -4693,7 +4696,8 @@ export function App() {
         </section>
         {/* docs/ui-design.md §10.4: what each step does is on that step; the rest is here, folded on a desktop. */}
         <details className="menu-more" open={compact || touring || undefined}>
-        <summary className="menu-more-sum">More: models, coordinate, this session, layout, help</summary>
+        {/* Only the sections shown below: nothing open (the landing) has no session or layout section. */}
+        <summary className="menu-more-sum">More: {["models", "coordinate", ...(landing ? [] : ["this session"]), ...(compact || landing ? [] : ["layout"])].join(", ")}</summary>
         <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
           title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
           {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>

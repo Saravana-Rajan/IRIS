@@ -279,3 +279,26 @@ def test_a_report_for_a_project_names_it_and_reads_its_saved_decisions_when_no_l
         r = c.post(url, json={"scene_id": sid, "triage": triage, "project_id": bad})
         assert r.status_code == 404 and r.json()["detail"] == "No such project."
     assert len(seen) == 3
+
+
+def test_a_report_builds_without_triage_and_keeps_the_accepted_fix(store, tmp_path, monkeypatch):
+    # Triage is optional (no run, no verdicts from the page): the route builds, and the fix goes to the report.
+    build_clash_fixture(tmp_path / "fixture-clash.ifc")
+    ws = Workspace(samples=tmp_path)
+    c = _client(monkeypatch, ws)
+    sid = c.post("/api/scenes", json={"samples": ["fixture-clash.ifc"]}).json()["id"]
+    rid = ws.detect(sid)["report"]["id"]
+    first = ws.report(rid).clashes[0]
+    seen: list[tuple] = []
+
+    def generate(report, verdicts, model, **kw):
+        seen.append((verdicts, kw))
+        return b"%PDF-1.7", "iris-report.pdf", "application/pdf"
+    monkeypatch.setattr(app_module.document, "generate", generate)
+    monkeypatch.setattr(app_module, "_take", lambda limit, request: None)
+    evidence = {first.id: {"status": "accepted", "title": "Raise the duct"}}
+    r = c.post(f"/api/reports/{rid}/document/stream", json={"scene_id": sid, "evidence": evidence})
+    assert r.status_code == 200 and '"ready"' in r.text
+    verdicts, kw = seen[-1]
+    assert verdicts == {} and kw["evidence"] == evidence
+

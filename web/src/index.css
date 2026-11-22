@@ -1224,13 +1224,13 @@ a.src:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; bor
 .detect-coverage .hint { margin-top: 6px; }
 .clash-pair.titled { color: var(--ink); }
 .clash-name { font-variant-numeric: tabular-nums; }
-.report-meta { display: flex; align-items: center; gap: 8px; margin: 0; }
+.report-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
 /* Iris's kept checks over the list (Detect.tsx CheckPicker; docs/detection.md, "Kept checks") */
 .check-pick { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
 .check-pick select { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink, inherit); }
 .check-stale { margin: 4px 0 0; }
 .triage-unread { margin: 6px 0 0; }
-.report-meta > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-meta > span:first-child { flex: 1 1 auto; min-width: 0; }
 .report-head .naming { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px;
   background: var(--accent-soft); color: var(--accent-ink); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .report-head .naming svg { animation: tour-pulse-op 1.6s ease-in-out infinite; }

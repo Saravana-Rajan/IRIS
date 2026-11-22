@@ -510,8 +510,8 @@ Owned by: [docs/show-it-built.md](../show-it-built.md) (design), [09](09-agent-w
 **Report** opens `ReportDialog` (`ReportDoc.tsx`), which asks the server to guess each model's team
 (`document.guess_teams`) as a starting name the person can retype. On build the page finishes the built pictures first (`prepareReport`,
 at most 10), then streams `document/stream` with the scope, teams, evidence, reviews, marks and the triage verdicts it
-shows. The route needs verdicts for at least half the clashes (else 409 "Triage the report first") and charges one
-proposal; `document.generate` explains each page with Gemini Pro (6 at a time), writes one summary, renders a PDF per
+shows. Triage is optional: without verdicts, a clash with a fix, a kept edit or a decision still gets its page and the
+rest are listed by clash test as not triaged. The route charges one proposal; `document.generate` explains each page with Gemini Pro (6 at a time), writes one summary, renders a PDF per
 group with WeasyPrint and the BCF 2.1 zip, then sends `ready` with `/api/documents/{doc_id}` (the last 24 are kept in
 memory), which the page downloads.
 
