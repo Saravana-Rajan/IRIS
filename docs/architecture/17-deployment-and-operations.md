@@ -11,7 +11,8 @@
 > exports), `server/iris/settings.py` (the settings file), `server/iris/projects.py` (the projects folder),
 > `server/iris/service.py` (eviction), `.env.example`, `.gitignore`,
 > `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
-> **Checked against code:** 2026-11-22 (the Cloud Run deploy files, the projects folder).
+> **Checked against code:** 2026-11-22 (the Cloud Run deploy files, the projects folder, the saved checks in the
+> image).
 > **Deeper design:** [docs/uploads.md](../uploads.md) (memory and uploads), [docs/mcp.md](../mcp.md),
 > [docs/voice.md](../voice.md) (the voice socket), [deploy/README.md](../../deploy/README.md) (every command)
 
@@ -93,7 +94,7 @@ The image is built in two stages.
 | `uv sync --frozen --no-dev --no-install-project` in `/app/server` | the server's locked Python dependencies | they come from `server/pyproject.toml` and `server/uv.lock` ([02](02-system-architecture.md#technology-stack)). The venv is `/app/server/.venv`. |
 | `COPY server/iris` | the server package | its prompts (`domain_packs/*.md`) come with it |
 | `COPY --from=web /app/web/dist /app/web/dist` | the built web app | `app.WEB_DIST` resolves to `/app/web/dist`, so it is mounted at `/`, except in split mode (below), where it stays unused |
-| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, and `samples/step-cache`. The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. |
+| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, `samples/step-cache` and `samples/saved-checks`. The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. The saved checks hold what the Northbank files measure, so their first check builds no geometry, cold or warm ([06](06-geometry-and-detection.md)). |
 | `USER iris` (uid 10001) | not root | `/app/server` and `/mnt/iris` belong to it |
 | `CMD uvicorn iris.app:app --host 0.0.0.0 --port $PORT --workers 1` | one process | all state is in this process's memory (below) |
 
@@ -376,6 +377,11 @@ flowchart TD
    enough. The manual commands are in `deploy/README.md`.
 3. **Samples** ([samples/README.md](../../samples/README.md)):
    - six Northbank IFCs and the cell's `PC-03-Palletising-Cell-RevA.step` and `-RevB.step` are bundled;
+   - `samples/saved-checks/` is committed and generated, one entry per platform (linux/x86_64 for Cloud Run and CI,
+     macOS/arm64 for development): `uv run python -m iris.saved_checks --docker` from `server/` (needs Docker for the
+     linux/x86_64 entry; no AI). Regenerate it when the samples, detection's measure, box making or IfcOpenShell
+     change, or the samples' first check builds its geometry again (`test_saved_checks.py` fails while either entry is
+     stale);
    - optional `samples/step-cache/` stays gitignored. To fill it, create the directory and open each STEP once with
      the server running locally;
    - optional clash reports in `samples/reports/<name>/` stay gitignored (XML at the top, with linked images).
@@ -562,6 +568,7 @@ each step's log and the job summary.
 | A stream's events all arrive at once at the end, in the browser only | the stream does not go through `app._ndjson` | send it through `_ndjson`, and test with `Accept-Encoding: gzip, deflate, br, zstd` |
 | "The server no longer holds your models" during a session | one of three things: a new revision (every push to main and every `deploy.sh` run makes one), a scale-down after an idle spell (the default, `MIN_INSTANCES` 0), or eviction under the scene budget | use **Open them again** on the notice, and don't push or redeploy while someone is working. `MIN_INSTANCES=1` stops the scale-downs. |
 | The first request after a quiet spell takes a few seconds | a cold start: the service scaled to zero | expected. `MIN_INSTANCES=1` keeps one instance warm (billed all the time). |
+| Northbank's first check says "Building geometry for n elements" and takes far longer than a few seconds | its saved check missed: `samples/saved-checks/` is stale (the samples, detection's measure, box making or IfcOpenShell changed), has no linux-x86_64 entry, or is not in the image; or the probe measured differently (the log says "saved checks: this machine measures the saved check's probe differently") | regenerate it (`uv run python -m iris.saved_checks --docker` from `server/`), commit, push |
 | The deploy job fails with "Repository variables missing" | `deploy/github-setup.sh` has not run, or `gh` could not set the variables | run it, or set the variables it printed |
 | The deploy job fails at "Sign in to Google Cloud" | the identity pool or its binding is new and still propagating, or the run is not on main (the attribute condition admits only main) | wait a few minutes and run it again, on main |
 | The smoke test says `/api/health` does not report this commit | the traffic is pinned to an older revision after a rollback, or the new revision did not become ready | `gcloud run services update-traffic iris-api --region REGION --to-latest`, and read the deploy step's log |

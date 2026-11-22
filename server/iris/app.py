@@ -1977,7 +1977,7 @@ async def requirements_preview(scene_id: str, request: Request):
         if key not in _previews:
             scene = ws.scene(scene_id)
             with ws.lock:
-                run = detect.run(scene, tests)
+                run = detect.run(scene, tests, replay=True)
             _previews[key] = {"clashes": len(run.report.clashes), "seconds": run.seconds,
                               "tests": [{"name": c.name, "kind": c.kind, "clashes": c.clashes} for c in run.coverage]}
             while len(_previews) > 64:

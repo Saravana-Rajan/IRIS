@@ -131,8 +131,9 @@ class Workspace:
             # Room first: a new scene peaks while it opens, so the held ones over the budget go before, not after.
             self._evict(sum(p.stat().st_size for p in ifc_paths))
             scene = IfcScene(ifc_paths)
-            # Pay the one-off triangulation now, not on the first check; a big model reports how far it has got.
-            scene.bounds(lambda done, total: on_event({"type": "boxes", "done": done, "total": total}))
+            # Pay the one-off triangulation now, not on the first check; a big model reports how far it has got. Just
+            # read from disk, so a shipped sample takes its saved boxes (saved_checks.py).
+            scene.bounds(lambda done, total: on_event({"type": "boxes", "done": done, "total": total}), saved=True)
         except BaseException:
             if root is not None:
                 shutil.rmtree(root, ignore_errors=True)
@@ -206,7 +207,7 @@ class Workspace:
                 self._evict(incoming, scene_id)   # room first, as opening makes it: the other scenes go, never this one
                 scene = self.scene(scene_id)
                 added = scene.add_files(ifc_paths, lambda done, total: on_event({"type": "boxes", "done": done,
-                                                                                  "total": total}))
+                                                                                  "total": total}), saved=True)
                 self.names[scene_id] = [*self.names[scene_id], *(p.name for p in paths)]
                 self.sources.setdefault(scene_id, {}).update(sources)
                 self.sizes[scene_id] = self.sizes.get(scene_id, 0) + incoming
@@ -1118,7 +1119,7 @@ class Workspace:
         return {"report": self.report_summary(report.id), "check": key, "ran": [key],
                 "checks": register.summaries(revision), "coverage": [asdict(c) for c in run.coverage],
                 "diff": run.diff, "elements": run.elements, "seconds": run.seconds, "offset": run.offset,
-                "requirements": self.requirements_info(doc),
+                "saved": run.saved, "requirements": self.requirements_info(doc),
                 # The tests as run, when they were chosen (a check on filters), so the check can be run again; None:
                 # the defaults (or the requirements'), read afresh next time.
                 "tests": None if tests is None else [asdict(t) for t in chosen]}
@@ -1171,8 +1172,10 @@ class Workspace:
         # A check compares with its own last run, and only under the same requirements (the same tests).
         rid = requirements.doc_id(doc) if doc else None
         register.absorb(self.reports.get(register.report_id or ""))
+        # The scene was read from disk and every kept edit bumps its revision, so an unchanged sample may take its saved
+        # check (saved_checks.py).
         run = detect.run(scene, chosen, on_event=on_event, previous=register.previous(key, rid),
-                         known=register.known(), root=register.root)
+                         known=register.known(), root=register.root, replay=True)
         run.report.requirements_id = rid
         register.keep(key, run, None if tests is None else [asdict(t) for t in chosen], self.requirements_info(doc),
                       scene.revision)

@@ -101,10 +101,13 @@ sort them, and keeping that policy visible is better than hiding it in the engin
 
 ## 3. The engine
 
-1. **Element boxes.** `IfcScene.bounds()` already caches a world box per physical element when the models open.
+1. **Element boxes.** `IfcScene.bounds()` already caches a world box per physical element when the models open (the
+   shipped samples take saved boxes, section 3a).
 2. **Broad phase.** A sort and sweep over the boxes, grown by the tolerance or clearance, gives the candidate pairs for
    each test. This is the completeness argument: a pair whose boxes never come that close cannot clash, so it needs no
-   further check. It also gives the coverage count.
+   further check. It also gives the coverage count. Since Nov 22 it takes every element's window at once, in chunks of
+   `CANDIDATES_CHUNK` (2^20) window entries, not one element at a time: the same pairs in the same order
+   (`test_detect.py` checks it against the old sweep).
 3. **Narrow phase.** One triangle tree per run (`ifcopenshell.geom.tree(backend="opencascade.trianglebvh")`) holds every
    element that appears in a candidate pair, from one multi-threaded iterator per file. Per test:
    - **hard:**
@@ -139,6 +142,72 @@ The clash point is the middle of the two witness points, else the middle of the 
 **Flush faces.** Neither triangle query sees two rectangular solids that overlap with every side face flush (a strut
 run 30 mm into a beam's end, two panels of one wall lapping, two duct pieces joined port to port). The exact
 separating-axis check runs on every pair whose boxes overlap deeper than the tolerance and that both queries missed.
+
+## 3a. Saved checks for the samples (Nov 22)
+
+On the live service (Cloud Run, 2 vCPU) the first check of Northbank once took 186 s, on a cold instance with two
+scenes opened at nearly the same time; warm it takes about 11 s. Nearly all of it is building geometry twice: every
+element's box when the models open (`IfcScene.bounds`), then the triangle tree (`detect._tree`, the same elements
+again) and the measures. On one machine detection is deterministic: the same files, measured by the same code under
+the same tests, give the same clashes, whatever the threads (checked on 1, 2, 4 and 10 threads, on linux/x86_64 and
+on macOS/arm64). So the shipped sample models carry what their geometry gave, in `samples/saved-checks/northbank.json` (code:
+`server/iris/saved_checks.py`):
+
+- **Boxes:** each file's element boxes, keyed by the file's SHA-256, whether the scene is big (`IRIS_BIG_MODEL_MB`),
+  `saved_checks.BOXES_VERSION`, the IfcOpenShell version and the platform. When the workspace opens models or adds
+  them to a scene (the files were just read from disk), a file with saved boxes takes them instead of being
+  triangulated.
+- **Checks:** the measurement of each test of the default check (the hits and touches of its candidate pairs), under
+  one key for the whole run: the files' hashes in order, every element box to the bit, every test's settings (all but
+  its name and whether it is on) and candidate pairs (as a set: NumPy's sort orders boxes that start at the same x
+  differently on x86 and ARM), the offset, `detect.VERSION`, the IfcOpenShell version and the platform. Only a scene
+  with no kept edit and no model added or removed (revision 0) looks, and it takes every test or none.
+
+**Per platform.** The same files measure a little differently on another processor and build. On Northbank, the boxes
+made on linux/x86_64 (Docker) differ from macOS/arm64's in the last bit for 12 elements, and the triangle queries give
+other depths for 46 clashes and other points for 309 (so the #N order too): a check saved on a Mac and replayed on
+Cloud Run would not be the check Cloud Run measures. So everything is kept per platform (`saved_checks.PLATFORM`):
+`linux-x86_64` for Cloud Run and CI, `darwin-arm64` for development Macs (`PLATFORMS`).
+
+**The probe.** Before a process first replays a check, it measures `PROBES` (8) of its clashes again on its own
+processor: pairs the triangle queries measured, spread over the tests, in a small tree of just their elements. Any
+difference to the bit and the check runs live, with a logged warning; the answer is kept for the process. With the
+Mac's entry forced in on linux/x86_64, the probe refuses it. It costs about 0.5 s once per process locally (the first
+OpenCASCADE call alone is 0.3 s).
+
+Everything after the measurement is made live, as in any run: the rules, clash ids, #N, the diff, the report and its
+coverage, kept checks, what triage reads, and Insights. The stream sends the same events; only the phase line changes,
+from "Building geometry for n elements" to "Unchanged sample models: taking the saved geometry of n elements", and
+the result says `saved: true`. The workspace's runs replay (the detect stream, Run all again, chat, MCP), and so does
+the requirements preview's count; a direct `detect.run` call measures live.
+
+Any difference misses and runs live: another byte in a file, a kept edit or a model added or removed, a box moved (a
+trial's move and back can leave a box a rounding apart), another test or setting (a tolerance, the rules,
+requirements that compile to other tests), other candidate pairs, another platform or a probe measured differently,
+or other code (`detect.VERSION`, `BOXES_VERSION`, IfcOpenShell).
+
+Make them again after any change to what detection measures or how boxes are made, bumping `detect.VERSION` or
+`saved_checks.BOXES_VERSION` first: `uv run python -m iris.saved_checks --docker` from `server/` (geometry only, no
+AI). It writes this machine's entry, then linux/x86_64's in Docker (`python:3.13-slim-bookworm`, `--platform
+linux/amd64`, the same IfcOpenShell, NumPy and defusedxml versions), both merged into the same file
+(`saved_checks.merge`). `server/tests/test_saved_checks.py` fails while either platform's entry is stale, and checks
+that a replay is the run a live one would be (on a machine whose probe refuses, that test is skipped: it runs live).
+
+Measured on Northbank, Apple Silicon (10 cores), each in a fresh process:
+
+| | Live | Replayed |
+|---|---|---|
+| Boxes at open (quiet machine) | 1.5-1.7 s; 4.1 s on 2 threads | 0.04 s (opening the files 0.1-0.2 s) |
+| The check (quiet machine) | 2.4-2.8 s: tree 1.5 s, measures 0.8 s, broad phase 0.3 s; 5.8 s on 2 threads (tree 4.6 s) | 0.3 s; 0.5-0.6 s the first time in a process (its probe) |
+| Open to first result, busy machine (load about 30 on 10 cores), one scene | 6.2-7.0 s (code before this change) | 0.7 s |
+| The same, two scenes opened at once, checked one after the other | 9.0-13.2 s | 1.2 s |
+| linux/x86_64 in Docker (emulated, so slow): boxes, check | 17.9 s, 8.8 s | 0.6 s, 0.45 s; the result the same as live, to the bit |
+
+The broad phase alone went from 0.28 s to 0.13 s (every window at once). Expected on Cloud Run, not measured there:
+the open and the first check of the unchanged samples about 1-2 s each, warm or cold, instead of about 8 s and 11 s;
+the first check of a process pays its probe and the first OpenCASCADE call once (about 0.5 s here; under Docker's
+emulation 7.7 s, OpenCASCADE translated on first use). A cold start's container start and imports (`import iris.app`
+about 2.7 s here, 1.1 s of it the `mcp` package) are unchanged.
 
 ## 4. What a run returns
 

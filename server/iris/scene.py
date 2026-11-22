@@ -231,14 +231,15 @@ class IfcScene:
         return [p for m in self.models for p in m.by_type("IfcElement")
                 if p.Representation is not None and not not_physical(p)]
 
-    def bounds(self, progress: Callable[[int, int], None] | None = None) -> dict[str, np.ndarray]:
+    def bounds(self, progress: Callable[[int, int], None] | None = None, saved: bool = False) -> dict[str, np.ndarray]:
         """GlobalId → [[min x, y, z], [max x, y, z]] in metres at current positions.
 
         Triangulating the whole federation takes seconds, so it happens once; moves shift the cached boxes.
-        The geometry check uses these to test only the neighbourhood of what moved.
+        The geometry check uses these to test only the neighbourhood of what moved. `saved`: the files are as on disk
+        (just opened, nothing changed), so a file with saved boxes (saved_checks.py: the shipped samples) takes them.
         """
         if self._bounds is None:
-            self._bounds = self._measure(range(len(self.models)), progress)
+            self._bounds = self._measure(range(len(self.models)), progress, saved)
         return self._bounds
 
     def big(self) -> bool:
@@ -249,26 +250,42 @@ class IfcScene:
         except OSError:
             return False
 
-    def _measure(self, indexes, progress: Callable[[int, int], None] | None = None) -> dict[str, np.ndarray]:
-        """The boxes of every physical element in these files, in model order."""
+    def _measure(self, indexes, progress: Callable[[int, int], None] | None = None,
+                 saved: bool = False) -> dict[str, np.ndarray]:
+        """The boxes of every physical element in these files, in model order. `saved`: the files are unchanged since
+        they were read from disk, so one with saved boxes (saved_checks.py) takes them instead of triangulating."""
         settings = ifcopenshell.geom.settings()
         settings.set("use-world-coords", True)
         bounds: dict[str, np.ndarray] = {}
         groups: dict[tuple[int, bool], list] = {}
         order = []
+        big = self.big()
+        kept: dict[int, dict[str, np.ndarray]] = {}
+        if saved:
+            from . import saved_checks
+            for i in indexes:
+                got = saved_checks.boxes(self.paths[i], big)
+                if got is not None:
+                    kept[i] = got
         for i in indexes:
             for p in self.models[i].by_type("IfcElement"):
                 if p.Representation is not None and not not_physical(p):
-                    groups.setdefault((i, meshes_only(p)), []).append(p)
+                    if i not in kept:
+                        groups.setdefault((i, meshes_only(p)), []).append(p)
                     order.append(p.GlobalId)
         total, done = sum(len(g) for g in groups.values()), 0
-        big = self.big()
         # Meshes through OpenCASCADE cost 20-30 ms each (it sews them into shells); CGAL reads them in about 1 ms with
         # the same vertices. Everything else keeps the default kernel, so boxes do not change. In batches: an
-        # iterator holds what it made until it is dropped (a 150 MB model in one went past 4.5 GB).
+        # iterator holds what it made until it is dropped (a 150 MB model in one went past 4.5 GB). File by file, a
+        # file with saved boxes taking them in its place, so a GlobalId two files repeat keeps the box it would have.
         batches = [(i, meshes, include[k:k + BOUNDS_BATCH]) for (i, meshes), include in groups.items()
                    for k in range(0, len(include), BOUNDS_BATCH)]
-        for i, meshes, include in batches:
+        steps = [step for i in indexes for step in ([(i, None, None)] if i in kept else
+                                                    [b for b in batches if b[0] == i])]
+        for i, meshes, include in steps:
+            if include is None:
+                bounds.update(kept[i])
+                continue
             kw = {"geometry_library": MESH_KERNEL} if meshes or big else {}
             it = ifcopenshell.geom.iterator(settings, self.models[i], THREADS, include=include, **kw)
             if not it.initialize():
@@ -288,9 +305,11 @@ class IfcScene:
             progress(total, total)
         return {g: bounds[g] for g in order if g in bounds}   # model order, whatever the kernel
 
-    def add_files(self, paths: list[str | Path], progress: Callable[[int, int], None] | None = None) -> list[int]:
+    def add_files(self, paths: list[str | Path], progress: Callable[[int, int], None] | None = None,
+                  saved: bool = False) -> list[int]:
         """Open more files into the scene, sharing its coordinates, after the ones it has: their indexes. With boxes
-        cached, only the new files' elements are measured. A file that will not open leaves the scene as it was."""
+        cached, only the new files' elements are measured (`saved`: a file with saved boxes takes them, as `bounds`).
+        A file that will not open leaves the scene as it was."""
         paths = [Path(p) for p in paths]
         models = [ifcopenshell.open(str(p)) for p in paths]
         for m in models:
@@ -303,7 +322,7 @@ class IfcScene:
         added = list(range(start, len(self.models)))
         if self._bounds is not None:
             try:
-                self._bounds = {**self._bounds, **self._measure(added, progress)}
+                self._bounds = {**self._bounds, **self._measure(added, progress, saved)}
             except BaseException:
                 self.paths, self.models, self.unit_scales = was
                 raise

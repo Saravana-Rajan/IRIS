@@ -2,9 +2,11 @@
 
 > **Covers:** `server/iris/service.py`, `scene.py`, `reports.py`, `detect.py`, `checks.py`, `agent.py`, `plans.py`,
 > `triage.py`, `titles.py`, `chat.py`, `agents.py`, `requirements.py`, `settings.py`, `limits.py`, `spend.py`,
-> `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `app.py` (its module-level stores), and the browser storage
+> `built.py`, `document.py`, `journal.py`, `projects.py`, `drawings.py`, `saved_checks.py`, `app.py` (its module-level
+> stores), and the browser storage
 > in `web/src/` (`App.tsx`, `Owner.tsx`, `Chat.tsx`, `Triage.tsx`, `Agent.tsx`, `ReportDoc.tsx`, `reqFile.ts`,
-> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings; re-branded on 2026-11-11) ·
+> `signoffs.ts`) · **Checked against code:** 2026-11-22 (projects, reviews, decisions, 2D drawings, `detect.Run` and
+> the saved checks' stores; re-branded on 2026-11-11) ·
 > **Deeper design:** [docs/detection.md](../detection.md), [docs/requirements.md](../requirements.md),
 > [docs/mcp.md](../mcp.md), [docs/escalation.md](../escalation.md), [docs/uploads.md](../uploads.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md)
@@ -325,8 +327,8 @@ Navisworks reports and Iris's own detection produce the same objects, so everyth
 - **Detection** (`detect.py`): a `Test` (`id`, `name`, `a` and `b` as `Selection`s of files, teams, classes,
   systems or ids; `kind` hard, clearance or duplicate; `tolerance_m`, `clearance_m`, `rules`, `enabled`,
   `min_size_m`) yields a `Coverage` row per test, and `run` returns a `Run` with the report, coverage, `diff` (new,
-  resolved, no longer checked), element count, seconds, the tree's `offset`, and the `state` the next run compares
-  with.
+  resolved, no longer checked), element count, seconds, the tree's `offset`, the `state` the next run compares
+  with, and `saved` (its measurement came from the samples' saved check, `saved_checks.py`).
 
 ### Fixes and plans (`agent.py`, `plans.py`)
 
@@ -664,6 +666,9 @@ stateDiagram-v2
 | Agent links, their proposals, plans and jobs | `app.links` (`agents.Links`) | 200 links, 12 h idle, 24 h total; 16 jobs per link; 200 queued events per following page |
 | Registered requirements files | `requirements._registry` | 500, least recently used dropped |
 | Host readings by kind | `hosts._cache` | The server's life |
+| The samples' saved checks, read from `samples/saved-checks/*.json` and merged | `saved_checks._loaded` | One entry; read again when a file there changes |
+| Each opened file's SHA-256, by path, size and time | `saved_checks._digests` | 256 entries, cleared past that |
+| Whether this process measured a saved check's probe as it was saved | `saved_checks._probed` (run key → yes or no) | One entry per saved check looked up; the process's life |
 | The filters' index | `IfcScene._facets` (`facets.index`; `Workspace.facets` reads and builds it outside the lock and keeps it only if the revision held) | Until a kept edit changes the scene's revision or its elements |
 | Pictures being drawn | `built._running` | Only while drawing |
 | 2D drawings per scene and the items of their last read | `drawings.STORE` (`scenes`, `drawings`, `scene_of`, `items`) | 30 per scene (`MAX_PER_SCENE`); dropped with the scene: when its `IfcScene` is garbage (`Store.watch`), and on every drawing call for any scene no longer open (`Store.prune`) |
@@ -679,7 +684,7 @@ Paths under "temp" are in the system temporary folder (`tempfile.gettempdir()`).
 
 | What | Path | Kept until |
 |---|---|---|
-| Sample models, sample reports, shipped STEP cache | `samples/`, `samples/reports/<name>/`, `samples/step-cache/` | Read-only; part of the deploy image |
+| Sample models, sample reports, shipped STEP cache, the samples' saved checks | `samples/`, `samples/reports/<name>/`, `samples/step-cache/`, `samples/saved-checks/` | Read-only; part of the deploy image |
 | Uploaded models and STEP conversions; a project's files copied in to open it | temp `iris-models/<folder>/` (`service.MODELS`, `Workspace._roots`: one folder per opening or adding) | The scene is evicted (or the open or add fails); a removed model's file at once, its folder once it holds none of the scene's files |
 | Projects | `IRIS_PROJECTS_DIR`, default `server/.iris-projects/` (gitignored); on Cloud Run `/mnt/iris/projects` when a bucket is mounted. One folder per project: `project.json`, `models/`, `saved/<n>/` (with `state.json`), `reports/`, `drawings/` ([14](14-files-in-and-out.md)) | Kept; at most `IRIS_PROJECTS_MAX` (50) projects |
 | 2D drawings: the PDF and each page's PNG | temp `iris-drawings/<scene id>/<drawing id>/` (`drawings.STORE`): `source.pdf`, `page-<index>.png` | The scene is evicted (its folder goes when the scene object is let go, or on the next drawing call) |

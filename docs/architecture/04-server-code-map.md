@@ -1,14 +1,9 @@
 # 04 · Server code map
 
-> **Covers:** `server/iris/*.py` (44 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** re-branded on 2026-11-11; `origins.py`, `owner.py`, `voice_live.py` and
-> `app.py`'s middleware and imports on 2026-11-22 · **Deeper design:** the feature docs linked
-> from each module below ([detection](../detection.md), [edits](../edits.md), [escalation](../escalation.md),
-> [mcp](../mcp.md), [requirements](../requirements.md), [show-it-built](../show-it-built.md), [step](../step.md),
-> [uploads](../uploads.md), [voice](../voice.md))
-> **Covers:** `server/iris/*.py` (47 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
-> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings; re-branded on
-> 2026-11-11) · **Deeper design:** the feature docs linked
+> **Covers:** `server/iris/*.py` (49 modules), `server/iris/demos/`, `server/iris/domain_packs/`, `server/pyproject.toml`,
+> `server/tests/` · **Checked against code:** 2026-11-22 (projects, decisions, kept-fix checks, 2D drawings, saved checks
+> with `scene.py`'s and `detect.py`'s imports; `origins.py`, `owner.py`, `voice_live.py` and `app.py`'s middleware and
+> imports; re-branded on 2026-11-11) · **Deeper design:** the feature docs linked
 > from each module below ([detection](../detection.md), [edits](../edits.md), [engineer-workflow](../engineer-workflow.md),
 > [escalation](../escalation.md), [mcp](../mcp.md), [requirements](../requirements.md),
 > [show-it-built](../show-it-built.md), [step](../step.md), [uploads](../uploads.md), [voice](../voice.md))
@@ -36,7 +31,7 @@ imports made inside functions, which are drawn dotted below).
 | Per-clash fix agent | `agent.py`, `escalation.py`, `hosts.py` | Propose → verify → retry → rank for one clash; the second try on the escalation model; which hosts may take an opening |
 | Report jobs | `triage.py`, `titles.py`, `built.py` | Bulk verdicts, model-written titles, Show it built pictures: work over a whole report or one picture, no scene edits |
 | Documents and inputs | `reports.py`, `document.py` | Navisworks XML in; PDF and BCF out |
-| Geometry | `scene.py`, `verify.py`, `edits.py`, `detect.py`, `step.py`, `context_eval.py` | The federated IFC scene, the geometric check, model edits, Iris's own detection, STEP conversion, whole-arrangement checks |
+| Geometry | `scene.py`, `verify.py`, `edits.py`, `detect.py`, `saved_checks.py`, `step.py`, `context_eval.py` | The federated IFC scene, the geometric check, model edits, Iris's own detection and the samples' saved checks, STEP conversion, whole-arrangement checks |
 | Policy and request context | `requirements.py`, `settings.py`, `owner.py`, `origins.py`, `limits.py`, `spend.py`, `domains.py`, `demos.py` | Coordination requirements, settings for everyone, the owner's context, the other origins allowed to call the API, demo caps, the escalation budget, a scene's domain and what stays in place by default, the demo projects |
 | Model client | `model_client.py` | Gemini calls (JSON, chat, images, transcription); model choice, thinking level, usage and price |
 | Test support | `fixtures.py` | Small synthetic IFC models for tests and spikes |
@@ -49,7 +44,7 @@ flowchart TB
     fixer["Fix agent: agent, escalation, hosts"]
     jobs["Report jobs: triage, titles, built"]
     docio["Documents and inputs: reports, document"]
-    geo["Geometry: scene, verify, edits, detect, step, context_eval"]
+    geo["Geometry: scene, verify, edits, detect, saved_checks, step, context_eval"]
     policy["Policy: requirements, settings, owner, origins, limits, spend, domains"]
     client["Model client: model_client"]
     support["Test support: fixtures"]
@@ -140,6 +135,7 @@ Three edges go "up" and are worth knowing before you add an import:
 | `projects.py` | Workflows | Projects kept on disk across restarts ([docs/engineer-workflow.md](../engineer-workflow.md)): a name, the original models, saved states (each model as it is now, the edit log, decisions, clash memory), clash reviews and reports, one folder each under `IRIS_PROJECTS_DIR`; opening one makes an ordinary scene with its clash numbers and titles seeded |
 | `reports.py` | Inputs | Navisworks XML reports: `Report`, `ReportClash`, `ReportElement`, numbering, image sets |
 | `requirements.py` | Policy | The `iris-requirements/1` file: parse, ids, registry, what it compiles into, policies, prompt lines |
+| `saved_checks.py` | Geometry | Saved checks ([docs/detection.md](../detection.md), "Saved checks for the samples"): what the shipped sample models measure (each file's element boxes, the default check's hits and touches per test), read from `samples/saved-checks/*.json` so their first check builds no geometry, kept per platform and checked by a probe before a process first replays one, and made again by `python -m iris.saved_checks --docker`; any difference misses and runs live |
 | `scene.py` | Geometry | `IfcScene`: the federated IFC models, element facts, cached boxes, moves, revisions, files added and removed (`layout`), writing |
 | `service.py` | Operations | `Workspace`: every operation the API and MCP share, plus `step_changes` for STEP export |
 | `settings.py` | Policy | Settings for everyone (thinking levels, escalation, built views), in a Cloud Storage object or a JSON file |
@@ -501,6 +497,7 @@ flowchart LR
     verifyPy["verify.py"]
     editsPy["edits.py"]
     detectPy["detect.py"]
+    savedPy["saved_checks.py"]
     stepPy["step.py"]
     evalPy["context_eval.py"]
     ctxPy["context_planner.py"]
@@ -516,6 +513,10 @@ flowchart LR
     detectPy --> reportsPy
     detectPy -->|"guess_team"| documentPy
     detectPy -.-> editsPy
+    detectPy -.->|"find"| savedPy
+    scenePy -.->|"boxes"| savedPy
+    savedPy -.-> detectPy
+    savedPy -.-> scenePy
     stepPy --> scenePy
     evalPy --> editsPy
     evalPy --> verifyPy
@@ -535,9 +536,11 @@ Detail on all of these: [06](06-geometry-and-detection.md) (scene, check, detect
 ### `scene.py`: the federated scene
 
 Elements are addressed by IFC GlobalId everywhere, never by express id. From the package it imports only `limits.py`
-(`env_int`) and `domains.py` (the default classes that stay).
+(`env_int`) and `domains.py` (the default classes that stay) at load, and `saved_checks.py` inside `_measure` (saved
+boxes).
 
-- **Main symbols:** `IfcScene` (`bounds`, `refresh_bounds`, `translate`, `placement`, `element`, `entity`,
+- **Main symbols:** `IfcScene` (`bounds` and `add_files`, both with `saved=` to take a shipped sample's saved boxes,
+  `big` (the files together reach `IRIS_BIG_MODEL_MB`), `refresh_bounds`, `translate`, `placement`, `element`, `entity`,
   `index_of`, `products`, `near`, `connected_run`, `step_run`, `step_group`, `mark_edited`, `bump`, `snapshot`,
   `write_edited`, `domain`, `stays` and `stays_rule`: what stays in place, as the requirements say), `Element`
   (`fixed` = `stays`), `NOT_PHYSICAL`, `not_physical`, `is_provision`, `meshes_only`, `faceted` and `kernel` (Revit's
@@ -607,12 +610,34 @@ What is joined to what, so a fix that moves something never leaves a joint apart
 Finds the clashes in the open models and returns them as a `reports.Report` (origin `"iris"`) that the rest of
 Iris reads unchanged. Deeper design: [docs/detection.md](../detection.md).
 
-- **Main symbols:** `run`, `Run`, `Test`, `Selection` (`from_dict`, `describe`, `filter`), `check_id`, `check_name`, `Coverage`, `default_tests`, `presets`, `measure_pair`,
-  `clash_id`, `_Index`, `_Solids`, `_candidates`, `_measure`, `_diff`, `RULES`, `RULE_LABEL`, `TOLERANCE_M`,
-  `DUPLICATE_M`, `FAR_M`, `CAP`.
+- **Main symbols:** `run` (`replay=`: take a saved check of the unchanged samples; `measured=`: each test's
+  measurement, for saving one), `Run` (`saved`), `Test`, `Selection` (`from_dict`, `describe`, `filter`), `check_id`, `check_name`, `Coverage`, `default_tests`, `presets`, `measure_pair`,
+  `clash_id`, `_Index`, `_Solids`, `_plan`, `_candidates` (every element's window at once, in chunks of
+  `CANDIDATES_CHUNK`), `_measure`, `_diff`, `RULES`, `RULE_LABEL`, `TOLERANCE_M`,
+  `DUPLICATE_M`, `FAR_M`, `CAP`, `VERSION` (the measurement's version, part of a saved check's key).
 - **Imports:** `facets.py` (filter sides), `limits.py`, `reports.py`, `requirements.py` (teams per file), `scene.py`,
-  `verify.py`; lazily `edits.py`.
-  **Imported by:** `app.py`, `projects.py` (`clash_id`), `requirements.py` (lazily), `service.py`.
+  `verify.py`; lazily `edits.py` and `saved_checks.py`.
+  **Imported by:** `app.py`, `projects.py` (`clash_id`), `requirements.py` (lazily), `saved_checks.py` (lazily),
+  `service.py`.
+
+### `saved_checks.py`: the samples' saved checks
+
+What the shipped sample models measure, kept so their first check builds no geometry. Deeper design:
+[docs/detection.md](../detection.md), "Saved checks for the samples"; detail in [06](06-geometry-and-detection.md).
+
+- **Main symbols:** `boxes` (a file's saved boxes, by its SHA-256, `big` and the platform), `find` (a run's saved
+  measurement, every test or none, once this process's `probe` agrees), `probe`, `run_key`, `digest`, `platform_name`,
+  `make`, `merge` (one platform's part replaced), `write`, `docker_command`, `main` (`python -m iris.saved_checks
+  [--docker]`), `FOLDER` (`samples/saved-checks/`), `SETS` (the demo sets saved: Northbank's four files),
+  `BOXES_VERSION`, `PLATFORM`, `PLATFORMS` (`linux-x86_64`, `darwin-arm64`), `PROBES` (8).
+- **Imports:** nothing from the package at load; lazily `detect.py` (`VERSION`, `_Hit`, `_Index`, `_tree`, `_measure`,
+  `_Solids`, `_box_point`, `default_tests`, `run`) and `scene.py` (`IfcScene`, to make the file). **Imported by:**
+  `scene.py` and `detect.py`, both lazily.
+- **Rules:** a key holds everything the measurement depends on (files, boxes to the bit, tests and candidate pairs as
+  a set, the offset, `detect.VERSION`, `BOXES_VERSION`, IfcOpenShell, the platform), so any difference misses and runs
+  live; only a scene at revision 0 looks; a process replays a check only after measuring its probe the same, to the
+  bit; the file is generated, never edited by hand, and `test_saved_checks.py` fails while either platform's entry is
+  stale.
 
 ### `step.py`: STEP models
 
@@ -964,10 +989,11 @@ reads the developer's `server/.iris-settings.json`). Most build their models wit
   (`restyle`, the Gemini image model) and `voice_live.py` (live voice, whose segments go through `model_client.transcribe`). Credentials (Application Default
   Credentials, or an optional `GEMINI_API_KEY` from the environment or `.env` via `load_env`) never reach the browser.
 - **Lazy imports keep the graph acyclic.** `requirements.py`, `model_client.py`, `settings.py`, `hosts.py`,
-  `verify.py`, `document.py` and `detect.py` import some package modules inside functions. Do not hoist those imports
-  to the top of the file.
-- **`scene.py`, `reports.py`, `limits.py`, `origins.py`, `spend.py` and `domains.py` import nothing from the
-  package, and `owner.py` only `origins.py`.** Keep them leaves.
+  `verify.py`, `document.py`, `detect.py`, `scene.py` and `saved_checks.py` import some package modules inside
+  functions. Do not hoist those imports to the top of the file.
+- **`limits.py`, `origins.py` and `domains.py` import nothing from the package; `owner.py` only `origins.py`,
+  `reports.py` only `demos.py`, `spend.py` only `model_client.py` (inside a function), and `scene.py` only `limits.py`
+  and `domains.py` at load.** Keep them leaves.
 
 ## When to update this doc
 
