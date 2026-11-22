@@ -19,7 +19,7 @@ export const useState = (v) => { const k = i++; if (!(k in slots)) slots[k] = ty
   return [slots[k], (n) => { slots[k] = typeof n === "function" ? n(slots[k]) : n; }]; };
 export const useRef = (v) => ({ current: v ?? null }); export const useEffect = () => {};`);
 const R = await import(reactUrl);
-const icons = url(["Check", "Columns2", "PencilRuler", "RotateCcw", "X"].map((n) => `export function ${n}(){return null;}`).join("\n"));
+const icons = url(["Check", "Columns2", "Info", "PencilRuler", "RotateCcw", "X"].map((n) => `export function ${n}(){return null;}`).join("\n"));
 async function card() {
   let src = await readFile(new URL("../src/ProposalCard.tsx", import.meta.url), "utf8");
   src = src.replace(/^import "\.\/proposal\.css";$/m, "");   // a stylesheet is Vite's business, not node's
@@ -224,6 +224,29 @@ test("card: Accept is disabled for every state but geometry-validated, whatever 
   assert.ok(hasText(failed, "collision with IfcWall 'W-12' (-35 mm)"));
   assert.ok(hasText(failed, "Wall W-12, unknown-id"), "what it hit, by name");
   assert.ok(hasText(failed, "None: the geometry check refused it"));
+});
+
+test("card: what the AI made wears the holo edge and a notice to check it; a validated fix wears the green check", () => {
+  const notice = (tree) => find(tree, (n) => n.props?.className === "pcard-notice");
+  const classes = (tree) => tree.props.className.split(/\s+/);
+  for (const [item, state] of [[idea, "ai_proposed"], [recommendation, "unverified"]]) {
+    const tree = render({ item, state, names, onAccept() {}, onAnother() {} })();
+    assert.ok(classes(tree).includes("holo-edge"), `${state}: the holo edge`);
+    assert.equal(notice(tree)?.props.role, "note", `${state}: the notice`);
+    assert.ok(hasText(notice(tree), "AI-proposed: check before accepting"));
+  }
+  const valid = render({ item: option, state: "geometry_validated", names, onAccept() {}, onReject() {}, onAnother() {} })();
+  assert.ok(!classes(valid).includes("holo-edge"), "proved by geometry: no holo edge");
+  assert.equal(notice(valid), undefined, "proved by geometry: no notice");
+  const chip = find(valid, (n) => typeof n.props?.className === "string" && n.props.className.startsWith("pcard-state"));
+  assert.ok(chip.props.className.includes("s-valid") && hasText(chip, "Geometry-validated ✓"), "the green badge keeps its words");
+  assert.ok([chip.props.children].flat().some((c) => c && typeof c === "object" && c.type?.name === "Check"), "with the check icon");
+  const failed = render({ item: attempt, state: "failed_validation", names })();
+  assert.ok(!classes(failed).includes("holo-edge") && notice(failed) === undefined, "refused: its evidence, no AI notice");
+  const actions = (n) => n.props.className.split(/\s+/);
+  assert.ok(actions(button(valid, "Accept")).includes("primary"), "Accept: the ink button");
+  assert.ok(!actions(button(valid, "Reject")).includes("primary") && !actions(button(valid, "Reject")).includes("ghost"), "Reject: outline");
+  assert.ok(actions(button(valid, "Request another")).includes("ghost"), "Request another: a text button");
 });
 
 test("card: Reject asks for a reason inline before it calls back", () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Columns2, PencilRuler, RotateCcw, X } from "lucide-react";
+import { Check, Columns2, Info, PencilRuler, RotateCcw, X } from "lucide-react";
 import {
   decisionWords, describe, EXPECTED_NONE, STATE_LABEL, STATE_MEANING,
   type Decision, type ProposalItem, type ProposalState,
@@ -31,6 +31,9 @@ export interface ProposalCardProps {
 const CHIP: Record<ProposalState, string> = {
   ai_proposed: "s-ai", geometry_validated: "s-valid", failed_validation: "s-fail", unverified: "s-unverified",
 };
+/** What the AI made and geometry has not proved: it wears the holographic edge and a notice to check it ("AI proposes,
+ * geometry proves"). A validated card wears the green check instead; a refused one its red evidence. */
+const AI_ONLY: ProposalState[] = ["ai_proposed", "unverified"];
 
 export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept, onReject, onModify, onAnother,
   onShowBeforeAfter, busy = false, decided = null, acceptTour }: ProposalCardProps) {
@@ -38,6 +41,7 @@ export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept
   const [why, setWhy] = useState("");
   const d = describe(item, names, { requiredClearanceMm, state });
   const valid = d.state === "geometry_validated";
+  const aiOnly = AI_ONLY.includes(d.state);
   const reason = why.trim();
   const submit = () => {
     if (!reason || !onReject || busy) return;
@@ -49,13 +53,14 @@ export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept
   const done = decided ? decisionWords(decided) : null;
 
   return (
-    <article className={`pcard ${CHIP[d.state]}`} data-state={d.state} aria-label={`${d.title}: ${STATE_LABEL[d.state]}`}>
+    <article className={`pcard ${CHIP[d.state]}${aiOnly ? " holo-edge" : ""}`} data-state={d.state} aria-label={`${d.title}: ${STATE_LABEL[d.state]}`}>
       <header className="pcard-head">
-        <span className={`pcard-state ${CHIP[d.state]}`}>{STATE_LABEL[d.state]}</span>
+        <span className={`pcard-state ${CHIP[d.state]}`}>{valid && <Check size={12} strokeWidth={2.4} aria-hidden />}{STATE_LABEL[d.state]}</span>
         <span className="pcard-kind">{d.kind}</span>
         {d.model && <span className="pcard-model">{d.model}</span>}
       </header>
       <p className="pcard-meaning">{STATE_MEANING[d.state]}</p>
+      {aiOnly && <p className="pcard-notice" role="note"><Info size={13} aria-hidden /> AI-proposed: check before accepting</p>}
       {d.title && <b className="pcard-title">{d.title}</b>}
 
       <dl className="pcard-rows">
@@ -109,7 +114,7 @@ export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept
             data-tip="Set it aside, with a reason"><X size={13} aria-hidden /> Reject</button>}
           {onModify && <button type="button" className="btn small" disabled={busy} onClick={() => onModify()}
             data-tip="Open the edit tool with this fix as the start"><PencilRuler size={13} aria-hidden /> Modify</button>}
-          {onAnother && <button type="button" className="btn small" disabled={busy} onClick={() => onAnother()}
+          {onAnother && <button type="button" className="btn small ghost" disabled={busy} onClick={() => onAnother()}
             data-tip="Ask for a different fix; this one is kept"><RotateCcw size={13} aria-hidden /> Request another</button>}
           {onShowBeforeAfter && <button type="button" className="btn small ghost" disabled={busy} onClick={() => onShowBeforeAfter()}
             data-tip="Before and after in 3D"><Columns2 size={13} aria-hidden /> Before / after</button>}
