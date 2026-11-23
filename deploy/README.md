@@ -34,44 +34,62 @@ the image and Cloud Run serves the web app and the API from one origin ("Deploy 
 |---|---|---|
 | A pull request | CI (`ci.yml`) | the three test jobs below. A newer push to the pull request cancels the older run. |
 | A push to any branch except main | CI | the three test jobs |
-| A push to main | Deploy (`deploy.yml`) | the three test jobs (it calls `ci.yml`), then the `deploy` job if they pass |
-| `gh workflow run deploy.yml --ref main` | Deploy | the same as a push to main |
+| A push to main | Deploy (`deploy.yml`) | `changes`, the three test jobs (it calls `ci.yml`) and `image` at once, then the `deploy` job if every test passed, for the parts that changed |
+| `gh workflow run deploy.yml --ref main` | Deploy | the same as a push to main, but it ships both parts |
 
 CI's jobs run on `ubuntu-24.04`. Each action is pinned to a commit SHA.
 
 - **`server`** installs the system libraries the Dockerfile installs (Pango, HarfBuzz, a font, libGL), so the
   WeasyPrint PDF tests pass. It sets up uv with Python 3.13 (cache keyed on `server/uv.lock`), then runs
-  `uv sync --frozen` and `uv run pytest -q --ignore=tests/bench`.
+  `uv sync --frozen` and `uv run pytest -q -n auto --dist loadfile --ignore=tests/bench` (pytest-xdist, one worker
+  per CPU).
 - **`web`** sets up Node 22 with the npm cache, then runs `npm ci`, `npm test` and `npm run build`.
 - **`bench`** runs only when `server/tests/bench` exists. When `bench/render/package-lock.json` exists, it installs the
   renderer (`npm ci` and `npx playwright install --with-deps chromium` in `bench/render`). Then it runs
   `uv run pytest -q tests/bench`.
 
-The `deploy` job runs only on `refs/heads/main`, because the identity pool trusts only main. Its steps run in this
-order:
+Deploy's jobs:
+
+- **`changes`** asks the Actions API for the last successful Deploy run on main and runs
+  `deploy/changed-parts.sh <its commit> <this commit>`: web-only changes skip the image and Cloud Run, server-only
+  changes skip Firebase, docs-only changes ship nothing, and a path it does not know ships both. A manual run, no
+  earlier success or a base that is not an ancestor ships both.
+- **`image`** (server changed) signs in the same way as below, then `docker buildx` builds the root `Dockerfile` with
+  the GitHub Actions cache and pushes `REGION-docker.pkg.dev/PROJECT/iris/iris:<commit sha>` while the tests run. No
+  provenance or SBOM manifests are pushed, so the cleanup policy counts one image per push. Cloud Build is not used.
+- **`deploy`** needs the three and runs only when every test passed (and the image was pushed, when the server
+  changed).
+
+`image` and `deploy` run only on `refs/heads/main`, because the identity pool trusts only main. The `deploy` job's
+steps run in this order:
 
 1. **Check the repository variables.** `GCP_PROJECT_ID`, `WIF_PROVIDER` and `DEPLOY_SA` must be set. Otherwise the
    job fails and points at `deploy/github-setup.sh`.
 2. **Sign in, keyless.** `google-github-actions/auth` v3.0.0 exchanges GitHub's OIDC token through Workload Identity
    Federation (`vars.WIF_PROVIDER`) for the deploy service account (`vars.DEPLOY_SA`). v2 ran on Node 20, which
-   GitHub has retired. Then `setup-gcloud` and `gcloud auth configure-docker REGION-docker.pkg.dev`.
-3. **Build the image on the runner.** `docker buildx` builds the root `Dockerfile` with the GitHub Actions cache and
-   pushes `REGION-docker.pkg.dev/PROJECT/iris/iris:<commit sha>`. No provenance or SBOM manifests are pushed, so the
-   cleanup policy counts one image per push. Cloud Build is not used.
-4. **Deploy the server.** `deploy/deploy.sh` runs with `IMAGE` (so it skips Cloud Build), `SERVICE=iris-api`,
+   GitHub has retired. Then `setup-gcloud` (the `image` job also runs `gcloud auth configure-docker
+   REGION-docker.pkg.dev`).
+3. **Deploy the server** (server changed). `deploy/deploy.sh` runs with `IMAGE` (the `image` job's tag, so it skips
+   Cloud Build), `SERVICE=iris-api`,
    `IRIS_PUBLIC_URL=https://SITE.web.app`, `IRIS_ALLOWED_ORIGINS=https://SITE.web.app,https://SITE.firebaseapp.com`
    (plus `WEB_URL` and `EXTRA_ORIGINS` when set), `BUCKET=vars.BUCKET`, `GEMINI_API_KEY_SECRET=""` (no API key in the
    cloud) and `IRIS_VERSION=<commit sha>`. `deploy.sh` writes the service URL to `$GITHUB_OUTPUT`.
-5. **Build the web app** with `VITE_API_BASE` set to the Cloud Run URL (or `vars.API_URL`), and check that the bundle
-   contains it.
-6. **Deploy the web app.** The job writes `.firebaserc` for `vars.FIREBASE_SITE` (default `iris-techjays`), then runs
+4. **Find the API's URL:** `vars.API_URL`, else the URL the deploy printed, else the running service's.
+5. **Build the web app** (web changed) with `VITE_API_BASE` set to that URL, and check that the bundle contains it.
+6. **Deploy the web app** (web changed). The job writes `.firebaserc` for `vars.FIREBASE_SITE` (default `iris-techjays`), then runs
    `npx firebase-tools@15.35.0 deploy --only hosting:web --project PROJECT --message "iris <short sha>"` with the same
    Workload Identity credentials.
-7. **Smoke test.** The web page answers. `GET /api/health` on the API reports this commit. A CORS preflight from
+7. **Smoke test.** The web page answers. `GET /api/health` on the API answers, and reports this commit when the
+   server was deployed in this run. A CORS preflight from
    `https://SITE.web.app` to `/api/owner/unlock` gets `Access-Control-Allow-Origin` back.
-8. **Summary.** The web app's URL, the API's URL and the image go to the job summary, even when a step failed.
+8. **Summary.** What shipped, the web app's URL, the API's URL and the image go to the job summary, even when a step
+   failed.
 
-Deploys share the concurrency group `deploy-<ref>`. A running deploy is never cancelled; a newer push waits its turn.
+A newer push to main cancels an older run that is still testing or building its image, so the latest commit deploys
+first. A release that has started is never cancelled: the `deploy` job's concurrency group `deploy-release-<ref>`
+queues the newer one behind it. A cancelled run is never the next run's base, so what it would have shipped ships with
+the next deploy. After changing a repository variable, or deploying by hand, run `gh workflow run deploy.yml --ref
+main` to ship both parts ([17](../docs/architecture/17-deployment-and-operations.md), "Cancelling").
 
 ### One-time setup
 

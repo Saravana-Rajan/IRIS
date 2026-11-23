@@ -1,5 +1,8 @@
-# Every push to main: run the tests (ci.yml), then deploy the FastAPI server to Cloud Run (the service "iris-api", the
-# API only) and the React app to Firebase Hosting. The browser calls Cloud Run directly (VITE_API_BASE): Firebase never proxies the API, because its rewrites
+# Every push to main: run the tests (ci.yml) and, at the same time, build and push the server image tagged with the
+# commit; when every test passes, deploy that image to Cloud Run (the service "iris-api", the API only) and the React app
+# to Firebase Hosting. Only the parts that changed since the last successful deploy ship (deploy/changed-parts.sh):
+# a web-only change skips the image and Cloud Run, a server-only change skips Firebase, a docs-only change deploys
+# nothing. A manual run (workflow_dispatch) ships both. The browser calls Cloud Run directly (VITE_API_BASE): Firebase never proxies the API, because its rewrites
 # to Cloud Run cut requests at 60 s and carry no WebSockets, and Iris streams for longer and talks voice on a socket.
 #
 # Keyless: GitHub's OIDC token is exchanged through Workload Identity Federation for the deploy service account; no
@@ -21,36 +24,69 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false   # never stop a deploy halfway; a newer push waits its turn
+# No run-wide group. A newer push cancels an older run that is still testing (ci.yml's own group) or building its
+# image (the image job's group), so the latest commit deploys first, but never a release that has started: the
+# release job's group queues the newer release behind it instead (and a third push replaces the one waiting). A
+# cancelled run is never the base of the next one, so whatever it would have shipped ships with the next deploy.
 
 jobs:
+  # ---- What changed since the last successful deploy: that run shipped (or kept) both parts as of its commit --------
+  changes:
+    name: What to deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read   # the last successful run of this workflow
+    outputs:
+      server: ${{ steps.parts.outputs.server }}
+      web: ${{ steps.parts.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0       # the last deploy may be many commits back
+          filter: blob:none    # commits and trees only: enough for a list of changed paths
+      - name: Compare with the last successful deploy
+        id: parts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail   # a failing script must fail the job, never read as "nothing to deploy"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual run: deploying both"; printf 'server=1\nweb=1\n' >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          base="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" \
+                  --jq '.workflow_runs[0].head_sha // empty' || true)"
+          echo "Last successful deploy: ${base:-none}"
+          deploy/changed-parts.sh "$base" "$GITHUB_SHA" | tee -a "$GITHUB_OUTPUT"
+
   ci:
     name: Tests
     uses: ./.github/workflows/ci.yml
 
-  deploy:
-    name: Cloud Run + Firebase Hosting
-    needs: ci
-    if: github.ref == 'refs/heads/main'   # the identity pool only trusts main; a dispatch elsewhere would fail to sign in
+  # ---- 1. The server image (the root Dockerfile: the API, samples/, and the web app it would serve alone), built
+  # while the tests run. Pushed under the commit's SHA; the release deploys exactly this tag, and only after the tests.
+  image:
+    name: Build and push the image
+    needs: changes
+    if: needs.changes.outputs.server == '1' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-image-${{ github.ref }}
+      cancel-in-progress: true   # an image nobody will deploy; the newer run builds its own
     permissions:
       contents: read
       id-token: write   # the OIDC token Workload Identity Federation exchanges
     env:
-      PROJECT: ${{ vars.GCP_PROJECT_ID }}
       REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
-      SITE: ${{ vars.FIREBASE_SITE || 'iris-techjays' }}
-      WEB_URL: ${{ vars.WEB_URL }}
-      SERVICE: iris-api
       IMAGE: ${{ vars.GCP_REGION || 'asia-south1' }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/iris/iris:${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check the repository variables
         env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
           WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
           DEPLOY_SA: ${{ vars.DEPLOY_SA }}
         run: |
@@ -69,12 +105,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
-      # ---- 1. The server image (the root Dockerfile: the web app it serves itself, the API, samples/) -----------
       - name: Let Docker push to Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # Layers come from the GitHub Actions cache: the apt packages, the locked Python dependencies and the web app's
+      # npm ci are rebuilt only when their inputs change (Dockerfile order), so a code change rebuilds the code.
       - name: Build and push the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -86,9 +123,62 @@ jobs:
           provenance: false   # one image per push, nothing else for the cleanup policy to count
           sbom: false
 
-      # ---- 2. Cloud Run: deploy.sh with the image above (no Cloud Build), its env.yaml caps and secrets -----------
+  # ---- 2. The release: only when every test passed, and only the parts that changed --------------------------------
+  deploy:
+    name: Cloud Run + Firebase Hosting
+    needs: [changes, ci, image]
+    # The identity pool only trusts main; a dispatch elsewhere would fail to sign in. The image job is skipped when
+    # the server did not change; the release then needs only the tests.
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main'
+      && needs.changes.result == 'success' && needs.ci.result == 'success'
+      && (needs.changes.outputs.server == '1' || needs.changes.outputs.web == '1')
+      && (needs.changes.outputs.server != '1' || needs.image.result == 'success')
+    concurrency:
+      group: deploy-release-${{ github.ref }}
+      cancel-in-progress: false   # never stop a release halfway; a newer one waits its turn
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write   # the OIDC token Workload Identity Federation exchanges
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+      SITE: ${{ vars.FIREBASE_SITE || 'iris-techjays' }}
+      WEB_URL: ${{ vars.WEB_URL }}
+      SERVICE: iris-api
+      IMAGE: ${{ vars.GCP_REGION || 'asia-south1' }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/iris/iris:${{ github.sha }}
+      SERVER: ${{ needs.changes.outputs.server }}
+      WEB: ${{ needs.changes.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the repository variables
+        env:
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          DEPLOY_SA: ${{ vars.DEPLOY_SA }}
+        run: |
+          missing=""
+          for v in PROJECT WIF_PROVIDER DEPLOY_SA; do [ -n "${!v}" ] || missing="$missing $v"; done
+          if [ -n "$missing" ]; then
+            echo "::error::Repository variables missing:$missing. Run deploy/github-setup.sh once (deploy/README.md, 'Deploy on every push')."
+            exit 1
+          fi
+          echo "Deploying: server=${SERVER} web=${WEB}"
+
+      - name: Sign in to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # ---- Cloud Run: deploy.sh with the image above (no Cloud Build), its env.yaml caps and secrets -----------------
       - name: Deploy the server to Cloud Run
         id: run
+        if: env.SERVER == '1'
         env:
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
           BUCKET: ${{ vars.BUCKET }}
@@ -104,26 +194,37 @@ jobs:
           export IRIS_ALLOWED_ORIGINS="${origins}${EXTRA_ORIGINS:+,$EXTRA_ORIGINS}"
           deploy/deploy.sh
 
-      # ---- 3. The web app on Firebase Hosting, calling the Cloud Run URL directly ------------------------------
+      # The API's URL: the repository's API_URL, else the service just deployed, else the running service's.
+      - name: Where the API is
+        id: api
+        env:
+          API_URL: ${{ vars.API_URL || steps.run.outputs.url }}
+        run: |
+          [ -n "$API_URL" ] ||
+            API_URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
+          [ -n "$API_URL" ] || { echo "::error::No Cloud Run URL (deploy the server first)"; exit 1; }
+          echo "url=${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      # ---- The web app on Firebase Hosting, calling the Cloud Run URL directly ------------------------------------
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: env.WEB == '1'
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
 
       - name: Build the web app for Firebase Hosting
-        id: web
+        if: env.WEB == '1'
         working-directory: web
         env:
-          API_URL: ${{ vars.API_URL || steps.run.outputs.url }}
+          API_URL: ${{ steps.api.outputs.url }}
         run: |
-          [ -n "$API_URL" ] || { echo "::error::No Cloud Run URL from the deploy step"; exit 1; }
-          echo "api=${API_URL%/}" >> "$GITHUB_OUTPUT"
           npm ci --no-audit --no-fund
-          VITE_API_BASE="${API_URL%/}" npm run build
-          grep -rqF "${API_URL%/}" dist/assets || { echo "::error::VITE_API_BASE did not reach the bundle"; exit 1; }
+          VITE_API_BASE="${API_URL}" npm run build
+          grep -rqF "${API_URL}" dist/assets || { echo "::error::VITE_API_BASE did not reach the bundle"; exit 1; }
 
       - name: Deploy the web app to Firebase Hosting
+        if: env.WEB == '1'
         run: |
           # The hosting target "web" (firebase.json) points at this project's site.
           cat > .firebaserc <<JSON
@@ -132,18 +233,21 @@ jobs:
           npx --yes firebase-tools@15.35.0 deploy --only hosting:web --project "$PROJECT" --non-interactive \
             --message "iris ${GITHUB_SHA::7}"
 
-      # ---- 4. Check both ends and say where they are ---------------------------------------------------------
+      # ---- Check both ends and say where they are ---------------------------------------------------------------
       - name: Smoke test
         env:
-          API: ${{ steps.web.outputs.api }}
+          API: ${{ steps.api.outputs.url }}
         run: |
           WEB="https://${SITE}.web.app"
           curl -fsS --retry 5 --retry-all-errors --max-time 60 -o /dev/null "$WEB/"
           # The new revision answers (a cold start may take a few seconds: min-instances is 0).
           health="$(curl -fsS --retry 5 --retry-all-errors --max-time 60 "$API/api/health")"
           echo "$health"
-          echo "$health" | grep -q "\"version\":\"${GITHUB_SHA}\"" ||
-            { echo "::error::$API/api/health does not report this commit"; exit 1; }
+          # A release that kept the running server (web-only) checks that it answers, not which commit it reports.
+          if [ "$SERVER" = "1" ]; then
+            echo "$health" | grep -q "\"version\":\"${GITHUB_SHA}\"" ||
+              { echo "::error::$API/api/health does not report this commit"; exit 1; }
+          fi
           # The web app's preflight is allowed (CORS with credentials for the Firebase origin).
           curl -fsS --max-time 60 -o /dev/null -D headers.txt -X OPTIONS "$API/api/owner/unlock" \
             -H "Origin: $WEB" -H "Access-Control-Request-Method: POST" \
@@ -154,14 +258,14 @@ jobs:
       - name: Summary
         if: always()
         env:
-          API: ${{ steps.web.outputs.api || steps.run.outputs.url }}
+          API: ${{ steps.api.outputs.url || steps.run.outputs.url }}
         run: |
           {
             echo "### Iris deployed"
             echo
-            echo "| | URL |"
-            echo "|---|---|"
-            echo "| Web app (Firebase Hosting) | ${WEB_URL:-https://${SITE}.web.app} |"
-            echo "| API and MCP (Cloud Run \`${SERVICE}\`) | ${API:-not deployed} |"
-            echo "| Image | \`${IMAGE}\` |"
+            echo "| | URL | This run |"
+            echo "|---|---|---|"
+            echo "| Web app (Firebase Hosting) | ${WEB_URL:-https://${SITE}.web.app} | $([ "$WEB" = 1 ] && echo deployed || echo unchanged) |"
+            echo "| API and MCP (Cloud Run \`${SERVICE}\`) | ${API:-not deployed} | $([ "$SERVER" = 1 ] && echo deployed || echo unchanged) |"
+            [ "$SERVER" != 1 ] || echo "| Image | \`${IMAGE}\` | |"
           } >> "$GITHUB_STEP_SUMMARY"

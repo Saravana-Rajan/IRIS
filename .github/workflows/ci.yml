@@ -12,9 +12,11 @@ on:
 permissions:
   contents: read
 
+# Called from deploy.yml, github.workflow is "Deploy": a newer push to main cancels the tests of an older one still
+# running, so the latest commit deploys first (deploy.yml, "No run-wide group"). Branch pushes still queue.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
 jobs:
   server:
@@ -40,8 +42,9 @@ jobs:
           enable-cache: true
           cache-dependency-glob: server/uv.lock
       - run: uv sync --frozen
-      # VisionBench (tests/bench) runs in its own job with the renderer installed.
-      - run: uv run pytest -q --ignore=tests/bench
+      # VisionBench (tests/bench) runs in its own job with the renderer installed. pytest-xdist: one worker per CPU
+      # (4 on GitHub's runners), each test file whole on one worker (--dist loadfile keeps a module's fixtures together).
+      - run: uv run pytest -q -n auto --dist loadfile --ignore=tests/bench
 
   web:
     name: Web tests and build
