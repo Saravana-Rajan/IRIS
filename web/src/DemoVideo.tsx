@@ -36,10 +36,13 @@ export const DEMO_CARDS: readonly { id: DemoVideoId; title: string; line: string
   { id: "full", title: "Full demo: problem to solution",
     line: "The problem, the 3D clash fixes, the drawing check and VisionBench, in one short story." },
   { id: "3d", title: "Fix clashes in your building models",
-    line: "464 clashes found; Gemini proposes fixes, geometry verifies them, the engineer accepts." },
+    line: "464 clashes; Gemini proposes fixes, geometry verifies them, the engineer accepts." },
   { id: "2d", title: "Check drawings against the model",
-    line: "AI reads a PDF sheet, Iris checks it against the model and finds the 4 planted mistakes." },
+    line: "AI reads a PDF sheet; Iris checks it and finds the 4 planted mistakes." },
 ];
+
+/** The meta line under each demo card's title. */
+export const DEMO_META = "Gemini voice · Captions on";
 
 /** What Tab reaches inside the dialog (the video's own controls are inside the video). */
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), '
@@ -162,20 +165,28 @@ export function DemoVideo({ id, open, onClose, opener }: {
  * "Watch the demo · 2:35": a play mark, the label and the video's length in mono. It opens its video in the lightbox
  * and holds that state itself, so a page needs one line per place (Home: the two sample tiles and the hero).
  */
-export function WatchDemoButton({ id, label = "Watch the demo", className = "" }: {
+export function WatchDemoButton({ id, label = "Watch the demo", className = "", thumb = false }: {
   id: DemoVideoId;
   label?: string;
   /** Extra classes: `watch-demo-hero` for the larger one in Home's hero. */
   className?: string;
+  /** A small 16:9 thumbnail of the video's poster with the play mark on it, in place of the round play mark (the hero's
+   * chip); off by default, so a Watch button fetches nothing. */
+  thumb?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const video = DEMO_VIDEOS[id];
   return (
     <>
-      <button ref={button} type="button" className={`watch-demo ${className}`.trim()} data-video={id} aria-haspopup="dialog"
-        aria-label={`${label}: ${video.title} (${video.duration})`} onClick={() => setOpen(true)}>
-        <span className="watch-demo-play" aria-hidden><Play size={12} fill="currentColor" strokeWidth={0} /></span>
+      <button ref={button} type="button" className={`watch-demo ${thumb ? "watch-demo-thumb " : ""}${className}`.trim()} data-video={id}
+        aria-haspopup="dialog" aria-label={`${label}: ${video.title} (${video.duration})`} onClick={() => setOpen(true)}>
+        {thumb ? (
+          <span className="watch-demo-poster" aria-hidden>
+            <img src={video.poster} alt="" width={64} height={36} decoding="async" />
+            <span className="watch-demo-play"><Play size={10} fill="currentColor" strokeWidth={0} /></span>
+          </span>
+        ) : <span className="watch-demo-play" aria-hidden><Play size={12} fill="currentColor" strokeWidth={0} /></span>}
         <span className="watch-demo-label">{label}</span>
         <span className="watch-demo-sep" aria-hidden>·</span>
         <span className="watch-demo-time mono">{video.duration}</span>
@@ -186,9 +197,11 @@ export function WatchDemoButton({ id, label = "Watch the demo", className = "" }
 }
 
 /**
- * One of Home's demo cards: the video's poster (lazy, so the page fetches it only near the viewport) with a play mark
- * and its length, then the title, one line, and "m:ss · Captions on". The whole card is one button that opens the
- * video in the lightbox (nothing of the video loads before). `featured`: the full demo, first and a little larger.
+ * One of Home's demo cards, as on a video site: a big 16:9 thumbnail (the video's poster, its title card with the glass
+ * aperture; lazy, so the page fetches it only near the viewport) with a round white play button in the middle and the
+ * length in a pill at the bottom right; under it the title (bold, two lines at most), one line and "Gemini voice ·
+ * Captions on". The whole card is one button that opens the video in the lightbox (nothing of the video loads before).
+ * `featured`: the full demo, first and larger.
  */
 export function DemoCard({ id, title, line, featured = false }: { id: DemoVideoId; title: string; line: string; featured?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -199,15 +212,14 @@ export function DemoCard({ id, title, line, featured = false }: { id: DemoVideoI
       <button ref={button} type="button" className="home-demo" data-video={id} aria-haspopup="dialog"
         aria-label={`Play ${title} (${video.duration}, captions on)`} onClick={() => setOpen(true)}>
         <span className="home-demo-poster">
-          <img src={video.poster} alt="" width={1280} height={720} loading="lazy" decoding="async" />
-          <span className="home-demo-play" aria-hidden><Play size={featured ? 22 : 18} fill="currentColor" strokeWidth={0} /></span>
+          <img src={video.poster} alt="" width={1920} height={1080} loading="lazy" decoding="async" />
+          <span className="home-demo-play" aria-hidden><Play size={featured ? 26 : 20} fill="currentColor" strokeWidth={0} /></span>
           <span className="home-demo-len mono" aria-hidden>{video.duration}</span>
         </span>
         <span className="home-demo-text">
-          {featured && <span className="home-demo-tag">Start here</span>}
           <span className="home-demo-title">{title}</span>
           <span className="home-demo-line">{line}</span>
-          <span className="home-demo-meta"><span className="mono">{video.duration}</span><span aria-hidden>·</span><span>Captions on</span></span>
+          <span className="home-demo-meta">{DEMO_META}</span>
         </span>
       </button>
       <DemoVideo id={id} open={open} onClose={() => setOpen(false)} opener={button} />

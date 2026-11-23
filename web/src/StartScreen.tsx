@@ -108,7 +108,7 @@ export function StartScreen({
               <span className="home-tagline-line"><TextReveal text={TAGLINE[0]} once="home-tagline" delay={helloMs} step={80} /></span>
               <span className="home-tagline-line"><TextReveal text={TAGLINE[1]} once="home-tagline-2" delay={helloMs + 80 * 4} step={80} /></span>
             </h1>
-            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero" />
+            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero" thumb />
             <p className="home-what">Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked,
               and report what was decided.</p>
           </div>

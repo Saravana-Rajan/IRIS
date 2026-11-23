@@ -138,16 +138,17 @@ test("Watch the demo: the 3D video on the sample building's tile, the 2D on the 
     assert.equal(startButton(html, tile).match(/<button/g).length, 1, `${tile}: no button inside the tile`);
   }
   assert.match(html, /<section class="home-tiles"[^>]*><button type="button" class="home-tile home-tile-new"/, "New project is still a tile of its own");
-  const full = html.match(/<button type="button" class="watch-demo watch-demo-hero" data-video="full"[^>]*>.*?<\/button>/)?.[0];
-  assert.ok(full, "the full demo in the hero, the larger button (no holo edge: none on Home)");
+  const full = html.match(/<button type="button" class="watch-demo watch-demo-thumb watch-demo-hero" data-video="full"[^>]*>.*?<\/button>/)?.[0];
+  assert.ok(full, "the full demo in the hero, the larger chip with a small thumbnail (no holo edge: none on Home)");
+  assert.match(full, /<span class="watch-demo-poster" aria-hidden="true"><img src="\/demos\/iris-full-demo\.webp"/);
   assert.ok(text(full).includes(`Watch the full demo · ${videos.full.duration}`));
   const hero = html.slice(html.indexOf('<div class="home-hero-text">'), html.indexOf('<div class="home-body">'));
   assert.ok(hero.indexOf('class="home-tagline"') < hero.indexOf('data-video="full"') && hero.indexOf('data-video="full"') < hero.indexOf('class="home-what"'),
     "under the tagline");
   assert.doesNotMatch(html, /<video|\.mp4|iris-\w+-demo\.vtt/, "no video or captions until one is opened");
   const posters = html.match(/<img [^>]*iris-\w+-demo\.webp[^>]*>/g) ?? [];
-  assert.equal(posters.length, 3, "only the Watch the demos cards' posters");
-  assert.ok(posters.every((img) => img.includes('loading="lazy"')), "lazy posters");
+  assert.equal(posters.length, 4, "the hero chip's small thumbnail and the three Watch the demos cards' posters");
+  assert.ok(posters.slice(1).every((img) => img.includes('loading="lazy"')), "the cards' posters lazy");
   assert.deepEqual(markup({}).match(/data-video="\w+"/g), ['data-video="full"', 'data-video="full"', 'data-video="3d"', 'data-video="2d"'],
     "no samples listed: the hero's and the three demo cards");
   let opened = 0;

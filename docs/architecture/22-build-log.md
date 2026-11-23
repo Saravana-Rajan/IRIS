@@ -1389,6 +1389,10 @@ plays a clip at most 1.5 times faster when its line is shorter than the clip's k
 "done at" times). Lengths: full 4:19 to 2:19, 3D 2:35 to 1:32, 2D 1:51 to 1:00 (`DEMO_VIDEOS`). Home gets a **Watch the
 demos** section after the start tiles (`WatchDemos`, `DemoCard` in `DemoVideo.tsx`; styles in `demoVideo.css`; the
 cards join the pink spotlight, `SPOTLIGHT`): three cards, the full demo first and featured, each a poster (lazy), a
-play mark, the title, one line, the length and "Captions on"; a click opens the lightbox. Checked: `npm test`, `tsc`,
+play button, the length, the title, one line and "Gemini voice · Captions on", laid out like video cards (the owner:
+"show a video like on YouTube ... with that glass image"): big 16:9 thumbnails that are the posters, now 1920 x 1080
+stills of each video's title card (its title and the glass aperture only, so the centred play button covers no words;
+rendered from the card page itself), the full demo large at the left, the 3D and 2D demos stacked
+beside it; the hero's Watch the full demo is a chip with a small thumbnail. A click opens the lightbox, captions on. Checked: `npm test`, `tsc`,
 `vite build`, the docs map test, screenshots of the section at 1512 x 805 and 390 x 844, and frames of the first and
 last 3 s of each video.
