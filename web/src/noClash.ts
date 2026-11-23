@@ -39,7 +39,7 @@ export function noClash(c: ReportClash, match?: Matches[string], measure?: Measu
   return null;
 }
 
-/** Triage as shown: a model verdict of "real" or "model error" gives way to what is already settled in this browser
+/** Triage as shown: a model verdict of "real" or "drawing mistake" (`modelling_error`) gives way to what is already settled in this browser
  * (marked not a clash, or Iris's own geometry: one element, not physical, a touch, no overlap here), and the model's
  * reading is kept beside it. Only the `selected` clash has the live `measure`. A clash with a kept fix (`fixes`) keeps
  * its verdict: the fix is why the overlap went (as the clash panel reads it), so selecting it never turns it, nor drops

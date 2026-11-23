@@ -8,8 +8,9 @@ const human = (c: string) => {
   const words = c.replace(/^Ifc/, "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
+const DRAWING_MISTAKE = "The clash comes from how the model was drawn (for example a duplicate or misplaced element), not from a real design conflict.";
 const VERDICT: Record<PatternVerdict["verdict"], { label: string; cls: string }> = {
-  by_design: { label: "by design", cls: "" }, modelling_error: { label: "model error", cls: "warn" }, real_problem: { label: "real problem", cls: "bad" },
+  by_design: { label: "by design", cls: "" }, modelling_error: { label: "drawing mistake in model", cls: "warn" }, real_problem: { label: "real problem", cls: "bad" },
 };
 
 /** What Iris sees across the report: elements behind several clashes, and clashes that repeat the same way. */
@@ -100,7 +101,7 @@ export function Insights({ rootCauses, patterns, verdicts, explaining, busy, onF
               <div className="insight-more">
                 <span className="hint">{p.levels.length} level{p.levels.length === 1 ? "" : "s"} · {p.min_mm === p.max_mm ? `${p.min_mm} mm every time` : `${p.min_mm} to ${p.max_mm} mm`}
                   {p.cross_discipline ? " · across disciplines" : ""}</span>
-                {v && <><span className="verdict"><span className={`chip small ${VERDICT[v.verdict].cls}`}>{VERDICT[v.verdict].label}</span> {v.cause}</span>
+                {v && <><span className="verdict"><span className={`chip small ${VERDICT[v.verdict].cls}`} data-tip={v.verdict === "modelling_error" ? DRAWING_MISTAKE : undefined}>{VERDICT[v.verdict].label}</span> {v.cause}</span>
                 <span className="hint">{v.rule ? <>Rule: <i>{v.rule}</i></> : v.action}</span></>}
               </div>
               <div className="pattern-foot">

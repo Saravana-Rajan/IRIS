@@ -83,7 +83,7 @@ export function ClashPanel({ reportId, clash, match, measure, onImage, fix, reso
       {triage && (
         <details className="triage-note" open={alert || undefined}>
           <summary>
-            <span className={`chip small ${TRIAGE[triage.verdict].cls}`}>{TRIAGE[triage.verdict].label}</span>
+            <span className={`chip small ${TRIAGE[triage.verdict].cls}`} data-tip={TRIAGE[triage.verdict].tip}>{TRIAGE[triage.verdict].label}</span>
             {triage.responsible && triage.responsible !== "none" && <span className="chip small">{triage.responsible}</span>}
             <span className="why tn-basis">{triage.basis ? BASIS[triage.basis] : triage.source === "rule" ? "by rule" : "triage model"}</span>
             {triage.understanding && <span className="tn-line">{triage.understanding}</span>}

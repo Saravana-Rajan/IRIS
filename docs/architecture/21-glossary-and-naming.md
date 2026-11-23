@@ -139,7 +139,7 @@ each feature see [01](01-product-and-journeys.md).
 | Term | Meaning | Code |
 |---|---|---|
 | **Triage** | A verdict for every clash: by rule where sure, else by the triage model. | `triage.py`, `triage.Job`; `TriageCard` |
-| **Triage verdict** | `real_clash` ("Real problem"), `by_design`, `non_physical` ("Not physical"), `modelling_error` ("Model error"), `unknown` ("No answer"). | `TriageKind` in `api.ts`; `TRIAGE` in `Triage.tsx` |
+| **Triage verdict** | `real_clash` ("Real problem"), `by_design`, `non_physical` ("Not physical"), `modelling_error` ("Drawing mistake in model", "drawing mistake" on a small chip; its tip says the clash comes from how the model was drawn, not a real design conflict. "Model error" read like a software error, owner Nov 23), `unknown` ("No answer"). | `TriageKind` in `api.ts`; `TRIAGE` in `Triage.tsx` |
 | **Basis** | What settled a not-a-clash verdict without the model, or overrode it: `non_physical`, `touch`, `same_element`, `no_overlap`, `reviewed`, `requirement`, `strictness`. | `TriageVerdict.basis`; `BASIS` in `ClashPanel.tsx` |
 | **Alike** | Three or more clashes of the same kinds, named alike, about as deep: read once, through the deepest. | `triage.alike_groups` |
 | **By design** | How the parts are meant to go together (a bolt in its plate). | triage verdict; pattern verdict; requirements `by_design` rules |
@@ -259,7 +259,7 @@ Each was checked at HEAD.
 - **Navisworks is named where it is a fact:** an imported clash's reference ("imported from Navisworks, Clash7"), the
   BCF tools list, the README's "Works with Navisworks reports", a recorded plan's cause text.
 - **Code kinds and UI names differ in two places:** `route` shows as "Reroute", `penetration` as "Opening"
-  (`KIND_LABEL`). Triage's `real_clash` shows as "Real problem" (or "real"), `modelling_error` as "Model error".
+  (`KIND_LABEL`). Triage's `real_clash` shows as "Real problem" (or "real"), `modelling_error` as "Drawing mistake in model".
 - **Units:** metres in the server and the API (`_m` names); millimetres when quoting depths and clearances in the UI,
   signed ("−300 mm", "+400 mm").
 - **British spelling** throughout the UI and docs: metres, colour, behaviour, centre, neighbour, licence (noun),

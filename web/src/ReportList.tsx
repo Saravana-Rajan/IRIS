@@ -400,7 +400,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
                         <span className={`mono dist dist-badge ${c.distance_m == null ? "none" : c.distance_m < 0 ? "over" : "gap"}`}
                           aria-label={`Distance ${mm(c.distance_m)}`}>{badgeMm(c.distance_m)}</span>
                         {nc && !tv && <span className="tv muted" title={nc.why}>{nc.label}</span>}
-                        {tv && !fixes[c.id] && !rv && <span className={`tv ${TRIAGE[tv.verdict].cls}`} title={tv.understanding || TRIAGE[tv.verdict].tip}
+                        {tv && !fixes[c.id] && !rv && <span className={`tv ${TRIAGE[tv.verdict].cls}`} title={tv.verdict === "modelling_error" ? [TRIAGE[tv.verdict].tip, tv.understanding].filter(Boolean).join(" ") : tv.understanding || TRIAGE[tv.verdict].tip}
                           aria-label={`Triage: ${TRIAGE[tv.verdict].label}`}>{TRIAGE[tv.verdict].label}</span>}
                         {fixes[c.id] ? <span className="fixed-label pill">Fixed</span>
                           : rv ? <span className={`review-label pill ${rv.kind}`}>{rv.kind === "by_design" ? "By design" : "For author"}</span>

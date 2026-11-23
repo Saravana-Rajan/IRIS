@@ -42,7 +42,7 @@ export function TriageArt() {
   const rows: [string, string, string][] = [
     ["Supply air main × transfer girder", "Real problem", "real"],
     ["Column × floor slab", "By design", "design"],
-    ["Two copies of one beam", "Model error", "error"],
+    ["Two copies of one beam", "Drawing mistake", "error"],
     ["Room space × wall", "Not physical", "space"],
   ];
   return (
@@ -165,7 +165,7 @@ export function NavisArt() {
   const rows: [string, string, string, string][] = [
     ["Clash39", "#1", "Real problem", "real"],
     ["Clash40", "#2", "By design", "design"],
-    ["Clash41", "#3", "Model error", "error"],
+    ["Clash41", "#3", "Drawing mistake", "error"],
   ];
   return (
     <div className="lp-navis">

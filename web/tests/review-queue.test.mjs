@@ -548,12 +548,17 @@ test("plainError: a server's exception or a model's status becomes a plain sente
   assert.equal(none.text, "No AI model is configured on this server, so no fix was prepared.");
   assert.match(none.detail, /^RuntimeError: No model configured/);
   const late = M.plainError("Traceback (most recent call last):\n  File \"x.py\", line 1\nhttpx.ReadTimeout: The read operation timed out", "Gemini Flash");
-  assert.equal(late.text, "Gemini Flash didn't answer in time.");
+  assert.equal(late.text, "Iris couldn't reach the AI model (Gemini Flash) in time: try again.");
   assert.equal(late.detail, "httpx.ReadTimeout: The read operation timed out", "a traceback's last line only");
   assert.equal(M.plainError("Preparing stopped: RuntimeError: No model configured").text,
     "Preparing stopped: No AI model is configured on this server, so no fix was prepared.");
   assert.equal(M.plainError("ClientError: 429 RESOURCE_EXHAUSTED").text, "The AI model is busy (too many requests): try again in a minute.");
   assert.equal(M.plainError("ValueError: something odd").text, "Something went wrong on the server.");
+  assert.equal(M.plainError("ServerError: 503 UNAVAILABLE", "Gemini 3.8 Flash").text, "Iris couldn't reach the AI model (Gemini 3.8 Flash): try again in a moment.");
+  assert.equal(M.plainError("TypeError: Failed to fetch").text, "Iris couldn't reach its server: check the connection and try again.");
+  for (const raw of ["httpx.ReadTimeout: timed out", "ClientError: 403 PERMISSION_DENIED", "ServerError: 500 InternalServerError", "JSONDecodeError: Expecting value"]) {
+    assert.doesNotMatch(M.plainError(raw, "Gemini").text, /model error/i, "an AI failure never reads as a model error");
+  }
   for (const words of ["Raise duct 400 mm: hits Secondary beam\nAsk the services designer.", "The saved AI proposals do not cover this clash.",
     "The requirements allow no edit here: the girder stays."]) {
     assert.deepEqual(M.plainError(words), { text: words, detail: "" }, "plain words pass through");

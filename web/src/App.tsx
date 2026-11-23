@@ -4506,7 +4506,7 @@ export function App() {
                       onOpen={(id) => { const c = report.clashes.find((x) => x.id === id); if (c) selectClash(c); }}
                       total={(listReport ?? report).clashes.length} unread={unread} resolved={(id) => !!fixes[id] || !!reviewed[id]} onRun={runTriage} onStop={stopTriage}
                       onSetAside={(ids) => review(ids, "by_design", "Triage: by design or not physical")}
-                      onFlag={(ids) => review(ids, "author", "Triage: modelling error")}
+                      onFlag={(ids) => review(ids, "author", "Triage: drawing mistake in model")}
                       requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />)}
                     insights={<>{projStep !== "coordination" && coordCard}{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
                       detection={shownCheck ?? { coverage: [], diff: { new: [], resolved: [], no_longer_checked: [], first: true }, elements: 0, seconds: 0 }}

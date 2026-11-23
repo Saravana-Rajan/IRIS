@@ -348,7 +348,7 @@ export function About({ start, onAbout }: {
             <p className="lp-kicker">And the rest of the toolkit</p>
             <ul>
               <Also icon={<Waypoints size={16} />} title="Explore a wider fix">Up to three complete arrangements of coordinated edits round a clash, each with its evidence and the reviews it needs before it can be accepted.</Also>
-              <Also icon={<Repeat size={16} />} title="Patterns">The same clash many times over, read once: by design (with the rule to add), a modelling error for its author, or a real problem to fix together.</Also>
+              <Also icon={<Repeat size={16} />} title="Patterns">The same clash many times over, read once: by design (with the rule to add), a drawing mistake in the model for its author, or a real problem to fix together.</Also>
               <Also icon={<GitCompare size={16} />} title="Kept checks">Each check's latest run side by side in one list, one #N per clash; run again to see what was resolved and what is new.</Also>
               <Also icon={<Filter size={16} />} title="Filters, and checks on them">Colour, hide or isolate by any property in every view, from the panel, chat, voice or an agent; then check a filter against everything, itself or another.</Also>
               <Also icon={<Info size={16} />} title="Properties">Everything the model says about an element, with breadcrumbs to its storey, building and site, and a filter from any value.</Also>
@@ -392,7 +392,7 @@ export function About({ start, onAbout }: {
             <div><dt><Logo name="step" size={18} />STEP</dt><dd>The open format mechanical CAD uses for machines and equipment.</dd></div>
             <div><dt>Clash</dt><dd>One place where two parts of the models conflict. Each has a number, like #3.</dd></div>
             <div><dt>Check</dt><dd>One pair of things checked against each other: two models, or one model against itself.</dd></div>
-            <div><dt>Triage</dt><dd>Sorting the clashes a check found: a real problem, by design, a model error, or not physical.</dd></div>
+            <div><dt>Triage</dt><dd>Sorting the clashes a check found: a real problem, by design, a drawing mistake in the model, or not physical.</dd></div>
             <div><dt>Clearance</dt><dd>The room left between two things once a clash is fixed: 25 mm unless asked for more.</dd></div>
             <div><dt><Logo name="bcf" size={18} />BCF</dt><dd>An open format for issues on a model, which design tools read.</dd></div>
           </dl>
@@ -458,7 +458,7 @@ const LOOP_STEPS: LoopStep[] = [
   { letter: "O", word: "Observe", title: "It reads the models before it touches them.",
     points: [
       <><b>Its own clash detection:</b> every pair of models and each against itself. Or import a Navisworks report.</>,
-      <><b>Every clash numbered and named,</b> then triaged: a real problem, by design, a model error, or not physical. Alike clashes are read once.</>,
+      <><b>Every clash numbered and named,</b> then triaged: a real problem, by design, a drawing mistake in the model, or not physical. Alike clashes are read once.</>,
       <><b>For the clash you pick,</b> Gemini Pro reads three pictures and the model's own facts: what each element is, which way it runs, the openings in its way, the room around it.</>,
     ],
     clip: { src: "/demos/check", caption: "Northbank's check, then its list: 464 clashes, numbered, being named.",

@@ -359,19 +359,23 @@ export function plainError(raw: string | null | undefined, model?: string | null
   const rest = all.slice(lead.length);
   const technical = /Traceback \(most recent call last\)|(?:^|[\s(])[A-Z]\w*(?:Error|Exception|Exceeded|Timeout|Miss)\b|Failed to fetch|NetworkError|\b(?:status|code|HTTP) ?[45]\d\d\b|\b[45]\d\d (?:[A-Z][a-z]+ ?)+\b/.test(rest);
   if (!technical) return { text: all, detail: "" };
-  const who = (model ?? "").trim() || "The AI model";
+  // Plain words for AI failures: "Iris couldn't reach the AI model", never a "model error" (which reads like the
+  // model's drawing; owner, Nov 23). The model's name, when known, in brackets.
+  const named = (model ?? "").trim();
+  const ai = named ? `the AI model (${named})` : "the AI model";
+  const AI = ai.charAt(0).toUpperCase() + ai.slice(1);
   const lines = rest.split("\n").map((l) => l.trim()).filter(Boolean);
   const last = /^Traceback/.test(lines[0] ?? "") ? lines[lines.length - 1] ?? "" : lines.join(" ");
   const detail = last.length > 300 ? `${last.slice(0, 299)}…` : last;
   const rules: [RegExp, string][] = [
     [/no model configured|GEMINI_API_KEY|GOOGLE_CLOUD_PROJECT|DefaultCredentials|credentials were not found|no model client may be built/i,
       "No AI model is configured on this server, so no fix was prepared."],
-    [/timed? ?out|timeout|deadline|\b504\b/i, `${who} didn't answer in time.`],
-    [/\b429\b|RESOURCE_EXHAUSTED|quota|rate.?limit/i, `${who} is busy (too many requests): try again in a minute.`],
-    [/\b40[13]\b|PERMISSION_DENIED|UNAUTHENTICATED|permission denied/i, "This server is not allowed to use the AI model."],
-    [/JSONDecodeError|Expecting value|could not parse|invalid json/i, `${who}'s answer could not be read.`],
-    [/\b50[023]\b|UNAVAILABLE|ServiceUnavailable|ServerError|InternalServerError/i, `${who} had a problem answering: try again.`],
-    [/Failed to fetch|NetworkError|network/i, "The server could not be reached."],
+    [/timed? ?out|timeout|deadline|\b504\b/i, `Iris couldn't reach ${ai} in time: try again.`],
+    [/\b429\b|RESOURCE_EXHAUSTED|quota|rate.?limit/i, `${AI} is busy (too many requests): try again in a minute.`],
+    [/\b40[13]\b|PERMISSION_DENIED|UNAUTHENTICATED|permission denied/i, "Iris isn't allowed to use the AI model on this server."],
+    [/JSONDecodeError|Expecting value|could not parse|invalid json/i, `Iris couldn't read ${ai}'s answer: try again.`],
+    [/\b50[023]\b|UNAVAILABLE|ServiceUnavailable|ServerError|InternalServerError/i, `Iris couldn't reach ${ai}: try again in a moment.`],
+    [/Failed to fetch|NetworkError|network/i, "Iris couldn't reach its server: check the connection and try again."],
   ];
   const text = rules.find(([re]) => re.test(rest))?.[1] ?? "Something went wrong on the server.";
   return { text: `${lead}${text}`, detail };

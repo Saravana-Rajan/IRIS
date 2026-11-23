@@ -210,7 +210,7 @@ const STAGES: { icon: ReactNode; title: string; short: string; body: ReactNode; 
     facts: ["Northbank: 1,732 elements, 464 clashes, about 4 s", "Stable numbers (#1, #2…) across reruns", "Reruns mark clashes new, still there, or resolved"] },
   { icon: <ListFilter size={18} aria-hidden />, title: "Triage", short: "Sort the real from the noise",
     body: <>Sure rules settle what needs no model: touches, spaces and ports, one element on both sides. A model reads
-      the rest and gives each clash a verdict: a <b>real problem</b>, <b>by design</b>, a <b>model error</b> for its
+      the rest and gives each clash a verdict: a <b>real problem</b>, <b>by design</b>, a <b>drawing mistake in the model</b> for its
       author, or <b>not physical</b>. Alike clashes (forty bolts in forty plates) are read once.</>,
     facts: ["Northbank: 464 clashes, alike ones read once", "Every clash gets a plain title", "Its reasoning is kept on the verdict"] },
   { icon: <Eye size={18} aria-hidden />, title: "Understand", short: "Read one clash",
