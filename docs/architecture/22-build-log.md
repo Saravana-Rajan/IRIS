@@ -1197,3 +1197,17 @@ clips stay in `web/public/demos/` for the submission video) for **How Iris works
 measured proof chips, Propose with the AI holo edge and Validate with a green "Geometry" badge, "AI proposes → geometry
 proves" between them; a card opens its step on the sample building (`onSampleStep` → `trySample(step)`). Tests:
 `sidebar.test.mjs` (the footer), `shell.test.mjs`, `start-screen.test.mjs` and `how-iris-works.test.mjs`. The owner then asked to drop the striped holographic ribbon everywhere: `HoloRibbon` is gone; empty states, the loading card and Home's quiet lines show the Aperture in a soft pink circle (`MarkBadge`), and the hero keeps a soft pink wash until the 3D glass aperture (`feature/hero-ribbon`) arrives. A pink glow now follows the cursor over the pages, never the 3D workspace (`CursorGlow.tsx`: eased, a trailing periwinkle glow, a breath at rest, a still wash on touch or under reduced motion), and the start tiles and How Iris works cards light under the cursor. Checked: `cursor-glow.test.mjs`, the full web suite, `npm run build`.
+
+Nov 22 (2026-11-22), the Drawings page after QA (`fix/qa2-fix-drawings`: `DrawingsPanel.tsx`, `drawings.css`).
+**The sample sheets open already read:** a sheet with a saved reading whose items come back empty replays it by itself
+(`autoReplays`, once per sheet, after the page stops being busy), so "Try the sample drawings" lands on the items and
+the four mismatches with no click, under the "Saved AI reading of this sample (Gemini 3.8 Flash)" note; its card no
+longer says both "Saved reading" and "Not read yet", and its button reads "Replay the reading". The user's own PDFs
+still wait for **Read with AI**. **The read button is reachable on a phone:** the header, the saved note and the
+reading line keep their own height (`.dwg-centre > :not(.dwg-viewer) { flex: none }`), so a wrapped button no longer
+slides under the note and taps reach it. **The viewer opens at "Fit"**, its zoom said against the fitted width, not the
+page image's pixels ("10 %", "6 %" on a phone); the zoom and the key share one row under the sheet, and on a phone the
+stage takes the sheet's shape. The selected tab's count is pink. Checked: `drawings-samples.test.mjs` (auto replay on a
+sample, none on an upload, none before the items are fetched or while busy, once), `drawings.test.mjs`, the full web
+suite, `tsc`, `npm run build`, and headless Chromium on a local one-origin server with no Gemini credentials (desktop
+1512×805, phone 390×844).

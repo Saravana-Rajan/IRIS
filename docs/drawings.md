@@ -149,3 +149,16 @@ the two sample sheets (`POST .../drawings/samples`) and lands on `/projects/<pid
 sample building open and no drawings, the Drawings step offers **Add the sample drawings** instead. Reading either
 sheet replays its saved reading; the comparison with the model then runs as after any read. Uploading your own PDFs
 reads them live.
+
+**The sample sheets open already read.** When the page has fetched a sheet's items and found none, and the sheet has a
+saved reading (`Drawing.saved_reading`), `DrawingsPanel` replays it by itself (`autoReplays`: once per sheet, after
+the page stops being busy; a failure waits for Retry): the same `POST .../read` stream, free and instant, so the items
+and the comparison's mismatches (four on the two sample sheets) show with no click, under the honest "Saved AI reading
+of this sample (Gemini 3.8 Flash)" note. Its card says "Opening the saved reading…" until then, never "Not read yet",
+and its button reads **Replay the reading**. A sheet without a saved reading (the user's own PDFs) is never read
+until **Read with AI** is clicked, since a live reading costs.
+
+**The sheet viewer** opens fitted to its width and says its zoom against that fit ("Fit", then 125 %, …), not against
+the page image's pixels (an A1 sheet rendered for reading opened at "6 %"). The zoom buttons and the key sit in one row
+under the sheet, never over it; on a phone the stage takes the sheet's shape (`--dwg-sheet-ar`), so the fitted sheet
+fills it. The read button, the saved note and the reading line each keep their own line above the sheet.

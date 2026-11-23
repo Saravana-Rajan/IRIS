@@ -326,7 +326,7 @@ test("a scanned sheet says every item is AI-read; nothing read yet says what to 
   assert.match(t, /Not read yet\. Read the sheet with AI to list its items\./);
   assert.match(t, /Not compared yet/);
   const busy = renderToStaticMarkup(panel({ drawings: [D2], items: {}, compare: null, busy: true }));
-  assert.match(busy, /<button type="button" class="btn small primary" disabled=""[^>]*>Read with AI/);
+  assert.match(busy, /<button type="button" class="btn small dwg-read primary" data-dwg="read" disabled=""[^>]*>Read with AI/);
   const failed = text(renderToStaticMarkup(panel({ error: "The server restarted. Open the models again.", onRetry: noop })));
   assert.match(failed, /The server restarted\. Open the models again\. Retry/);
   assert.match(text(renderToStaticMarkup(panel({ compare: { matches: [{ item: "sa-1", element: "g", by: "tag" }], mismatches: [] } }))),
