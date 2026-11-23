@@ -1197,3 +1197,27 @@ clips stay in `web/public/demos/` for the submission video) for **How Iris works
 measured proof chips, Propose with the AI holo edge and Validate with a green "Geometry" badge, "AI proposes → geometry
 proves" between them; a card opens its step on the sample building (`onSampleStep` → `trySample(step)`). Tests:
 `sidebar.test.mjs` (the footer), `shell.test.mjs`, `start-screen.test.mjs` and `how-iris-works.test.mjs`. The owner then asked to drop the striped holographic ribbon everywhere: `HoloRibbon` is gone; empty states, the loading card and Home's quiet lines show the Aperture in a soft pink circle (`MarkBadge`), and the hero keeps a soft pink wash until the 3D glass aperture (`feature/hero-ribbon`) arrives. A pink glow now follows the cursor over the pages, never the 3D workspace (`CursorGlow.tsx`: eased, a trailing periwinkle glow, a breath at rest, a still wash on touch or under reduced motion), and the start tiles and How Iris works cards light under the cursor. Checked: `cursor-glow.test.mjs`, the full web suite, `npm run build`.
+
+Nov 23 (2026-11-23), the review queue after QA (`fix/qa2-fix-queue`). **Clash #1 always failed with the saved set**,
+though the owner-approved Gemini run (d22fe34: gemini-3.8-flash at thinking low, 8 calls, $0.057) made 8 of 8 ready.
+The cause: the page takes views of the clash on screen (#1 before the queue opens), and `Workspace.clash_for` then
+added "Images are views of this clash." to the question, so its hash missed the recorded reply (`prepare.MISS`). A
+saved set is made from model data alone, so its replay now asks the same way: `plans._resolve_items(..., pictures=False)`
+→ `clash_for(..., pictures=False)` (no images, no views line); `generate` records the same way, and a live pair still
+sends the views. No `prepare.VERSION` bump: the recorded questions are unchanged. Tests: `test_prepare.py` (views
+taken after a set was made; the committed Northbank set replays 8 of 8 ready through the route with views on the first
+clash and no model call; both fail without the fix). **The report counts queue accepts:** the queue's `onKept` in
+`App.tsx` now records the report's evidence as `accept()` does (both pictures, every clash on the pair; an uncut
+penetration a recommendation), so "Fixes: 2 applied" and the fixes' pages (`report-queue-kept.test.mjs`). **The
+queue's layout:** one friendly title (the pair by name, or the clash's own title over it; never the raw IFC label
+too), and the decision bar (`.rq-decide`: name, Accept, Reject, Request another) is always in view at the left pane's
+foot, the card scrolling above it (sticky at the screen's foot on a phone). **Plain whys:** `reviewQueueModel.plainError`
+maps a server exception or a model's status to a sentence ("No AI model is configured on this server", "Gemini Flash
+didn't answer in time", …), the raw words only in a tooltip. **Phones and tablets:** the entry is the compact top
+bar's primary (`reviewLeads` without `!compact`), and a phone shows Propose fixes once: the sheet's peek line
+keeps it (on screen at every height of the sheet) and the Fix tab's copy, half cut off at a half-raised sheet's foot,
+steps aside (`review-queue-phone.test.mjs`). **Both** no longer z-fights: the before ghost writes no depth, has a
+polygon offset and draws after the solid (`Viewer.ts`, `viewer-links.test.mjs`). Checked: server `pytest` (all but
+the two known pango PDF tests), web `npm test`, `tsc`, `vite build`, and headless Chromium (real GPU) at 1512×805 and
+390×844 against a local one-origin server with no credentials (`GEMINI_MODEL=gemini-3.8-flash`): 8 of 8 ready with
+#1 opened first, Accept and Reject in view, Both on #17 clean, and the report "2 applied, 0 proposed" after two accepts.

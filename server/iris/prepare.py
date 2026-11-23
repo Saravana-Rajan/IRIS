@@ -12,9 +12,11 @@ instead of asking it again (free: no proposal is charged and nothing waits on th
 every option). A saved set holds the model's replies only, never the geometry's results: every replayed reply goes
 back through `agent.resolve`, so each option is tried, checked and
 ranked on the server exactly as a live one is. A reply is used only for the exact question it answered (sha256 of the
-system prompt and the question text; images are not part of it: saved sets are made from model data alone, with no
-pictures). A question the file does not hold fails that item with a plain why; it is never asked live behind the
-reviewer's back. Saved runs read no hosts (`hosts_model=None`): a service may pass through walls and slabs only, and
+system prompt and the question text). Saved sets are made from model data alone, and replayed the same way: no
+pictures, even when the page has since taken views of the clash (it takes them of the clash on screen, so the first
+one in the list always has some), because those views change the question ("Images are views of this clash.") and
+the recorded reply answered the one without. A question the file does not hold fails that item with a plain why; it
+is never asked live behind the reviewer's back. Saved runs read no hosts (`hosts_model=None`): a service may pass through walls and slabs only, and
 every opening is reviewed by its host's team, the same when made and when replayed, so both ask the same questions.
 
 The whole set is used only when its key (`saved_key`) equals the scene's: this module's `VERSION`, the files by name and
@@ -333,11 +335,12 @@ def _plain(error: str) -> str:
 
 
 def run(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str], emit: Callable[[dict], None],
-        saved: Saved | None = None, *, live_model=None, live_hosts=plans._WS_HOSTS,
+        saved: Saved | None = None, *, live_model=None, live_hosts=plans._WS_HOSTS, live_pictures: bool = True,
         limit: int | None = plans.MAX_ITEMS) -> dict:
     """Prepare a fix for each distinct pair these clashes stand for (at most `limit`): the pairs `saved` holds first,
-    replayed (`ReplayModel`, no host reading), then the rest live (`live_model`, else `ws.model`; `live_hosts`, else
-    `ws.hosts_model`). Streams `prepare_start`, the loop's `item` events, a `prepared` event per item as it finishes and
+    replayed (`ReplayModel`, no host reading, no pictures: the question as the set was made), then the rest live
+    (`live_model`, else `ws.model`; `live_hosts`, else `ws.hosts_model`; the clash's views unless `live_pictures` is
+    False, as `generate` asks). Streams `prepare_start`, the loop's `item` events, a `prepared` event per item as it finishes and
     `done` (docs/review-queue.md). Returns {ready, failed, total, seconds, skipped, live, saved, items}."""
     started = time.perf_counter()
     items, skipped = pairs(ws, scene_id, report_id, clash_ids, limit)
@@ -377,10 +380,10 @@ def run(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str], emit
 
     if replay:
         plans._resolve_items(ws, scene_id, report_id, replay, "", relay, model=ReplayModel(saved), hosts_model=None,
-                             label=saved.model_label)
+                             label=saved.model_label, pictures=False)
     if live:
         plans._resolve_items(ws, scene_id, report_id, live, "", relay, model=model, hosts_model=live_hosts,
-                             label=getattr(model, "label", "") or "")
+                             label=getattr(model, "label", "") or "", pictures=live_pictures)
     seconds = round(time.perf_counter() - started, 1)
     emit({"type": "done", "ready": tally["ready"], "failed": tally["failed"], "total": len(items), "seconds": seconds})
     return {"ready": tally["ready"], "failed": tally["failed"], "total": len(items), "seconds": seconds,
@@ -398,8 +401,8 @@ def _clash_key(ws: Workspace, report_id: str, clash_id: str) -> str:
 def generate(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str], model, label: str = LABEL,
              out: Path | None = None, emit: Callable[[dict], None] | None = None,
              limit: int | None = None) -> dict:
-    """Make a saved set: prepare these clashes live on `model` through a `Recorder` (no host reading, as a replay
-    asks), then write every reply and the items it covers to `out` (atomically). The key names the model that made the
+    """Make a saved set: prepare these clashes live on `model` through a `Recorder` (no host reading and no pictures,
+    as a replay asks), then write every reply and the items it covers to `out` (atomically). The key names the model that made the
     replies (its id and thinking level), so a set is used only where that model is the configured one. Raises
     ValueError when the scene cannot have one (`saved_key`). Returns what was written and what it cost."""
     key = saved_key(ws, scene_id)
@@ -410,7 +413,7 @@ def generate(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str],
     key = {**key, "model": rec.model, "thinking": rec.thinking_level}
     usage_from = model.usage.snapshot() if isinstance(getattr(model, "usage", None), model_client.Usage) else None
     summary = run(ws, scene_id, report_id, clash_ids, emit or (lambda e: None), None, live_model=rec, live_hosts=None,
-                  limit=limit)
+                  live_pictures=False, limit=limit)
     items = {}
     for it in summary["items"]:
         if it["key"] in rec.failed:   # the model failed on it: nothing to replay

@@ -266,3 +266,64 @@ def test_the_generator_runs_offline_unless_told_to_call_gemini(monkeypatch):
         model_client.GeminiModel().complete_json("s", "t")
     assert model_client.model_id("proposal")   # the key still names the configured model
     sys.modules.pop("prepare_saved", None)
+
+
+def _png() -> bytes:
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "white").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_views_taken_of_a_clash_after_the_set_was_made_do_not_change_its_replay(tmp_path, monkeypatch, client):
+    """The page takes views of the clash on screen (the first in the list, before anyone opens the queue). A saved
+    set was made from model data alone, so its replay asks without them: the views' line ("Images are views of this
+    clash.") once changed the question, and the first clash always missed."""
+    _generate(tmp_path, monkeypatch)
+    ws, sid, rid = _open(tmp_path, Refuses())
+    monkeypatch.setattr(app_module, "ws", ws)
+    [cid] = [c.id for c in ws.report(rid).clashes]
+    for label in "ABC":
+        ws.save_capture(rid, cid, label, _png())
+    assert len(ws.report(rid).clash(cid).images) == 3
+    events = _events(client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "clash_ids": [cid]}))
+    [p] = [e for e in events if e["type"] == "prepared"]
+    assert p["source"] == "saved" and p["status"] == "ready", p.get("why")
+    c = ws.report(rid).clash(cid)
+    asked = ws.clash_for(c.a.global_id, c.b.global_id, None, None, "", rid, cid, sid, pictures=False)
+    assert asked.images == [] and "Images are views" not in asked.notes
+    live = ws.clash_for(c.a.global_id, c.b.global_id, None, None, "", rid, cid, sid)
+    assert len(live.images) == 3 and "Images are views of this clash." in live.notes   # a live proposal sees them
+
+
+SAMPLES = Path(__file__).resolve().parents[2] / "samples"
+
+
+@pytest.mark.skipif(not (SAMPLES / "prepared" / "Northbank.json").exists(), reason="no saved Northbank set")
+def test_the_northbank_saved_set_replays_eight_of_eight_with_no_model_call(monkeypatch, client):
+    """The committed set (made on Gemini, evals/prepare_saved.py) replays every pair it holds as ready, with views
+    taken of the first clash as the page takes them, and no model is asked."""
+    from iris import demos
+    saved_file = json.loads((SAMPLES / "prepared" / "Northbank.json").read_text())
+    monkeypatch.delenv("IRIS_PREPARED_DIR", raising=False)
+    monkeypatch.setenv("GEMINI_MODEL", saved_file["key"]["model"])
+    monkeypatch.setenv("GEMINI_THINKING_LEVEL", saved_file["key"]["thinking"])
+    ws = Workspace(samples=SAMPLES, model=Refuses())
+    monkeypatch.setattr(app_module, "ws", ws)
+    sid = ws.open(list(next(d for d in demos.DEMOS if d.id == "northbank").files))
+    rid = ws.detect(sid)["report"]["id"]
+    first = prepare.deepest(ws, sid, rid, [])[0]
+    for label in "ABC":
+        ws.save_capture(rid, first, label, _png())
+    events = _events(client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "pick": "deepest"},
+                                 headers=GZIP))
+    start, done = events[0], events[-1]
+    assert start["saved"] is not None and all(it["saved"] for it in start["items"])
+    cards = [e for e in events if e["type"] == "prepared"]
+    assert {c["key"] for c in cards} == set(saved_file["items"])
+    assert [c["status"] for c in cards] == ["ready"] * 8, [(c["label"], c.get("why")) for c in cards]
+    assert all(c["source"] == "saved" for c in cards)
+    assert done["type"] == "done" and done["ready"] == 8 and done["failed"] == 0
+    duct = next(c for c in cards if first in c["clash_ids"])
+    assert duct["options"] and duct["options"][0]["kind"] == "offset"

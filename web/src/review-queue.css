@@ -47,7 +47,11 @@
 
 /* Two panes */
 .rq-body { grid-row: 3; display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; }
-.rq-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px; overflow-y: auto; border-right: 1px solid var(--line, #e6e6e6); }
+.rq-left { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line, #e6e6e6); }
+.rq-left-scroll { display: flex; flex-direction: column; gap: 14px; flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; }
+/* The decision bar: always in view at the foot of the left pane, the card scrolling above it */
+.rq-decide { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line, #e6e6e6);
+  background: #fff; box-shadow: 0 -6px 16px rgba(16, 24, 40, .04); }
 .rq-right { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 12px; background: #fff; }
 
 /* ---------- Left pane: the clash, once ---------- */
@@ -124,6 +128,7 @@
 .rq-decided.is-rejected { background: var(--panel, #f2f2f2); color: var(--muted, #6a6a6a); }
 .rq-stale, .rq-error { padding: 10px 12px; border: 1px solid rgba(224, 71, 63, .35); border-radius: 10px; background: rgba(224, 71, 63, .06);
   color: #b3332c; font-size: 13px; line-height: 1.45; }
+.rq-detail-icon { flex: none; width: 12px; height: 12px; margin-left: 5px; vertical-align: -1px; opacity: .6; cursor: help; }
 .rq-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 32px; text-align: center;
   color: var(--muted, #6a6a6a); font-size: 13.5px; }
 
@@ -196,11 +201,26 @@
   .rq-body { display: flex; flex-direction: column; }
   .rq-right { order: -1; min-height: 46vh; padding: 8px; }
   .rq-view { min-height: 42vh; }
-  .rq-left { overflow: visible; border-right: 0; padding: 12px; }
+  .rq-left { border-right: 0; }
+  .rq-left-scroll { overflow: visible; padding: 12px; }
+  .rq-decide { position: sticky; bottom: 0; z-index: 3; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .rq-decide .rq-keys { display: none; }
   .rq-rows { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
   .rq-rows dd + dt { margin-top: 6px; }
   .rq-seg button { min-width: 64px; padding: 0 10px; }
 }
+
+/* ---------- Phones and tablets: the entry in the compact top bar; "Propose fixes" once ---------- */
+/* The entry is Clash review's primary action on every layout (App.tsx `reviewLeads`). In the compact bar it is a
+   smaller button beside Export's icon; the logo's name steps aside to make room. Its error is left to the queue, which
+   opens at once and shows it. */
+.topbar.compact:has(.rq-entry) .topbar-logo-name { display: none; }
+.topbar.compact .work-actions .rq-entry .rq-btn.rq-primary { height: 34px; padding: 0 12px; font-size: 13px; }
+.topbar.compact .work-actions .rq-entry-error { display: none; }
+/* On a phone, Propose fixes once: the sheet's peek line has it beside the clash's title, on screen at every height of
+   the sheet, so the Fix tab's copy (at the foot of a half-raised sheet, half cut off) steps aside. Where the peek line
+   has none (a run working on another clash: "Waiting for #n"), the tab's shows. */
+.app.phone:has(.sheet-peek .btn[data-tour="propose"]) .pane.right .actions > .btn[data-tour="propose"] { display: none; }
 
 /* ---------- Reduced motion: everything static ---------- */
 @media (prefers-reduced-motion: reduce) {

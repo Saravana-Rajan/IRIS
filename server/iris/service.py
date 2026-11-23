@@ -624,11 +624,14 @@ class Workspace:
 
     def clash_for(self, element_a: str, element_b: str, distance_m: float | None = None,
                   images: list[str] | None = None, notes: str = "", report_id: str | None = None,
-                  clash_id: str | None = None, scene_id: str | None = None) -> agent.Clash:
-        pics = [Path(p) for p in images or []]
+                  clash_id: str | None = None, scene_id: str | None = None, pictures: bool = True) -> agent.Clash:
+        """The clash as the fix agent reads it. `pictures` False: from model data alone, with no images (neither
+        `images` nor the report clash's views, nor the line saying there are some): what a saved set was made from
+        and what its replay asks (prepare.py), whatever views the page has taken of the clash since."""
+        pics = [Path(p) for p in images or []] if pictures else []
         if report_id and clash_id:
             c = self.report(report_id).clash(clash_id)
-            pics = pics or [p for _, p in c.images]
+            pics = (pics or [p for _, p in c.images]) if pictures else []
             if distance_m is None:
                 distance_m = c.distance_m
             source = (f"Found by Iris's own detection: {c.test}, {c.name}." if self.report(report_id).origin == "iris"
