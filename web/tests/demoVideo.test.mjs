@@ -166,12 +166,12 @@ test("opening: portalled to the body, the page stops scrolling, focus on Close, 
     assert.deepEqual([p.dialog.open, p.dialog.shown], [true, 1], "shown as a modal (the page behind inert, the dialog in the top layer)");
     assert.equal(p.doc.body.style.overflow, "hidden");
     assert.equal(p.doc.activeElement, p.close, "focus moves into the dialog");
-    assert.equal(p.track.mode, "showing", "captions on, whatever the browser made of `default`");
+    assert.equal(p.track.mode, "hidden", "captions on (drawn by the page), whatever the browser made of `default`");
     assert.equal(p.played.length, 1, "it plays");
     await new Promise((r) => setImmediate(r));   // the refused play() was caught (no unhandled rejection)
     p.track.mode = "disabled";
     host.find((n) => n.type === "video").props.onLoadedMetadata({ currentTarget: p.video });
-    assert.equal(p.track.mode, "showing", "and again once the video's data loads");
+    assert.equal(p.track.mode, "hidden", "and again once the video's data loads");
     host.render({ open: false });
     assert.equal(host.tree, null);
     assert.equal(p.dialog.open, false, "the modal closed");
@@ -411,4 +411,11 @@ test("the stylesheet is light: a frosted white scrim, a white card, the video 16
   assert.match(css, /\.demo-video-frame \{[^}]*aspect-ratio: 16 \/ 9/);
   assert.match(css, /@media \(max-width: 600px\) \{[^}]*\.demo-video \{ padding: 16px; \}/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^}]*\.demo-video-card \{ animation: none; \}/);
+});
+
+test("captions are drawn by the page: the active cues' text, tags stripped, one line per cue; nothing when none", () => {
+  assert.equal(V.cueText(undefined), "");
+  assert.equal(V.cueText({ activeCues: [] }), "");
+  assert.equal(V.cueText({ activeCues: [{ text: "Building models <b>clash</b>." }] }), "Building models clash.");
+  assert.equal(V.cueText({ activeCues: [{ text: "One" }, { text: "Two" }] }), "One\nTwo");
 });
