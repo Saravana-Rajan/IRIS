@@ -26,9 +26,12 @@ const ui = await component();
 const hooks = `const s = () => globalThis.__dwgState;
 export function useState(name, init) { if (!(name in s())) s()[name] = typeof init === "function" ? init() : init;
   return [s()[name], (v) => { s()[name] = typeof v === "function" ? v(s()[name]) : v; }]; }
-export const useId = () => "id"; export const useRef = (v) => ({ current: v }); export const useEffect = () => {};
+export const useId = () => "id"; export const useRef = (_name, v) => ({ current: v }); export const useEffect = () => {};
 export const useLayoutEffect = () => {};`;
 const live = await component(`data:text/javascript;base64,${Buffer.from(hooks).toString("base64")}`, true);
+/** The same, with each effect run as it is declared (a render, then its effects), to see what opening the page does. */
+const effects = await component(`data:text/javascript;base64,${Buffer.from(hooks.replace("export const useEffect = () => {};",
+  "export const useEffect = (f) => { f(); };")).toString("base64")}`, true);
 const css = await readFile(new URL("../src/drawings.css", import.meta.url), "utf8");
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/\s+/g, " ");
 const noop = () => {};
@@ -187,7 +190,8 @@ test("a saved sheet says so once under its header, carries a Saved reading badge
   assert.match(html, /<svg[^>]*lucide-history/, "with its small icon");
   assert.equal(html.match(/data-dwg="saved-badge"/g)?.length, 1, "the badge on the saved sheet only");
   assert.match(html, /class="dwg-badge dwg-saved-badge" data-dwg="saved-badge" title="A saved Gemini 3\.8 Flash reading of this sample[^"]*">Saved reading<\/span>/);
-  assert.match(html, /title="Replays the saved Gemini 3\.8 Flash reading of this sample: instant, no cost\."[^>]*>Read with AI<\/button>/);
+  assert.match(html, /<button type="button" class="btn small dwg-read" data-dwg="read" title="Replays the saved Gemini 3\.8 Flash reading of this sample: instant, no cost\.">Replay the reading<\/button>/,
+    "a replay, never the paid Read with AI, and not the primary button");
   assert.ok(html.indexOf("dwg-view-head") < html.indexOf('data-dwg="saved"'), "under the sheet header");
 });
 
@@ -226,4 +230,75 @@ test("the saved styles use the AI tokens, light only", () => {
   assert.match(rule(".dwg-saved"), /background: var\(--d-ai-soft\)/);
   assert.match(rule(".dwg-badge.dwg-saved-badge"), /color: var\(--muted\)/, "the badge is neutral");
   assert.ok(rule(".dwg-samples-line"));
+});
+
+test("the sample sheets open already read: a saved sheet fetched with no items replays its reading once, a user's PDF waits", () => {
+  const none = {};
+  assert.deepEqual(ui.autoReplays([SHEET, LIVE], { m201: [], u1: [] }, none).map((x) => x.id), ["m201"], "only the sheet with a saved reading");
+  assert.deepEqual(ui.autoReplays([SHEET], {}, none), [], "not before its items are fetched: it may have been read already");
+  assert.deepEqual(ui.autoReplays([SHEET], { m201: [itemOf("sa-1")] }, none), [], "read already: nothing to replay");
+  assert.deepEqual(ui.autoReplays([SHEET], { m201: [] }, { m201: { state: "reading", page: null, total: 1, items: 0 } }), [], "replaying now");
+  assert.deepEqual(ui.autoReplays([SHEET], { m201: [] }, { m201: { state: "error", message: "x" } }), [], "a failure waits for Retry");
+  assert.deepEqual(ui.autoReplays([LIVE], { u1: [] }, none), [], "the user's own PDF: a live reading costs, so it waits for a click");
+
+  // Opening the page: the saved sheet's reading starts by itself, once; the user's PDF is not read.
+  globalThis.__dwgState = {};
+  const calls = [];
+  const onRead = (did) => { calls.push(did); return new Promise(() => {}); };
+  const props = { sceneId: "s1", drawings: [SHEET, LIVE], items: { m201: [], u1: [] }, compare: null, onUpload: noop, onRead, onFocusElement: noop };
+  effects.DrawingsPanel(props);
+  effects.DrawingsPanel(props);
+  assert.deepEqual(calls, ["m201"], "the sample sheet replayed once; the uploaded one left for Read with AI");
+  const t = text(renderToStaticMarkup(live.DrawingsPanel(props)));
+  assert.match(t, /Northbank M-201\.pdf .*Saved reading Opening the saved reading…/, "the card says it is opening, never 'Not read yet'");
+  assert.match(t, /Replaying the saved reading|Starting the reading…/);
+  assert.match(t, /Replaying…/);
+
+  // The page busy elsewhere: the replay waits, then starts once it is free.
+  globalThis.__dwgState = {};
+  calls.length = 0;
+  effects.DrawingsPanel({ ...props, busy: true });
+  assert.deepEqual(calls, []);
+  effects.DrawingsPanel(props);
+  assert.deepEqual(calls, ["m201"]);
+
+  // Before its items arrive the card still says it is opening; a user's PDF says it is not read yet.
+  globalThis.__dwgState = {};
+  const before = text(renderToStaticMarkup(live.DrawingsPanel({ ...props, items: {} })));
+  assert.match(before, /Saved reading Opening the saved reading…/);
+  assert.match(before, /Own sheet\.pdf .*Not read yet/);
+  assert.doesNotMatch(before.slice(0, before.indexOf("Own sheet.pdf")), /Not read yet/, "never both Saved reading and Not read yet");
+  assert.match(before, /Opening the saved reading: its items appear here\./);
+});
+
+test("phone and desktop: the read button keeps its line, the note sits on its own, the zoom sits under the sheet", () => {
+  const rule = (sel) => { const m = new RegExp(`${sel.replace(/[.()>:]/g, "\\$&")} \\{([^}]*)\\}`).exec(css); assert.ok(m, sel); return m[1]; };
+  assert.match(rule(".dwg-centre > :not(.dwg-viewer)"), /flex: none/, "nothing above the sheet is squeezed under the next line");
+  assert.match(rule(".dwg-read"), /flex: none/);
+  assert.match(rule(".dwg-view-head"), /flex-wrap: wrap/);
+  assert.doesNotMatch(rule(".dwg-tools"), /position: absolute/, "the zoom never covers the sheet");
+  const phone = css.slice(css.indexOf("@media (max-width: 760px)"));
+  assert.match(phone, /\.dwg-stage \{[^}]*aspect-ratio: var\(--dwg-sheet-ar/, "on a phone the stage takes the sheet's shape");
+  const html = renderToStaticMarkup(panel({ drawings: [SHEET], items: { m201: [itemOf("sa-1")] } }));
+  assert.ok(html.indexOf('data-dwg="read"') < html.indexOf('data-dwg="saved"'), "the button in the header, the note after it");
+  assert.match(html, /style="--dwg-sheet-ar:2000 \/ 1400"/);
+  assert.match(html, /<div class="dwg-foot"><ul class="dwg-legend"[^]*<div class="dwg-tools" role="toolbar" aria-label="Zoom">/);
+});
+
+test("white and pink: the selected tab in the pink accent, red for differs, amber for missing, the key in that order", () => {
+  const rule = (sel) => { const m = new RegExp(`${sel.replace(/[.()>:"=[\]]/g, "\\$&")} \\{([^}]*)\\}`).exec(css); assert.ok(m, sel); return m[1]; };
+  assert.match(rule(".dwg-tabs"), /background: var\(--surface\)/, "white tabs");
+  const on = rule('.dwg-tabs [role="tab"][aria-selected="true"]');
+  assert.match(on, /color: var\(--accent-ink\)/);
+  assert.match(on, /border-bottom-color: var\(--pink, var\(--accent\)\)/);
+  for (const part of ["dwg-mis", "dwg-badge", "dwg-mk", "dwg-swatch"]) {
+    assert.match(rule(`.${part}.mk-differs`), /var\(--d-failed\)/, `${part}: differs is red`);
+    assert.match(rule(`.${part}.mk-missing`), /var\(--warn\)/, `${part}: missing is amber`);
+  }
+  assert.match(rule(".dwg-mm.mk-differs"), /var\(--d-failed\)/);
+  assert.match(rule(".dwg-mm.mk-missing"), /var\(--warn\)/);
+  const key = text(renderToStaticMarkup(ui.Legend()));
+  assert.match(key, /Confirmed.*AI-read.*Differs from the model Missing/);
+  assert.match(renderToStaticMarkup(ui.Legend()), /<li class="dwg-legend-mk"><i class="dwg-swatch mk-differs"/);
+  assert.match(rule(".dwg-legend::after"), /order: 1; flex-basis: 100%/, "the mismatches on a row of their own");
 });

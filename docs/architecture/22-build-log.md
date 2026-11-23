@@ -1222,3 +1222,20 @@ the split deploy. **Report PDF on Cloud Run:** the `Dockerfile` already installs
 Checked: server tests (new: the defaults equal `deploy.sh`'s; Northbank's saved set replays with no credentials and
 no live call; the patterns reading skipped with no model; an unknown page gets `index.html` while `/api`, files and
 anything that walks up stay 404), `test_docs_map.py`, the web suite, `tsc` and `vite build`; no Gemini call.
+Nov 22 (2026-11-22), the Drawings page after QA (`fix/qa2-fix-drawings`: `DrawingsPanel.tsx`, `drawings.css`).
+**The sample sheets open already read:** a sheet with a saved reading whose items come back empty replays it by itself
+(`autoReplays`, once per sheet, after the page stops being busy), so "Try the sample drawings" lands on the items and
+the four mismatches with no click, under the "Saved AI reading of this sample (Gemini 3.8 Flash)" note; its card no
+longer says both "Saved reading" and "Not read yet", and its button reads "Replay the reading". The user's own PDFs
+still wait for **Read with AI**. **The read button is reachable on a phone:** the header, the saved note and the
+reading line keep their own height (`.dwg-centre > :not(.dwg-viewer) { flex: none }`), so a wrapped button no longer
+slides under the note and taps reach it. **The viewer opens at "Fit"**, its zoom said against the fitted width, not the
+page image's pixels ("10 %", "6 %" on a phone); the zoom and the key share one row under the sheet, and on a phone the
+stage takes the sheet's shape. **White and pink:** the selected readings tab is the pink accent (word, underline,
+count), tabs hover pink; a mismatch is red when the drawing differs from the model and amber when an element is
+missing (was the other way round), on the sheet, in the list and in the key, which puts the two on a row under the
+reading statuses. Checked: `drawings-samples.test.mjs` (auto replay on a
+sample, none on an upload, none before the items are fetched or while busy, once; the tab and mismatch colours and
+the key), `drawings.test.mjs`, the full web
+suite, `tsc`, `npm run build`, and headless Chromium on a local one-origin server with no Gemini credentials (desktop
+1512×805, phone 390×844).

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { Box, ChevronLeft, ChevronRight, FileUp, History, Maximize2, RotateCcw, TriangleAlert, ZoomIn, ZoomOut } from "lucide-react";
 import {
   centreOn, costText, findItem, fitWidth, kindLabel, mismatchStyle, pageNumber, pageUrl, plural, savedModel, savedOfItems,
@@ -14,7 +14,8 @@ import "./drawings.css";
 export interface DrawingsPanelProps {
   sceneId: string | null;
   drawings: readonly Drawing[];
-  /** Items by drawing id (GET /api/drawings/{did}/items); a drawing not read yet is absent or []. */
+  /** Items by drawing id (GET /api/drawings/{did}/items): absent until fetched, [] when not read yet. A sample sheet
+   *  (`saved_reading`) fetched with [] replays its saved reading at once (`autoReplays`); other sheets wait for a click. */
   items: Readonly<Record<string, readonly Item[]>>;
   /** GET /api/scenes/{sid}/drawings/compare, or null before it has run. */
   compare: Comparison | null;
@@ -70,6 +71,8 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
   const [skipped, setSkipped] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [samples, setSamples] = useState<SamplesState | null>(null);
+  // Sheets replayed on their own (`autoReplays`): each once, even when React runs an effect twice.
+  const replayed = useRef<Set<string>>(new Set());
 
   const current = drawings.find((d) => d.id === sel) ?? drawings[0] ?? null;
   const itemsOf = (did: string): readonly Item[] => (items[did]?.length ? items[did] : live[did] ?? []);
@@ -126,6 +129,17 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
       (e) => setReads((r) => ({ ...r, [did]: { state: "error", message: messageOf(e) } })),
     );
   };
+
+  // The sample sheets open already read: one with a saved reading whose items came back empty replays it now, free and
+  // instant (docs/drawings.md, "Saved readings"). The user's own PDFs wait for Read with AI: a live reading costs.
+  useEffect(() => {
+    if (busy) return;
+    for (const d of autoReplays(drawings, items, reads)) {
+      if (replayed.current.has(d.id)) continue;
+      replayed.current.add(d.id);
+      read(d);
+    }
+  }, [drawings, items, busy]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const addSamples = () => {
     if (!onSamples || busy || !sceneId || samples?.state === "adding" || upload?.state === "sending") return;
@@ -198,6 +212,7 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
           <ul>
             {drawings.map((d) => {
               const its = itemsOf(d.id), t = statusTally(its), layer = textLayerOf(d), rs = reads[d.id], sv = savedReadingOf(d.saved_reading);
+              const pending = sheetPending(d, items, rs);
               return (
                 <li key={d.id}>
                   <button type="button" className="dwg-sheet" aria-current={d.id === current?.id ? "true" : undefined} onClick={() => choose(d.id)}>
@@ -213,10 +228,12 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
                         Saved reading</span>}
                     </span>
                     <span className="dwg-sheet-meta">
-                      {rs?.state === "reading" ? <span>Reading…</span>
+                      {rs?.state === "reading" ? <span>{sv ? "Opening the saved reading…" : "Reading…"}</span>
                         : rs?.state === "error" ? <span className="dwg-bad">Reading failed</span>
                           : its.length ? <span><span className="mono">{its.length}</span> items{t.ai_only ? <> · <span className="mono">{t.ai_only}</span> to check</> : null}</span>
-                            : <span className="dwg-faint">Not read yet</span>}
+                            : pending ? <span className="dwg-faint">Opening the saved reading…</span>
+                              : rs?.state === "done" ? <span className="dwg-faint">No items found</span>
+                                : <span className="dwg-faint">Not read yet</span>}
                     </span>
                   </button>
                 </li>
@@ -239,13 +256,16 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
                 </span>
               )}
               <span className="dwg-spacer" />
-              <button type="button" className={`btn small${wasRead ? "" : " primary"}`} disabled={busy || readState?.state === "reading"} onClick={() => read(current)}
+              <button type="button" className={`btn small dwg-read${wasRead || savedSheet ? "" : " primary"}`} data-dwg="read"
+                disabled={busy || readState?.state === "reading"} onClick={() => read(current)}
                 title={savedSheet ? `Replays the saved ${savedModel(savedSheet)} reading of this sample: instant, no cost.`
                   : wasRead ? "Read the sheet again (a page already read is cached and costs nothing)" : "Gemini reads tags, types and sizes; the text layer checks them"}>
-                {readState?.state === "reading" ? "Reading…" : wasRead ? "Read again" : "Read with AI"}</button>
+                {readState?.state === "reading" ? (savedSheet ? "Replaying…" : "Reading…") : savedSheet ? "Replay the reading"
+                  : wasRead ? "Read again" : "Read with AI"}</button>
             </header>
             {saved && <SavedNote saved={saved} />}
-            <ReadLine read={readState} drawing={current} onRetry={() => read(current)} />
+            {/* A replay done says nothing the note above does not (saved, no cost); the Items tab counts the items */}
+            {!(readState?.state === "done" && readState.saved && saved) && <ReadLine read={readState} drawing={current} onRetry={() => read(current)} />}
             {page && !page.has_text_layer && (
               <p className="dwg-notice st-ai" role="note"><b>No text layer on this page (scanned).</b> Every item on it is AI-read: check each one on the sheet.</p>
             )}
@@ -260,7 +280,11 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
               items: <>
                 {shown.length > 0 && <StatusFilter tally={tally} total={shown.length} filter={filter} onFilter={setFilter} />}
                 <ItemsTable drawing={current} items={filtered} picked={picked} mismatchOf={mismatchOf} onPick={(it) => pick(it)}
-                  empty={shown.length ? "No items with this status." : readState?.state === "reading" ? "Items appear here as each page is read." : "Not read yet. Read the sheet with AI to list its items."} />
+                  empty={shown.length ? "No items with this status."
+                    : readState?.state === "reading" ? (savedSheet ? "Opening the saved reading: its items appear here." : "Items appear here as each page is read.")
+                      : current && sheetPending(current, items, readState) ? "Opening the saved reading: its items appear here."
+                        : readState?.state === "done" ? "No items found on this sheet."
+                          : "Not read yet. Read the sheet with AI to list its items."} />
                 {pickedItem && current && <ItemDetail item={pickedItem} drawing={current} match={matchOf.get(pickedItem.id) ?? null}
                   mismatch={mismatchOf.get(pickedItem.id) ?? null} names={names} onFocusElement={onFocusElement} />}
               </>,
@@ -276,6 +300,18 @@ export function DrawingsPanel({ sceneId, drawings, items, compare, busy = false,
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 /* Parts                                                                                                            */
+
+/** The sheets to replay on their own when the page shows them: each with a saved reading (`saved_reading`, the sample
+ *  sheets: free, instant), its items fetched and empty (never read), and no reading of it here yet (one that failed
+ *  waits for Retry). Never a sheet without one: reading the user's own PDFs costs, so it waits for Read with AI. */
+export function autoReplays(drawings: readonly Drawing[], items: Readonly<Record<string, readonly Item[]>>,
+  reads: Readonly<Record<string, ReadState>>): Drawing[] {
+  return drawings.filter((d) => Object.prototype.hasOwnProperty.call(items, d.id) && sheetPending(d, items, reads[d.id]));
+}
+/** A sample sheet waiting for its saved reading: one is there, nothing read or reading yet, and no failure. */
+function sheetPending(d: Drawing, items: Readonly<Record<string, readonly Item[]>>, read: ReadState | undefined): boolean {
+  return !!savedReadingOf(d.saved_reading) && !items[d.id]?.length && !read;
+}
 
 /** The rule in the proof grammar: AI reads (dashed indigo), data checks (solid teal), the engineer decides (navy). */
 export function RuleStrip() {
@@ -665,12 +701,16 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
 
   const s = view?.s ?? 1;
   const pad = 5 / s;
+  // The zoom said against the width fitted to the viewer (100%: the sheet's width fills it), not the page image's
+  // pixels: a large sheet rendered at print resolution would otherwise open at "6%".
+  const fitS = size && size.w > 0 ? fitWidth(size, dims).s : null;
+  const zoomPct = view && fitS ? Math.round((view.s / fitS) * 100) : null;
   const tally = statusTally(items);
   const label = `${drawing.name}, page ${pageNumber(drawing, page.index)} of ${drawing.pages.length}: ${plural(items.length, "item")}`
     + (items.length ? ` (${tally.confirmed} confirmed, ${tally.ai_only} AI-read, ${tally.text_only} text only)` : "");
   return (
     <div className="dwg-viewer">
-      <div ref={stage} className="dwg-stage" tabIndex={0} role="group"
+      <div ref={stage} className="dwg-stage" tabIndex={0} role="group" style={{ "--dwg-sheet-ar": `${dims.w} / ${dims.h}` } as CSSProperties}
         aria-label={`${label}. Drag or arrow keys to pan, wheel or + and − to zoom, 0 to fit the width.`}
         aria-keyshortcuts="+ - 0 ArrowLeft ArrowRight ArrowUp ArrowDown"
         onKeyDown={onKey} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
@@ -706,13 +746,16 @@ function SheetViewer({ drawing, page, items, picked, mismatchOf, onPick }: {
           </div>
         )}
       </div>
-      <div className="dwg-tools" role="toolbar" aria-label="Zoom">
-        <button type="button" className="dwg-ibtn" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoom(0.8)} disabled={!view}><ZoomOut size={16} aria-hidden /></button>
-        <span className="mono dwg-zoom" aria-live="off">{view ? `${Math.round(view.s * 100)}%` : "fit"}</span>
-        <button type="button" className="dwg-ibtn" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoom(1.25)} disabled={!view}><ZoomIn size={16} aria-hidden /></button>
-        <button type="button" className="dwg-ibtn" aria-label="Fit to width" title="Fit to width (0)" onClick={fit} disabled={!size}><Maximize2 size={16} aria-hidden /></button>
+      <div className="dwg-foot">
+        <Legend />
+        <div className="dwg-tools" role="toolbar" aria-label="Zoom">
+          <button type="button" className="dwg-ibtn" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoom(0.8)} disabled={!view}><ZoomOut size={16} aria-hidden /></button>
+          <span className="mono dwg-zoom" aria-live="off" data-dwg="zoom" title="Zoom against the sheet's width fitted to the viewer">
+            {zoomPct === null || (fitted.current && zoomPct === 100) ? "Fit" : `${zoomPct}%`}</span>
+          <button type="button" className="dwg-ibtn" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoom(1.25)} disabled={!view}><ZoomIn size={16} aria-hidden /></button>
+          <button type="button" className="dwg-ibtn" aria-label="Fit to width" title="Fit to width (0)" onClick={fit} disabled={!size}><Maximize2 size={16} aria-hidden /></button>
+        </div>
       </div>
-      <Legend />
     </div>
   );
 }
@@ -724,8 +767,8 @@ export function Legend() {
       {(["confirmed", "ai_only", "text_only"] as const).map((st) => (
         <li key={st}><i className={`dwg-swatch ${statusStyle(st).cls}`} aria-hidden />{statusStyle(st).label}</li>
       ))}
+      <li className="dwg-legend-mk"><i className="dwg-swatch mk-differs" aria-hidden />Differs from the model</li>
       <li><i className="dwg-swatch mk-missing" aria-hidden />Missing</li>
-      <li><i className="dwg-swatch mk-differs" aria-hidden />Differs</li>
     </ul>
   );
 }
