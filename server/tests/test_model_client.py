@@ -1,6 +1,7 @@
 """model_client: Gemini through google-genai, with the SDK client mocked (no network)."""
 import base64
 import json
+from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
@@ -186,3 +187,32 @@ def test_client_backend_choice(monkeypatch):
     monkeypatch.delenv("GOOGLE_CLOUD_LOCATION", raising=False)
     model_client.make_client()
     assert made[-1] == {"vertexai": True, "project": "proj", "location": "global"}
+
+
+def test_the_code_defaults_are_the_deploy_defaults_and_the_saved_set_s_key():
+    """A fresh clone with no settings runs what the deploy runs (deploy/deploy.sh's `VAR="${VAR:-default}"` lines), and
+    so matches the saved review-queue set's key (its proposal model and thinking level) out of the box."""
+    import re
+    root = Path(__file__).resolve().parents[2]
+    deploy = dict(re.findall(r'^(GEMINI_\w+)="\$\{\1:-([^}]*)\}"', (root / "deploy" / "deploy.sh").read_text(), re.M))
+    for role, (var, default) in model_client.DEFAULT_MODELS.items():
+        if var in deploy:
+            assert default == deploy[var], (role, var)
+    for role, (var, default) in model_client.DEFAULT_THINKING.items():
+        if var in deploy:
+            assert default == deploy[var], (role, var)
+    assert {"GEMINI_MODEL", "GEMINI_ESCALATION_MODEL", "GEMINI_THINKING_LEVEL"} <= set(deploy)
+    assert model_client.model_id("proposal") == model_client.model_id("escalation") == "gemini-3.8-flash"
+    saved = root / "samples" / "prepared" / "Northbank.json"
+    if saved.exists():
+        key = json.loads(saved.read_text())["key"]
+        assert (key["model"], key["thinking"]) == (model_client.model_id("proposal"), model_client.thinking_level("proposal"))
+
+
+def test_only_a_gemini_model_with_no_client_and_no_credentials_cannot_be_called(monkeypatch):
+    assert not model_client.configured()
+    assert not model_client.can_call(GeminiModel())
+    assert model_client.can_call(GeminiModel(client=object()))
+    assert model_client.can_call(object())   # a stand-in: a replay, a scripted or test model
+    monkeypatch.setenv("GEMINI_API_KEY", "not-a-key")
+    assert model_client.can_call(GeminiModel())

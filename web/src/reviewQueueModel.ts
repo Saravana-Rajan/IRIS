@@ -349,6 +349,34 @@ export function anotherStage(e: AgentEvent): string | null {
   }
 }
 
+/** What went wrong, in plain words. A server error (a Python exception's `RuntimeError: …`, a traceback, a model's
+ * status code) or a browser one ("Failed to fetch") becomes a sentence a reviewer can act on, with the raw words kept
+ * as `detail` (for a tooltip, never printed). Plain words (geometry's why, the requirements, the saved set's miss)
+ * pass through with no detail. A lead such as "Preparing stopped: " is kept. `model`: the AI model's name, if known. */
+export function plainError(raw: string | null | undefined, model?: string | null): { text: string; detail: string } {
+  const all = String(raw ?? "").trim();
+  const lead = /^((?:Preparing stopped|Another fix was not prepared|Not kept|The rejection was not recorded|The request was not recorded)[^:\n]*: )/.exec(all)?.[1] ?? "";
+  const rest = all.slice(lead.length);
+  const technical = /Traceback \(most recent call last\)|(?:^|[\s(])[A-Z]\w*(?:Error|Exception|Exceeded|Timeout|Miss)\b|Failed to fetch|NetworkError|\b(?:status|code|HTTP) ?[45]\d\d\b|\b[45]\d\d (?:[A-Z][a-z]+ ?)+\b/.test(rest);
+  if (!technical) return { text: all, detail: "" };
+  const who = (model ?? "").trim() || "The AI model";
+  const lines = rest.split("\n").map((l) => l.trim()).filter(Boolean);
+  const last = /^Traceback/.test(lines[0] ?? "") ? lines[lines.length - 1] ?? "" : lines.join(" ");
+  const detail = last.length > 300 ? `${last.slice(0, 299)}…` : last;
+  const rules: [RegExp, string][] = [
+    [/no model configured|GEMINI_API_KEY|GOOGLE_CLOUD_PROJECT|DefaultCredentials|credentials were not found|no model client may be built/i,
+      "No AI model is configured on this server, so no fix was prepared."],
+    [/timed? ?out|timeout|deadline|\b504\b/i, `${who} didn't answer in time.`],
+    [/\b429\b|RESOURCE_EXHAUSTED|quota|rate.?limit/i, `${who} is busy (too many requests): try again in a minute.`],
+    [/\b40[13]\b|PERMISSION_DENIED|UNAUTHENTICATED|permission denied/i, "This server is not allowed to use the AI model."],
+    [/JSONDecodeError|Expecting value|could not parse|invalid json/i, `${who}'s answer could not be read.`],
+    [/\b50[023]\b|UNAVAILABLE|ServiceUnavailable|ServerError|InternalServerError/i, `${who} had a problem answering: try again.`],
+    [/Failed to fetch|NetworkError|network/i, "The server could not be reached."],
+  ];
+  const text = rules.find(([re]) => re.test(rest))?.[1] ?? "Something went wrong on the server.";
+  return { text: `${lead}${text}`, detail };
+}
+
 /** Why a second proposal found no verified fix, honestly: the requirements, else what geometry refused. */
 export function failedWhy(p: Pick<Proposal, "attempts" | "advice" | "recommendation">): string {
   if (p.recommendation?.blocked_by) return `The requirements allow no edit here: ${p.recommendation.blocked_by}.`;

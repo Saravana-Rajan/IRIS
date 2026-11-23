@@ -21,6 +21,12 @@ export const PANEL_IDS: PanelId[] = PANELS.map((p) => p.id);
 export const isPanel = (id: string): id is PanelId => (PANEL_IDS as string[]).includes(id);
 export const homeOf = (id: PanelId) => PANELS.find((p) => p.id === id)!.home;
 export const titleOf = (id: PanelId) => PANELS.find((p) => p.id === id)!.title;
+/** The tab names that follow the project step on screen: the left panel shows the Models step's import and models on
+ *  Models, the overview and the list on Coordination, the clash list on Clash review; elsewhere every panel keeps its
+ *  own name (none returned). */
+export function stepTitles(step: string | null | undefined): Partial<Record<PanelId, string>> {
+  return step === "models" ? { clashes: "Models" } : step === "clash" ? { clashes: "Clashes" } : {};
+}
 
 /** The side panes' widths in pixels (least, most, default): the classic layout's dragged panes and the dock's left and
  * right side bars, which start at the widths the panes were dragged to (`iris.left-w`, `iris.right-w`). */

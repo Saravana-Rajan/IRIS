@@ -1,5 +1,5 @@
-"""The built web app's pages (app._WebApp): a browser asking for one of the app's pages gets index.html; an /api route,
-a file or anything that walks up stays a 404."""
+"""The built web app's pages (app._WebApp): a browser asking for a page gets index.html (the app shows its own "Page not
+found" for one it does not know); an /api route, a file or anything that walks up stays a 404."""
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -33,8 +33,9 @@ def test_the_app_s_pages_are_the_app(tmp_path):
 def test_api_files_and_anything_else_stay_404(tmp_path):
     c = _client(tmp_path)
     for path in ["/api/nope", "/api/projects/a/b", "/api/projects/..%2F..%2Fetc", "/mcp/x", "/docs/x", "/openapi.json.bak",
-                 "/assets/missing.js", "/wasm/web-ifc.wasm", "/favicon.ico", "/projects/abc/app.js", "/elsewhere",
-                 "/projects/..%2F..%2Fetc", "/projects/%2e%2e/secret", "/home/..%5c..%5cwin"]:
+                 "/assets/missing.js", "/wasm/web-ifc.wasm", "/favicon.ico", "/projects/abc/app.js", "/redoc/x",
+                 "/projects/..%2F..%2Fetc", "/projects/%2e%2e/secret", "/home/..%5c..%5cwin", "/nope/..%2Fx",
+                 "/elsewhere/%2e%2e/x", "/elsewhere.html", "/api", "/mcp", "/assets", "/wasm/x"]:
         assert c.get(path, headers=HTML).status_code == 404, path
 
 
@@ -42,3 +43,13 @@ def test_only_a_browser_page_request_gets_the_app(tmp_path):
     c = _client(tmp_path)
     assert c.get("/projects/abc", headers={"accept": "application/json"}).status_code == 404
     assert c.post("/projects/abc", headers=HTML).status_code in (404, 405)
+
+
+def test_an_unknown_page_is_the_app_so_it_can_say_page_not_found(tmp_path):
+    c = _client(tmp_path)
+    for path in ["/nope-page", "/elsewhere", "/a/b/c", "/home-old/", "/Projects"]:
+        r = c.get(path, headers=HTML)
+        assert r.status_code == 200 and "<title>Iris</title>" in r.text, path
+    assert c.head("/nope-page", headers=HTML).status_code == 200
+    assert c.get("/nope-page", headers={"accept": "application/json"}).status_code == 404   # not a browser page
+    assert c.get("/nope-page").status_code == 404

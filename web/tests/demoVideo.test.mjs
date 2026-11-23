@@ -279,8 +279,8 @@ test("Watch the demo: a play mark, the label and the length in mono; it opens it
   assert.match(html, /<span class="watch-demo-play" aria-hidden="true"><svg/);
   assert.ok(html.includes(`<span class="watch-demo-time mono">${t2}</span>`));
   assert.equal(text(html).trim(), `Watch the demo · ${t2}`);
-  const hero = renderToStaticMarkup(h(V.WatchDemoButton, { id: "full", label: "Watch the full demo", className: "watch-demo-hero holo-edge" }));
-  assert.match(hero, /^<button type="button" class="watch-demo watch-demo-hero holo-edge" data-video="full"/);
+  const hero = renderToStaticMarkup(h(V.WatchDemoButton, { id: "full", label: "Watch the full demo", className: "watch-demo-hero" }));
+  assert.match(hero, /^<button type="button" class="watch-demo watch-demo-hero" data-video="full"/);
   assert.ok(hero.includes(`aria-label="Watch the full demo: Iris: does AI truly see? (${tf})"`));
   for (const id of ["3d", "2d", "full"]) {
     const host = mount(S.WatchDemoButton, { id });

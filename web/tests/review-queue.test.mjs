@@ -137,7 +137,7 @@ const press = (key, target = { tagName: "BODY" }, extra = {}) => {
 
 let scene = 0;
 /** A queue open on a run the shared store has prepared (each test its own scene, so the store starts again). */
-async function openQueue({ events = runEvents(), routes = {}, reviewer = "Asha Rao", onKept, extra = {} } = {}) {
+async function openQueue({ events = runEvents(), routes = {}, reviewer = "Asha Rao", onKept, extra = {}, list = clashes } = {}) {
   const sceneId = `scene${++scene}`;
   const calls = server({ "/prepare/stream": () => ndjson(events), ...routes });
   await M.prepareStore.start(sceneId, { report_id: "rep", clash_ids: ["c1", "c2", "c3"], pick: "ids", fixed: [] });
@@ -145,7 +145,7 @@ async function openQueue({ events = runEvents(), routes = {}, reviewer = "Asha R
   const viewer = { ...base, ...Object.fromEntries(Object.entries(extra).map(([k, fn]) => [k, (...a) => { seen.push([k, ...a]); return fn(...a); }])) };
   const kept = [], decisions = [], names = [];
   let closed = 0;
-  const host = mount(Q.ReviewQueue, { sceneId, reportId: "rep", reportTitle: "Coordination check", clashes, viewer, reviewer,
+  const host = mount(Q.ReviewQueue, { sceneId, reportId: "rep", reportTitle: "Coordination check", clashes: list, viewer, reviewer,
     onReviewer: (n) => names.push(n), onKept: onKept ?? ((k, info) => { kept.push([k, info]); }), onDecisions: (d) => decisions.push(d),
     onClose: () => { closed++; } });
   return { host, calls, seen, kept, decisions, names, sceneId, closed: () => closed,
@@ -541,4 +541,54 @@ test("queue: closing puts the camera back where it was and clears the clash mark
   host.unmount();
   assert.deepEqual(seen.slice(-5), [["preview", []], ["setFocus", { a: null, b: null }], ["setMarker", null], ["mountIn", null],
     ["applyPose", "pose-at-open", false]], "the view goes back as it was");
+});
+
+test("plainError: a server's exception or a model's status becomes a plain sentence, the raw words kept as detail", () => {
+  const none = M.plainError("RuntimeError: No model configured: set GOOGLE_CLOUD_PROJECT (Vertex AI) or GEMINI_API_KEY.");
+  assert.equal(none.text, "No AI model is configured on this server, so no fix was prepared.");
+  assert.match(none.detail, /^RuntimeError: No model configured/);
+  const late = M.plainError("Traceback (most recent call last):\n  File \"x.py\", line 1\nhttpx.ReadTimeout: The read operation timed out", "Gemini Flash");
+  assert.equal(late.text, "Gemini Flash didn't answer in time.");
+  assert.equal(late.detail, "httpx.ReadTimeout: The read operation timed out", "a traceback's last line only");
+  assert.equal(M.plainError("Preparing stopped: RuntimeError: No model configured").text,
+    "Preparing stopped: No AI model is configured on this server, so no fix was prepared.");
+  assert.equal(M.plainError("ClientError: 429 RESOURCE_EXHAUSTED").text, "The AI model is busy (too many requests): try again in a minute.");
+  assert.equal(M.plainError("ValueError: something odd").text, "Something went wrong on the server.");
+  for (const words of ["Raise duct 400 mm: hits Secondary beam\nAsk the services designer.", "The saved AI proposals do not cover this clash.",
+    "The requirements allow no edit here: the girder stays."]) {
+    assert.deepEqual(M.plainError(words), { text: words, detail: "" }, "plain words pass through");
+  }
+});
+
+test("queue: a server error is never printed as the why; its words are in the tooltip", async () => {
+  const raw = "RuntimeError: No model configured: set GOOGLE_CLOUD_PROJECT (Vertex AI) or GEMINI_API_KEY.";
+  const q = await openQueue({ events: runEvents({ k2: prepared("k2", 1, { status: "failed", options: [], why: raw, model: "Gemini Flash" }) }) });
+  q.host.find((n) => n.props?.["aria-label"] === "#57: No verified fix").props.onClick(); q.host.render();
+  const text = q.host.text();
+  assert.match(text, /No verified fix found/);
+  assert.ok(text.includes("No AI model is configured on this server"));
+  assert.ok(!text.includes("RuntimeError") && !text.includes("GEMINI_API_KEY"), "no exception text on screen");
+  assert.ok(q.host.find((n) => typeof n.props?.title === "string" && n.props.title.includes("RuntimeError: No model configured")), "details in a tooltip");
+  q.host.unmount();
+});
+
+test("queue: one friendly title (never the raw IFC label too), and the decision bar in its own footer", async () => {
+  const untitled = clashes.map((c) => ({ ...c, title: null }));
+  const items = startItems.map((it) => ({ ...it, label: `IfcDuctSegment '${it.element_a}' x IfcBeam 'Transfer girder TB-L02-01'` }));
+  const q = await openQueue({ list: untitled, events: [{ type: "prepare_start", total: 3, items, skipped: 0, saved },
+    ...runEvents().slice(1)] });
+  const title = titleOf(q.host).replace(/\s+/g, " ");
+  assert.equal(title, "#42 Supply air main ↔ Transfer girder TB-L02-01−300 mm");
+  assert.ok(!q.host.text().includes("IfcDuctSegment"), "the raw label is not shown");
+  assert.equal(q.host.find((n) => n.props?.className === "rq-pair"), undefined, "the pair is not repeated under it");
+  const bar = q.host.find((n) => n.props?.className === "rq-decide");
+  assert.ok(bar, "the decision bar");
+  for (const words of ["Accept", "Reject", "Request another", "Reviewing as"]) assert.ok(textOf(bar).includes(words), `${words} in the bar`);
+  const scroll = q.host.find((n) => n.props?.className === "rq-left-scroll");
+  assert.ok(!textOf(scroll).includes("Accept"), "not in the scrolling card");
+  q.host.unmount();
+  const titled = await openQueue();
+  assert.match(titleOf(titled.host), /^#42 Supply air main through the transfer girder/);
+  assert.equal(textOf(titled.host.find((n) => n.props?.className === "rq-pair")), "Supply air main ↔ Transfer girder TB-L02-01", "under a written title, the pair");
+  titled.host.unmount();
 });

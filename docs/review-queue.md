@@ -15,7 +15,7 @@ keep route as everywhere else (`plans.apply`: tried again on the server first).
 | The fix loop: agent → geometry verify → retry with the reason → rank | `agent.resolve` through `plans._resolve_items` (`PLAN_WORKERS` 4 at a time, `PLAN_ROUNDS` 2), each result remembered for a second try (`Workspace._remember`) |
 | "No verified fix found: why" | `plans.failure_summary` (the item's `error`) |
 | Caps | one proposal per clash pair prepared live (`propose_limit.take_many`, all or nothing, before the stream); at most `plans.MAX_ITEMS` (8) per run |
-| Before / After / Both | `Viewer.showOption(..., "before" \| "after" \| "both")`: the fix solid in its new place, what it changes ghosted in its old one |
+| Before / After / Both | `Viewer.showOption(..., "before" \| "after" \| "both")`: the fix solid in its new place, what it changes ghosted in its old one (translucent, no depth written, pushed back by a polygon offset and drawn after the solid, so a face the two share shows the solid and never flickers) |
 | Accept | `POST /api/scenes/{scene_id}/fix/apply` → `plans.apply` → `plans.recheck` (409 `NotVerified` with why) |
 | Reject, Request another | `POST /api/scenes/{scene_id}/decisions` (`rejected` with the reason, `requested_another`), then a fresh `propose/stream` for "Request another" |
 | Activity | the journal's decisions (`GET .../edits`), which Activity already shows |
@@ -42,7 +42,9 @@ together), at most `plans.MAX_ITEMS` per run, and no item is told about the othe
 
 Refusals before the stream: 404 scene, report or an unknown clash id; 422 "Nothing to prepare."; 429 the proposal cap
 (`propose_limit.take_many(who, n_live)`: one per pair prepared live, all or none; a pair replayed from a saved file is
-free; the owner has no caps).
+free; the owner has no caps). With no model that can be called (`model_client.can_call` false: no credentials), the
+live pairs are not charged: each fails with `prepare.NO_MODEL` ("No AI model is configured on this server, so this
+clash was not prepared live: only saved proposals replay."), with no model call, while the saved pairs replay.
 
 Events (NDJSON through `app._ndjson`, `Content-Encoding: identity`), in this order: `prepare_start`; then, saved pairs
 first and live pairs after, each pair's `item` events, its last `item` (`status` done) immediately followed by its
@@ -52,16 +54,16 @@ first and live pairs after, each pair's `item` events, its last `item` (`status`
 |---|---|---|
 | `prepare_start` | `total`, `items` (`[{key, clash_ids, element_a, element_b, label, distance_m, saved}]`), `skipped` (why some clashes cannot be prepared, as words), `saved` (`{label, model, made, title}` of the saved file in use, or null) | first |
 | `item` | as Fix together's `item`: `key`, `status` thinking / checking (`attempt`, `passed`, `seconds`?, `checked`?, `reason`?) / done (`ok`, `title`: the best option's title, or why not) | while an item is worked on |
-| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready` or `failed`), `source` (`live` or `saved`), `options` (every one verified by geometry in this run, best first, each an `agent.Option` with `pair`, `others`, `before`, `preview`, `placements`, `min_clearance_m`, `checked_against`, `model`), `understanding`, `why` (failed only), `tried`, `model` (who proposed: "Gemini Pro", or the saved file's model), `recommended`, `done` (how many have finished, this one included), `total` | each item as it finishes |
+| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready` or `failed`), `source` (`live` or `saved`), `options` (every one verified by geometry in this run, best first, each an `agent.Option` with `pair`, `others`, `before`, `preview`, `placements`, `min_clearance_m`, `checked_against`, `model`), `understanding`, `why` (failed only), `tried`, `model` (who proposed: the live model's name, "Gemini Flash" by default, or the saved file's model), `recommended`, `done` (how many have finished, this one included), `total` | each item as it finishes |
 | `done` | `ready`, `failed`, `total`, `seconds` | last |
 | `error` | `detail` | the run failed |
 
 `ready` means at least one option passed the geometry check of its kind in this run; `failed` carries the honest why
 (`plans.failure_summary`, a recommendation when the requirements allow no edit, or, for a saved pair whose question
 the file does not hold, `prepare.MISS`: "The saved AI proposals do not cover this clash as Iris asks about it now, so no
-fix was prepared: request another to ask the model live.").
+fix was prepared: request another to ask the model live."; for a live pair with no model, `prepare.NO_MODEL`).
 
-`saved.title` is the sentence to show: "Saved AI proposals for this sample (Gemini Pro, 2026-11-22)".
+`saved.title` is the sentence to show: "Saved AI proposals for this sample (Gemini Flash, 2026-11-22)".
 
 ## Saved results for the unedited sample
 
@@ -70,8 +72,11 @@ A saved file replays the AI's replies, never the geometry's results: every saved
 ranked on the server exactly as live ones are before anyone sees it.
 
 - **Where:** `samples/prepared/*.json` (`IRIS_PREPARED_DIR` overrides); the first whose `key` equals the scene's.
-  None is in the repo yet. `.gitignore` un-ignores `samples/prepared/` and `.dockerignore` ships `samples/**/*.json`,
-  so a set, once made and committed, deploys with the samples.
+  `samples/prepared/Northbank.json` is in the repo (made on `gemini-3.8-flash` at thinking `low`). `.gitignore`
+  un-ignores `samples/prepared/` and `.dockerignore` ships `samples/**/*.json`, so a set, once made and committed,
+  deploys with the samples. The code's defaults (`model_client.DEFAULT_MODELS`, `DEFAULT_THINKING`: proposals on
+  `gemini-3.8-flash` at `low`, as `deploy/deploy.sh` sets them) equal its key, so a fresh clone matches it out of the
+  box, and with no credentials at all it still replays (a replay needs no model and no client).
 - **The file:** `{"format": 1, "key": {...}, "label": "Saved AI proposals for this sample", "model": id,
   "model_label": label, "made": ISO date, "calls": {sha256(system + "\0" + question): reply}, "items": {"a|b":
   {"clash_key", "clash_ids", "label", "options": n verified when made}}}`. `items` says which pairs are replayed
@@ -86,8 +91,12 @@ ranked on the server exactly as live ones are before anyone sees it.
   difference is a miss, and every pair is prepared live.
 - **No hosts:** saved runs read no hosts (`hosts_model=None`), when made and when replayed, so both ask the same
   questions: a service may pass through walls and slabs only, each opening reviewed by its host's team.
-- **No images:** a question's hash is its system prompt and text only. Sets are made from model data alone (Iris's
-  own detection has no pictures).
+- **No images:** a question's hash is its system prompt and text only. Sets are made from model data alone, and a
+  replay asks the same way (`plans._resolve_items(..., pictures=False)` → `Workspace.clash_for(..., pictures=False)`:
+  no images and no "Images are views of this clash." line), whatever views the page has taken since. The page takes
+  views of the clash on screen (the first in the list, before the queue opens), and that line once changed the first
+  clash's question, so #1 always failed with `prepare.MISS` (fixed Nov 22; `test_prepare.py`). `generate` records with
+  no pictures too (`run(..., live_pictures=False)`); a live pair in the queue still sends the views.
 - **Per question:** a reply is used only for the exact question it answered. A question the file does not hold (the
   code changed what Iris asks, an imported report's notes, another platform rounding a number differently) fails that
   item honestly with `prepare.MISS`; "Request another" asks live.
@@ -105,10 +114,20 @@ ranked on the server exactly as live ones are before anyone sees it.
   question names. Only passed in explicitly (tests, `--model scripted`, a local click-through with
   `IRIS_PREPARED_DIR=<its folder> GEMINI_MODEL=scripted GEMINI_THINKING_LEVEL=`); nothing in the environment selects it.
 
-## Measured so far (scripted model only)
+## Measured so far
 
-These are `prepare.ScriptedModel` results, free and offline (`evals/prepare_saved.py --model scripted`, Northbank,
-2026-11-22). They are not Gemini's; nothing here has been run on Gemini yet.
+**On Gemini (the saved set in `samples/prepared/Northbank.json`, d22fe34, 2026-11-22).** One run of
+`evals/prepare_saved.py --model gemini --yes`, approved by the owner, on gemini-3.8-flash at thinking low ("Gemini
+Flash"): **8 of 8 pairs ready**, each verified in the first round, **8 calls, $0.057** (billed usage). The answer key's
+three girder clashes came back as offsets through the girder's web openings at the designer's Rev04 heights: the
+supply air main up 400 mm (50 mm clear), the cable tray up 250 mm, the cold water main up 280 mm. The other five: two
+lift pit wall / pad footing pairs (seat; one also a trim) and three holding-down bolts trimmed to the footing's top.
+Replayed offline (no credentials, `GEMINI_MODEL=gemini-3.8-flash`): 8 of 8 ready, 0 model calls, about 6 s of
+geometry checks after detection, with views taken of the first clash as the page takes them
+(`test_the_northbank_saved_set_replays_eight_of_eight_with_no_model_call`).
+
+**Scripted model.** These are `prepare.ScriptedModel` results, free and offline (`evals/prepare_saved.py --model
+scripted`, Northbank, 2026-11-22). They are not Gemini's.
 
 - Detection found 464 clashes. The generator's pick (the answer key's pairs plus `deepest(8)`) gave 8 pairs: the answer
   key falls within the deepest 8.
@@ -132,9 +151,16 @@ These are `prepare.ScriptedModel` results, free and offline (`evals/prepare_save
 Layout (two panes, light only):
 
 - **Top:** "3 of 8 reviewed · 2 accepted · 1 rejected", status pills per clash, ← / → and Close.
-- **Left:** the clash title with a red distance badge; the proposal card (AI-proposed: holo edge; Geometry-validated ✓
-  in green; what moves, how far, the evidence: clash gone, clearance, nothing new hit); the reviewer's name; Accept
-  (ink), Reject with a reason (outline), Request another (text). It moves to the next clash after a decision.
+- **Left:** one title, the clash's own (model-written) title with its pair by name under it, else the pair by name
+  ("Supply air main ↔ Transfer girder"), never the raw "IfcClass 'name' x IfcClass 'name'" label as well; a red
+  distance badge; the proposal card (AI-proposed: holo edge; Geometry-validated ✓ in green; what moves, how far, the
+  evidence: clash gone, clearance, nothing new hit), scrolling on its own (`.rq-left-scroll`); then the decision bar
+  (`.rq-decide`), always in view at the pane's foot (sticky at the screen's foot on a phone): the reviewer's name,
+  Accept (ink), Reject with a reason (outline), Request another (text). It moves to the next clash after a decision.
+- **Why, in plain words:** a server error is never printed (`reviewQueueModel.plainError`): "No AI model is configured
+  on this server", "Gemini Flash didn't answer in time", too many requests, not allowed, an unreadable answer, or
+  "Something went wrong on the server"; the raw words (a traceback's last line) only in the tooltip. Geometry's why,
+  the requirements and `prepare.MISS` are plain already and show as they are.
 - **Right:** the 3D view at the clash with a segmented "Before | After | Both" control. It is the page's one viewer,
   moved into the pane with `Viewer.mountIn` while the queue is open; the queue holds its pair in focus even after the
   page's own effects (a keep patches the model and the page sets its focus again), and closing puts the viewer back
@@ -151,14 +177,16 @@ The page wiring is kept small so it can move with the app shell:
 3. `<ReviewFixesEntry sceneId reportId reportTitle clashes triage={listTriage} ticked={checked}
    fixed={[...fixed ids, ...reviewed ids]} onOpen={() => setReviewOpen(true)} />` on Clash review: the primary action
    in the workspace's header, at the right of the app shell's top bar (`workActions`, when `reviewLeads`: Clash review
-   or a session outside a project, not on phones and tablets), with Export beside it as a secondary; its one line
+   or a session outside a project, on every layout: on phones and tablets it is the compact top bar's primary, a
+   smaller button beside Export's icon, the logo's name stepping aside), with Export beside it as a secondary; its one line
    and "Prepare again" show beside the button only on very wide screens (the queue has both), its error under it
    (`frame.css`).
 4. `{reviewOpen && sceneId && report && <ReviewQueue … viewer={viewer.current} reviewer onReviewer={setReviewer}
    onDecisions={(d) => noteDecisions(d, true)} onClose={() => setReviewOpen(false)} onKept={…} />}` with the overlays,
    inside the workspace (`div.app`): in the app shell it covers the shell's body only (`.shell .rq` is absolute), so the
    sidebar and the top bar stay.
-   `onKept` does what `accept()` does after its keep request (note the decisions, `applyToViewer`, `setEdits`,
-   `markFixed`, `setRemeasure`); it never makes a keep request of its own.
+   `onKept` does what `accept()` does after its keep request (note the decisions, the report's evidence with before
+   and after pictures for every clash on the pair, so the report counts and pages fixes kept in the queue,
+   `applyToViewer`, `setEdits`, `markFixed`, `setRemeasure`); it never makes a keep request of its own.
 
 Nothing is applied without Accept.

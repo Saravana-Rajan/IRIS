@@ -155,7 +155,7 @@ export function DemoVideo({ id, open, onClose, opener }: {
 export function WatchDemoButton({ id, label = "Watch the demo", className = "" }: {
   id: DemoVideoId;
   label?: string;
-  /** Extra classes: `watch-demo-hero` for the larger one, `holo-edge` for the holographic border. */
+  /** Extra classes: `watch-demo-hero` for the larger one in Home's hero. */
   className?: string;
 }) {
   const [open, setOpen] = useState(false);

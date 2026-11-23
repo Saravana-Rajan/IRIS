@@ -120,7 +120,7 @@ def test_the_report_names_the_triage_model_that_ran(tmp_path, monkeypatch):
     pro_run = {"model": "gemini-4-argon", "label": "Gemini Pro", "images": True}
     assert "the rest by Gemini Flash (Google)." in document.render_html("t", "s", rows, {}, {}, None, flash_run)
     html_text = document.render_html("t", "s", rows, {}, {}, None, pro_run)
-    assert "the rest by Gemini Pro (Google)." in html_text and "Gemini Flash (Google)" not in html_text
+    assert "the rest by Gemini Pro (Google)." in html_text and "the rest by Gemini Flash" not in html_text
     # Without a run (a restart), the model triage would run on now.
     monkeypatch.setattr(document, "triage_model_info", lambda: pro_run)
     assert "the rest by Gemini Pro (Google)." in document.render_html("t", "s", rows, {}, {})

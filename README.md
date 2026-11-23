@@ -1,132 +1,220 @@
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/iris/svg/iris-wordmark-dark.svg">
-    <img src="assets/brand/iris/svg/iris-wordmark-light.svg" alt="Iris by Techjays" width="260">
-  </picture>
-</h1>
+# Iris
 
-> **Iris — Does AI truly see?**<br>
-> *Fixes, not just findings. Where teams' 3D designs collide, Gemini proposes a real edit to the model, Iris proves
-> it with geometry, and only fixes that pass reach you.*
+**AI proposes. Geometry proves. The engineer decides.**
 
-[![Gemini on Vertex AI](https://img.shields.io/badge/Gemini-Vertex_AI-4285F4?style=for-the-badge&logo=googlegemini&logoColor=white&labelColor=555555)](docs/architecture/08-ai-models-prompts-and-spend.md)
-[![Cloud Run](https://img.shields.io/badge/Google_Cloud-Cloud_Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white&labelColor=555555)](docs/architecture/17-deployment-and-operations.md)
-[![Fixes: verified by geometry](https://img.shields.io/badge/Every_Fix-Verified_by_Geometry-00897B?style=for-the-badge&labelColor=555555)](docs/architecture/07-fixes-and-edits.md)
-[![Formats: IFC, STEP, BCF, PDF](https://img.shields.io/badge/Formats-IFC_%C2%B7_STEP_%C2%B7_BCF_%C2%B7_PDF-5C6BC0?style=for-the-badge&labelColor=555555)](docs/architecture/14-files-in-and-out.md)
-[![MCP server](https://img.shields.io/badge/MCP-Server_%2B_Pairing_Links-111111?style=for-the-badge&labelColor=555555)](docs/architecture/11-mcp-and-agent-links.md)
+[![Live app](https://img.shields.io/badge/Live_app-iris--techjays.web.app-1A73E8?style=for-the-badge)](https://iris-techjays.web.app)
+[![Built by Techjays](https://img.shields.io/badge/Built_by-Techjays-111111?style=for-the-badge)](#team)
+[![Google Cloud](https://img.shields.io/badge/Google_Cloud-Cloud_Run_%C2%B7_Firebase_%C2%B7_Vertex_AI-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](docs/architecture/17-deployment-and-operations.md)
+[![Gemini](https://img.shields.io/badge/Gemini-on_Vertex_AI-8E24AA?style=for-the-badge&logo=googlegemini&logoColor=white)](docs/architecture/08-ai-models-prompts-and-spend.md)
+[![Innodata Frontier AI Hackathon 2026](https://img.shields.io/badge/Innodata_Hackathon_2026-Track_2_Visual_Task_Factory-00897B?style=for-the-badge)](docs/visionbench.md)
 
-[How it works](#how-it-works) · [Run locally](#run-locally) · [Tests](#tests) · [Roadmap](#roadmap-innodata-track-2--visual-task-factory) ·
-[Architecture](docs/architecture/README.md)
+**Live app: <https://iris-techjays.web.app>** · Built by **Techjays** on **Google Cloud** · Our entry to the
+**Innodata Frontier AI Hackathon 2026, Track 2 "Visual Task Factory"**
+
+[The problem](#the-problem) · [What Iris does](#what-iris-does) · [Results](#results) ·
+[How it works](#how-it-works) · [Tech stack](#tech-stack) · [Run locally](#run-locally) · [Deploy](#deploy) ·
+[Repository map](#repository-map)
 
 ---
 
-**Iris by Techjays is for the design coordinator, who makes every team's 3D design fit together, on a building or a machine.** Iris checks
-the models every team makes against each other and finds where they conflict: two parts designed into the same space,
-or too close to leave room (the industry calls these clashes). It sorts what matters from what doesn't and proposes one
-to three fixes. Every fix is a real edit to the model, and is checked by geometry before anyone sees it: the conflict is
-gone, there is clearance, and nothing new is hit. You review the options in 3D, accept one, and export the edited model.
+## The problem
 
-## At a glance
+On a building project, the structure, ducts, pipes and cable trays are designed by different teams in separate 3D
+models, and they collide. These collisions are called clashes. Engineers spend days finding them, working out fixes,
+and checking the 2D PDF drawings against the 3D model by hand. AI can help, but it can also confidently propose a
+fix that is physically wrong.
 
-- **Fixes, verified.** Every option edits the model's own elements and passes the geometry check first. A failed idea
-  goes back to Gemini with the reason. Seven fix kinds (move, offset with bends, trim, route, penetration, resize,
-  seat) and fixes that combine them.
-- **Its own clash detection.** On the Northbank demo, every pair of models checked: 464 clashes in 1,732 elements in
-  about 4 s (geometry only, no model calls). Navisworks XML clash reports are read too.
-- **Buildings and machines.** IFC models and STEP assemblies in; the edited IFC or STEP, PDF reports and BCF issues out.
-- **You keep the last word.** Before / After / Both in 3D, beside plans, sections and elevations; accept, undo, export.
-  Keeping runs the check again on the server, never trusting the page.
-- **Watch it work.** Workings draws each run as it happens: the brief, the model's ideas, Iris's check on each, the ranking.
-- **Bring your own agent.** An MCP server over the same operations, with pairing links, so any MCP client fixes through
-  the same geometry check.
+## What Iris does
 
-### Gemini at work
+Iris is one product in two parts. Both rest on the same idea: an AI answer counts only after geometry has checked it.
 
-| Role | Env var | What it does in Iris |
+### 1. Iris Engineering: the coordination app
+
+```mermaid
+flowchart LR
+    A["Import<br/>IFC / STEP models"] --> B["Detect<br/>clashes, exact geometry"]
+    B --> C["AI proposes<br/>Gemini edits the model"]
+    C --> D{"Geometry validates<br/>clash gone? clearance met?<br/>nothing new hit?"}
+    D -- "fails: retry with the reason" --> C
+    D -- passes --> E["Engineer reviews<br/>review queue, before / after"]
+    E --> F["Report<br/>edited IFC, PDF, BCF"]
+```
+
+- **Import** federated IFC building models and STEP machine assemblies.
+- **Detect** clashes with Iris's own geometry engine (IfcOpenShell and OpenCASCADE triangle trees). Navisworks clash
+  reports can be imported too.
+- **AI proposes.** Gemini reads each clash from three rendered views plus the model data, and proposes one to three
+  fixes. Each fix is a real edit to the model: a move, an offset with bends, a reroute, a trim, a penetration, a
+  resize or a seat.
+- **Geometry validates.** Every proposal is re-checked before anyone sees it: the clash is gone, the required
+  clearance is met, and nothing new is hit. A failed idea goes back to Gemini with the reason
+  (propose → verify → retry → rank).
+- **The engineer reviews.** The [review queue](docs/review-queue.md) prepares fixes in the background, then shows one
+  clash per screen: the verified fix next to a 3D **Before / After / Both** view. Accept, reject with a reason, or
+  request another. Accepting runs the geometry check again on the server, so the page is never trusted.
+- **Report.** Export the edited IFC or STEP, a PDF coordination report, and BCF issues for Revit, Navisworks, Solibri
+  and BIMcollab.
+- **2D drawing reader.** Upload PDF drawings. Gemini reads the tags and sizes on each sheet, and every reading is
+  checked against the PDF's own text layer (confirmed, AI-only, or text-only). The confirmed items are then compared
+  with the 3D model to find drawing-vs-model mismatches ([design](docs/drawings.md)).
+- **Bring your own agent.** An MCP server exposes the same operations, behind the same geometry check
+  ([docs/mcp.md](docs/mcp.md)).
+
+### 2. Iris VisionBench: the Track 2 benchmark
+
+> *The model sees the scene. Iris knows the geometry. The geometry independently verifies the answer.*
+
+VisionBench is a factory of visual engineering tasks for multimodal models ([design](docs/visionbench.md),
+[quick start](bench/README.md)):
+
+- **Synthetic scenes.** Each seed gives a deterministic ceiling void: steel beams with web openings, a slab, ducts,
+  pipes and cable trays, and planted clashes, near misses and by-design contacts. Each scene is also written out as
+  an IFC4 file.
+- **Rendered views.** A three.js renderer in headless Chromium draws views A, B and C, top and section views, and
+  before/after pictures of proposed fixes. The elements are labelled with neutral letters.
+- **8 engineering question categories,** taken from a coordinator's real workflow: clash identification, element
+  selection (which element moves), movement estimation, opening selection, resolution validity, new clash detection,
+  spatial reasoning, and relationship understanding. Nine jobs (J1 to J9) feed these categories.
+- **Ground truth from geometry only.** The reference answers are computed from the scene's geometry and are never
+  taken from a model. A fix question has no single "right" answer: the model's proposed move is applied and the
+  geometry checker decides whether it works.
+- **Controls that separate seeing from guessing:** the same questions with **no image**, with the **wrong image**
+  (swapped), and with **images plus measurements as text**.
+- **Integrity checks:**
+  - the answer key is frozen and hashed before any model call;
+  - the truth code never imports the runner or a model client;
+  - the picture prompts are scanned for leaked kinds, ids and measurements;
+  - a sample of reference answers is re-derived from the scene by geometry;
+  - every answer letter must be visible in the item's own pictures.
+- **Scoring:** accuracy per category with 95% bootstrap confidence intervals, calibration (ECE, Brier), "confidently
+  wrong" rates, an error taxonomy, and a cost-weighted score.
+
+## Results
+
+All numbers below are measured. Model runs use Gemini 3.8 Flash on Vertex AI, and the demo data is synthetic.
+
+### Iris Engineering
+
+| What | Result |
+|---|---|
+| Clash detection: the Northbank sample building (4 federated IFC models, 1,732 elements) | **464 clashes in about 11 s** on Cloud Run (warm, live geometry) |
+| First check of the unchanged samples, with the saved-check replay | About 0.7 s locally, down from 6–7 s. Before a replay is used, it is verified against live geometry |
+| Fix engine on the answer key | **31 / 31 proposals verified** by geometry. Gemini Flash solved 9 / 9, at about $0.008 per clash |
+| AI fix on a real clash: a supply-air duct through a 1 m transfer girder | 2 options in 12 s, both geometry-validated. The top option (raise the duct 400 mm through the web opening, 50 mm clearance) matches the designer's own fix |
+| Review queue: 8 sample clashes | **8 / 8 got a geometry-verified fix**, in 22 s for $0.06. On the 3 hard transfer-girder clashes, the AI's fixes match the designer's real revision: **duct +400 mm, cable tray +250 mm, cold-water main +280 mm** |
+| 2D drawing reader: the sample M-201 sheets | **119 / 123 items confirmed** against the PDF text layer. It found **exactly the 4 planted** drawing-vs-model mismatches, with **0 false alarms** on the clean sheet |
+
+### Iris VisionBench: Gemini 3.8 Flash
+
+The first paid run used 7 seeds, 95 picture questions and 21–22 questions per control mode. It cost $2.33 for 170
+calls, and the integrity check passed.
+
+| Mode | Accuracy [95% CI] | n |
 |---|---|---|
-| **Gemini Pro** | `GEMINI_MODEL` | Reads each clash from three pictures and the model data, proposes edits; chat, root causes, plans and report text |
-| **Gemini Flash** | `GEMINI_FAST_MODEL` | Bulk triage of hundreds of clashes, clash titles, STEP part names, voice transcription, and the lighter Show it built judges |
-| **Escalation model** | `GEMINI_ESCALATION_MODEL` | A second try on clashes the main model could not fix, and the full Show it built judges (daily cap `IRIS_ESCALATION_MAX_USD_DAY`) |
-| **Gemini image model** | `GEMINI_IMAGE_MODEL` | Show it built: a checked fix restyled as a picture of what will be built |
+| Pictures | **58%** [47, 67] | 95 |
+| No picture | **36%** [18, 59] | 22 |
+| Wrong picture (swapped) | **14%** [0, 32] | 22 |
+| Pictures + measurements as text | **90%** [76, 100] | 21 |
 
-Thinking depth is set per role with `GEMINI_THINKING_LEVEL`, `GEMINI_FAST_THINKING_LEVEL` and
-`GEMINI_ESCALATION_THINKING_LEVEL`; default model ids live in `model_client.DEFAULT_MODELS` and env vars override them. The server calls Gemini through `server/iris/model_client.py`
-(`GeminiModel`); the browser never does. Prompts and budgets: [08 · AI models, prompts and spend](docs/architecture/08-ai-models-prompts-and-spend.md).
+**Calibration (pictures):**
+- Mean confidence was 0.96, against 58% accuracy.
+- **ECE was 0.385**, and 42% of the picture answers were confidently wrong (confidence ≥ 0.8).
+
+**Per category (pictures):**
+
+| Category | Accuracy | n |
+|---|---|---|
+| Element selection (which element moves) | 100% | 11 |
+| Movement estimation | 73% | 11 |
+| New clash detection | 73% | 11 |
+| Clash identification | 64% | 11 |
+| Relationship understanding | 64% | 11 |
+| Spatial reasoning | 55% | 11 |
+| Opening selection | 29% | 7 |
+| Resolution validity (is this fix good?) | 27% | 22 |
+
+**What this shows:**
+- **The model really uses the picture:** its accuracy falls to 14% with the wrong one.
+- **It reasons well from numbers:** 90% with the measurements as text.
+- **It is weak at reading geometry from pictures:** 58%, and it is weakest when judging whether a fix works or an
+  opening fits.
+- **It is overconfident.**
+
+This is why Iris never trusts a model's answer without a geometry check. The samples are small (n = 7–22 per
+category, with wide intervals), so read these numbers as a first measurement, not a ranking.
 
 ## How it works
 
-```
-Browser (React + three.js + web-ifc)          Server (Python, FastAPI, on Cloud Run)
-  view · pick · isolate · preview options  ⇄    Iris core (also an MCP server)
-                                                  ├─ IfcOpenShell: load, connected runs, edits, IFC export
-                                                  ├─ Geometry check: collision + clearance (IfcOpenShell tree)
-                                                  └─ Gemini on Vertex AI (vision, reasoning)
-```
+```mermaid
+flowchart LR
+    subgraph browser["Engineer's browser"]
+        web["React + three.js + web-ifc<br/>3D viewer, review queue, drawings"]
+    end
+    fh["Firebase Hosting<br/>the web app"]
+    agent["MCP client<br/>(any agent)"]
+    subgraph gcp["Google Cloud"]
+        api["FastAPI geometry server<br/>Cloud Run: iris-api"]
+        geo["Geometry engine<br/>IfcOpenShell + OpenCASCADE"]
+        gemini["Gemini on Vertex AI"]
+        gcs[("Cloud Storage<br/>projects, settings")]
+        sm["Secret Manager"]
+    end
+    gh["GitHub Actions<br/>CI/CD"]
 
-The agent loop is **propose → verify → retry → rank**: Gemini proposes fixes from the clash images, the element data
-and a domain pack (rules of thumb, in `server/iris/domain_packs/`); the geometry check tests each one; failures are fed
-back with what they hit; only verified options are shown. A fix is a **move** (an element and its straight run), a
-**local offset** (split either side of an obstacle, raise or lower the middle piece, join it with bends), a **reroute**
-(up to three such steps), a **trim** at a joint, or a penetration, resize or seat. Every kind is registered once
-(design: [docs/edits.md](docs/edits.md)). The browser previews moves instantly; the server makes the real edit and is
-the only source of clearance numbers. Elements are addressed by IFC GlobalId everywhere.
-
-- **Detection** ([docs/detection.md](docs/detection.md), `server/iris/detect.py`): every pair of open models and each
-  model against itself, hard at 1 mm, plus duplicates. Pairs meant to meet (joined by ports, one assembly, a door in its
-  wall) are counted but not reported. A box sweep finds candidate pairs; IfcOpenShell's triangle tree measures them.
-- **Triage** (`server/iris/triage.py`): every clash gets a verdict (real, by design, not physical, model error). Sure
-  cases are settled by rule with no model call; the rest go to Gemini Flash in batches, with their images.
-- **Titles and numbers:** every clash has a stable `#N` and a readable title written by Gemini Flash (`server/iris/titles.py`).
-- **Fix together and root causes** (`server/iris/plans.py`): fixes for several clashes are applied in one trial and
-  checked against the whole model, swapping in a next-best option when two collide. Root causes find the element at
-  the centre of several clashes and build one plan.
-- **Explore wider fix:** for a clash that needs changes around it, Iris inspects nearby geometry and checks complete
-  arrangements of up to three coordinated edit groups, each with designer review conditions.
-- **Coordination requirements** ([docs/requirements.md](docs/requirements.md)): a design level, a strictness, checks
-  between groups, who moves for whom and pairs declared by design. They only ever turn into numbers (tolerance,
-  clearance, move limit) and every verified fix says which requirements it meets.
-- **Chat and voice** (`server/iris/chat.py`): Gemini with tools over the open report and model: list and look at
-  clashes, measure, find elements and openings, check a move, propose fixes, drive the view.
-- **STEP** ([docs/step.md](docs/step.md)): AP203/AP214/AP242 assemblies are converted to IFC on open, keeping part names
-  and colours; export gives your STEP back with the fixes written in.
-- **Show it built** ([docs/show-it-built.md](docs/show-it-built.md)): the Gemini image model restyles Iris's own view of
-  a checked fix; the picture is checked against the model before anyone sees it.
-- **Viewer:** Shaded / X-ray / Context / Isolate, section box, measure with snapping, properties, filters by property,
-  plans, sections and elevations beside 3D. Keys: 1-4 views, H fit, F go to clash, S section, M measure, Esc clears.
-
-### Connect an agent (MCP)
-
-Any MCP client can work on your Iris session. In the app choose **Connect an agent** and paste the settings it shows:
-
-```bash
-gemini mcp add --transport http iris https://<host>/mcp --header "Authorization: Bearer <token>"
+    fh -->|serves the page| web
+    web -->|"HTTPS, NDJSON streams, voice socket"| api
+    agent -->|MCP over HTTP| api
+    api --> geo
+    api -->|"google-genai, service account (no keys)"| gemini
+    api --> gcs
+    sm --> api
+    gh -->|"Workload Identity Federation (keyless)"| api
+    gh -->|deploy| fh
 ```
 
-The agent sees what you have open, checks its own ideas against the model, runs Iris's fix agent, applies fixes,
-triages, builds the report and exports. The link is a secret that expires 12 hours after its last use. Locally, with
-its own session: `cd server && uv run python -m iris.mcp_server`. Details: [docs/mcp.md](docs/mcp.md).
+- **The browser** loads the React app from Firebase Hosting. The app calls the Cloud Run API directly, streaming
+  progress as NDJSON. The browser never sees a credential and never calls Gemini.
+- **The FastAPI server** holds the open models and runs detection, the fix agent, the geometry check, the drawing
+  reader, reports and the MCP server. Only the server's geometry supplies clearance numbers.
+- **Gemini on Vertex AI** is called only by the server (`server/iris/model_client.py`), through the runtime service
+  account. Gemini returns strict JSON (`response_json_schema`), and every call counts against caps and a daily spend
+  budget.
+- **Cloud Storage** keeps projects and settings across restarts. **Secret Manager** holds the server's secrets.
 
-## Demo models
+The full map, with a doc per part checked against the code: [docs/architecture/](docs/architecture/README.md). Start
+with [01 · Product and journeys](docs/architecture/01-product-and-journeys.md) and
+[02 · System architecture](docs/architecture/02-system-architecture.md).
 
-Two synthetic model sets ship in [samples/](samples/README.md), each with an answer key and no customer data:
+## Tech stack
 
-- **Northbank, a riverside office site** (6 IFC files): structure, building services, architecture, site and grids. On
-  Level 02 a transfer girder is hit by a supply-air duct, a cable tray and a cold water main. `Northbank-MEP-Rev04.ifc`
-  holds the designer's own fixes, the benchmark for Iris's.
-- **PC-03, a robot palletising cell** (2 STEP revisions): a robot, conveyor, guarding and services with eight planted
-  problems; Rev B is the fixed revision. `evals/step_cell.py` checks fixes against its answer key.
+| Layer | Technology |
+|---|---|
+| AI | **Gemini 3.8 Flash** (every role by default: proposals, second tries at thinking high, triage, titles, drawing reading, voice, benchmark runs), **Gemini 4 Argon** (optional, by env var), **Gemini 3.1 Flash Image** (pictures of an accepted fix) · Vertex AI + google-genai SDK · multimodal prompts (3 views per clash plus measurements) · structured JSON output · agentic propose → verify → retry → rank loop · Model Context Protocol server |
+| Backend | Python 3.13, uv · FastAPI, Uvicorn, Pydantic · IfcOpenShell 0.9 · OpenCASCADE (cadquery-ocp) · NumPy · pypdfium2 + pdfplumber (PDF drawings) · ReportLab, WeasyPrint (PDF reports) · defusedxml |
+| Frontend | React 19, TypeScript 5.9, Vite 8 · three.js + web-ifc (batched meshes) · dockview · lucide-react |
+| Benchmark | Seeded scene generator, closed-form geometry checker · three.js renderer in headless Chromium (Playwright) · IFC4 export · bootstrap CIs, ECE, Brier |
+| Google Cloud | Cloud Run · Firebase Hosting · Vertex AI · Cloud Storage (+ FUSE) · Secret Manager · Artifact Registry · IAM service accounts |
+| DevOps | Docker (multi-stage) · GitHub Actions CI/CD · Workload Identity Federation (keyless deploys) |
+| Testing | pytest · Node test runner · Playwright · `tsc --noEmit` |
+| Formats | IFC · STEP · BCF · PDF · Navisworks XML · NDJSON · MCP |
 
 ## Run locally
 
-**Prerequisites:** Git, [Node.js](https://nodejs.org/en/download) LTS 22.12+, [uv](https://docs.astral.sh/uv/) (it
-installs Python 3.13), and a browser with WebGL. On Linux also `sudo apt install libgl1`. PDF reports need Pango (see
-[PDF system libraries](#pdf-system-libraries)). On Windows PowerShell use `npm.cmd` in place of `npm`.
+**Prerequisites:**
+- Git, [Node.js](https://nodejs.org/en/download) 22.12 or newer, and [uv](https://docs.astral.sh/uv/), which installs
+  Python 3.13.
+- A browser with WebGL.
+- On Linux, also `sudo apt install libgl1`.
+- PDF reports need Pango (see [PDF system libraries](#pdf-system-libraries)).
+- On Windows PowerShell, use `npm.cmd` in place of `npm`.
 
 ```bash
+git clone https://github.com/Saravana-Rajan/IRIS.git
+cd IRIS
 uv python install 3.13
 uv sync --project server --locked --python 3.13
 npm ci --prefix web
-test -f .env || cp .env.example .env      # at the repo root; never committed
+test -f .env || cp .env.example .env      # at the repo root; git-ignored, never committed
 ```
 
 Start the two servers in separate terminals from the repo root, then open <http://127.0.0.1:5173>:
@@ -136,31 +224,86 @@ cd server && uv run --locked uvicorn iris.app:app --reload --reload-dir iris --h
 cd web && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-Vite forwards `/api` to port 8000; <http://127.0.0.1:8000/api/samples> should return JSON with `files` and `demos`.
-Keep `--reload-dir iris`: plain `--reload` also watches `server/.venv` and a package install would restart the server,
-dropping open models. Edits live in server memory, so export before restarting.
+Vite forwards `/api` to port 8000. To check the server, open <http://127.0.0.1:8000/api/samples>: it should return
+JSON with `files` and `demos`. Keep `--reload-dir iris`: a plain `--reload` also watches `server/.venv`, so a package
+install would restart the server and drop the open models. Edits live in server memory, so export before you
+restart.
 
-**First check, without any credentials:** generate a small model with
-`uv run --directory server --locked python -m iris.fixtures ../samples/fixture-clash.ifc`, open only that file from
-**Menu › Models**, choose **Check 3 elements**, pick clash #1, expand **Try a move yourself**, enter **-0.80** and choose
-**Check this move**. Expect **Clear · nearest +50 mm** (a **-0.40** move clears the beam but hits the pipe).
+Eight synthetic demo models ship in [samples/](samples/README.md). They contain no customer data:
+- **Northbank**, an office building: 6 IFC files, including `Northbank-MEP-Rev04.ifc`, the designer's own fixes.
+- **PC-03**, a robot palletising cell: 2 STEP revisions.
 
-### Enable AI features
+The two sample M-201 PDF drawings come with answer keys.
 
-Iris calls Gemini on Vertex AI from the Python server. Set these in the root `.env` (no quotes, no inline comments) or
-the environment, then restart the server:
+### Configuration (`.env`)
+
+Viewing, detection, measuring and checking a move by hand need **no credentials**. Proposals, triage, chat, the
+drawing reader and VisionBench runs call Gemini, and live calls are billed. Set these in the root `.env` (no quotes,
+no inline comments) or in the environment, then restart the server:
 
 | Variable | Purpose |
 |---|---|
-| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | The Vertex AI project and location (default `global`). Authenticate with Application Default Credentials (`gcloud auth application-default login`) |
-| `GEMINI_API_KEY` | Optional: an API key, used only when no project is set |
-| `GEMINI_MODEL`, `GEMINI_FAST_MODEL`, `GEMINI_ESCALATION_MODEL`, `GEMINI_IMAGE_MODEL` | Override the model for each role (above) |
-| `GEMINI_THINKING_LEVEL`, `GEMINI_FAST_THINKING_LEVEL`, `GEMINI_ESCALATION_THINKING_LEVEL` | Thinking level per role (defaults `low`, the model's own, `high`) |
-| `GEMINI_INCLUDE_THOUGHTS` | `1` (default) streams thought summaries to Workings; `0` turns them off |
+| `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | The Vertex AI project and location (default `global`). Sign in once with `gcloud auth application-default login` |
+| `GEMINI_API_KEY` | Optional. A Gemini API key, used only when no project is set |
+| `GEMINI_MODEL` | The main model: proposals, chat, plans, report text (default `gemini-3.8-flash`, as every role but images) |
+| `GEMINI_FAST_MODEL` | Bulk triage, clash titles, STEP part names, voice |
+| `GEMINI_ESCALATION_MODEL`, `GEMINI_IMAGE_MODEL` | Second tries on hard clashes, and pictures of an accepted fix |
+| `GEMINI_THINKING_LEVEL` (and `_FAST_`, `_ESCALATION_` variants) | The thinking level per role: `minimal`, `low`, `medium` or `high` |
+| `IRIS_ESCALATION_MAX_USD_DAY` | The daily spend cap for second tries and image work (default 25 USD) |
+| `IRIS_OWNER_TOKEN` | Unlocks the owner settings (open the page with `#owner`) |
+| `IRIS_ALLOWED_ORIGINS` | The web app's origins, when it is served from another origin (as on Firebase) |
 
-Viewing, detection, measuring and manual move checks need no credentials. Proposals, chat, triage, titles, plans,
-report text and STEP part classification need Gemini access, and live calls may incur charges. Every setting, caps
-included, is in [the configuration reference](docs/architecture/15-requirements-settings-and-config.md).
+The per-visitor caps (`IRIS_PROPOSE_PER_HOUR`, `IRIS_CHAT_PER_DAY`, …) are off locally unless you set them. Every
+variable, its default and its cloud value is in
+[15 · Requirements, settings and configuration](docs/architecture/15-requirements-settings-and-config.md).
+
+### Tests
+
+From the repo root, after installing the dependencies (the PDF tests need the PDF libraries below):
+
+```bash
+uv run --directory server --locked pytest -q        # server, including tests/bench (VisionBench)
+npm test --prefix web
+npm run build --prefix web                          # tsc --noEmit + vite build
+```
+
+At this commit, pytest collects 1,393 server tests, 212 of them for VisionBench. All the unit tests use synthetic
+models and scripted AI replies, so they need no credentials and make no paid calls. VisionBench's renderer tests
+are skipped unless `bench/render` is installed (next section). CI runs the server, web and VisionBench suites on
+every push and pull request ([.github/workflows/ci.yml](.github/workflows/ci.yml)). The real-model evals in
+[evals/](evals/README.md) are separate and make paid calls.
+
+### Run VisionBench
+
+Start free and offline, then add a capped real run. All of these run from `server/`, after the setup above.
+
+```bash
+# 1. The renderer, once (three.js in headless Chromium)
+(cd ../bench/render && npm ci && npx playwright install chromium)
+
+# 2. Free, offline: a stand-in model that is right 70% of the time. Its report carries a FAKE MODEL banner.
+uv run iris-bench all --seeds 0:3 --model fake:0.7 --out runs/demo
+open runs/demo/report.html                     # xdg-open on Linux
+
+# 3. Paid, always capped: run refuses a real model without --max-usd
+uv run iris-bench run    --out runs/demo --model gemini-3.8-flash --max-usd 2 --concurrency 8
+uv run iris-bench score  --out runs/demo
+uv run iris-bench verify --out runs/demo --sample 100
+uv run iris-bench report --out runs/demo
+```
+
+- **`all`** runs every stage in order: generate, render, build, run, score, verify and report. It returns 2 when
+  an integrity check fails.
+- **Without the renderer,** the pipeline still runs, but without pictures.
+- **`--max-usd` stops new model calls** once that run's new spend reaches the cap. In-flight calls can overshoot by
+  at most `--concurrency` calls. The run then returns 3, and `all` scores and reports the partial results.
+- **Cost on Nov 22:** a Gemini 3.8 Flash call averaged $0.0137, so $2.50 buys about 180 calls.
+- **Replies are cached,** so a rerun of the same items is free.
+- **More options:** every stage, flag and output is in [bench/README.md](bench/README.md).
+
+The review queue's saved Gemini fixes have their own estimate-first script. Run
+`uv run python ../evals/prepare_saved.py --dry-run` to count the calls, tokens and USD with no model call, or add
+`--model scripted` for a free, offline run.
 
 ### PDF system libraries
 
@@ -168,8 +311,8 @@ WeasyPrint needs Pango ([platform instructions](https://doc.courtbouillon.org/we
 
 - **Ubuntu/Debian:** `sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core`
 - **macOS:** `brew install pango libffi`
-- **Windows:** [MSYS2](https://www.msys2.org/), then `pacman -S mingw-w64-ucrt-x86_64-pango` in its UCRT64 shell; set
-  `WEASYPRINT_DLL_DIRECTORIES=C:\msys64\ucrt64\bin` if Python cannot find the DLLs.
+- **Windows:** [MSYS2](https://www.msys2.org/), then `pacman -S mingw-w64-ucrt-x86_64-pango` in its UCRT64 shell.
+  Set `WEASYPRINT_DLL_DIRECTORIES=C:\msys64\ucrt64\bin` if Python cannot find the DLLs.
 
 Check with `uv run --directory server --locked python -m weasyprint --info`.
 
@@ -177,58 +320,70 @@ Check with `uv run --directory server --locked python -m weasyprint --info`.
 
 | Symptom | Check |
 |---|---|
-| Page loads but API requests fail | Both servers running? Check `/api/samples` on port 8000 and the Python terminal |
-| Viewer reports missing `.wasm` files | `npm run copy-wasm --prefix web`, then refresh |
-| AI request fails | Check `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION`, ADC or `GEMINI_API_KEY`, model access and quota |
+| The page loads but API requests fail | Are both servers running? Check `/api/samples` on port 8000 and the Python terminal |
+| The viewer reports missing `.wasm` files | Run `npm run copy-wasm --prefix web`, then refresh |
+| An AI request fails | Check `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION`, ADC or `GEMINI_API_KEY`, model access and quota |
 | Open models vanish ("Open them again") | The server was started without `--reload-dir iris` |
-| MCP client cannot connect through 5173 | Use `http://127.0.0.1:8000/mcp`; Vite proxies `/api`, not `/mcp` |
+| An MCP client cannot connect through 5173 | Use `http://127.0.0.1:8000/mcp`: Vite proxies `/api`, not `/mcp` |
 
-## Deploy (Cloud Run)
+## Deploy
 
-One container serves the built web app and the API from the same origin, deployed to Cloud Run by
-[`deploy/deploy.sh`](deploy/deploy.sh); persisted files go to Cloud Storage and secrets come from the Cloud Run
-environment (Secret Manager), never git. Open models and edits live in server memory, so the service runs a single
-instance. Proposals, chat and other model calls are capped per visitor and per day (`IRIS_*` settings in
-`server/iris/limits.py`). Owner settings unlock with `IRIS_OWNER_TOKEN` and `#owner` in the URL. Full guide:
-[17 · Deployment and operations](docs/architecture/17-deployment-and-operations.md).
+A push to `main` runs [deploy.yml](.github/workflows/deploy.yml):
+1. It runs the full CI first.
+2. It signs in to Google Cloud through **Workload Identity Federation**, so no key file exists anywhere.
+3. It builds the Docker image into Artifact Registry and deploys the FastAPI server to **Cloud Run** (`iris-api`,
+   scale to zero, startup CPU boost, demo caps from `deploy/env.yaml`).
+4. It builds the React app against that API URL and deploys it to **Firebase Hosting**
+   (<https://iris-techjays.web.app>).
+5. It smoke-tests both ends.
 
-## Tests
+Gemini is reached through the service's own service account. Secrets come from Secret Manager, never from git. The
+one-time setup is `deploy/github-setup.sh`, and `deploy/deploy.sh` still deploys by hand. Full guide:
+[17 · Deployment and operations](docs/architecture/17-deployment-and-operations.md) and
+[deploy/README.md](deploy/README.md).
 
-From the repo root, after installing dependencies (and the PDF libraries for the server suite):
+## Repository map
 
-```bash
-uv run --directory server --locked pytest -q
-npm run build --prefix web
-npm test --prefix web
-```
+| Path | What is there |
+|---|---|
+| [`server/iris/`](server/iris/) | The FastAPI server: API, MCP server, geometry engine, detection, fix agent, review queue, drawing reader, reports |
+| [`server/iris/domain_packs/`](server/iris/domain_packs/) | The prompts sent to Gemini |
+| [`server/iris_bench/`](server/iris_bench/) | VisionBench: scenes, geometry truth, jobs, runner, scoring, integrity checks, report, CLI (`iris-bench`) |
+| [`server/tests/`](server/tests/) | The pytest suites (VisionBench in `tests/bench/`) |
+| [`bench/`](bench/README.md) | VisionBench quick start and the headless three.js renderer (`bench/render/`) |
+| [`web/`](web/) | The React + three.js web app (`web/src/`) and its tests |
+| [`samples/`](samples/README.md) | Synthetic demo models, sample PDF drawings with answer keys, saved checks and saved AI replies |
+| [`evals/`](evals/README.md) | Real-model evals and the scripts that make the saved sample data |
+| [`deploy/`](deploy/README.md) | Cloud Run and Firebase setup and deploy scripts |
+| [`.github/workflows/`](.github/workflows/) | CI (`ci.yml`) and CD (`deploy.yml`) |
+| [`docs/architecture/`](docs/architecture/README.md) | The architecture map: one doc per part, checked against the code |
+| [`docs/`](docs/) | Feature designs, for example [review queue](docs/review-queue.md), [drawings](docs/drawings.md), [detection](docs/detection.md), [VisionBench](docs/visionbench.md), [edits](docs/edits.md), [MCP](docs/mcp.md) |
+| [`assets/brand/iris/`](assets/brand/iris/) | The Iris brand kit |
 
-The unit tests use synthetic models and scripted AI responses; they need no credentials. Real-model
-[evals](evals/README.md) are separate, make paid Gemini calls, and are being re-run on Gemini: earlier results were
-measured on other models and are not reported here.
+## Screenshots
 
-## Roadmap: Innodata Track 2 — Visual Task Factory
+See it live at <https://iris-techjays.web.app>.
 
-Iris is being extended into an entry for Track 2 of the Innodata Frontier AI Hackathon 2026. The same scenes and
-geometry engine that verify fixes become a **factory of visual tasks** for benchmarking Gemini multimodal models:
+<!-- screenshot: home → docs/media/home.png (first screen: open a sample project)
+![Iris: the first screen](docs/media/home.png)
+-->
 
-- **Synthetic images:** Iris renders views of real 3D models (the A/B/C clash views, plans, sections, X-ray) with
-  controlled camera, transparency and context.
-- **Questions:** generated per image: does A touch B, which is in front, how far apart, which element blocks the duct,
-  how many clashes are visible.
-- **Geometry-verified answers:** every answer comes from IfcOpenShell measurements, not from a model or a person, so
-  the ground truth is exact.
-- **Scoring:** Gemini's answers are graded against that ground truth, by task type and difficulty — asking, in
-  numbers, whether AI truly sees.
+<!-- screenshot: clash-review → docs/media/clash-review.png (clash list and 3D viewer, Northbank)
+![Clash review in 3D](docs/media/clash-review.png)
+-->
 
-This part is **Iris VisionBench**: the design is in [docs/visionbench.md](docs/visionbench.md), and the quick start
-(install, run, read the report) in [bench/README.md](bench/README.md).
+<!-- screenshot: review-queue → docs/media/review-queue.png (verified fix beside the Before / After view)
+![The review queue: a verified fix, before and after](docs/media/review-queue.png)
+-->
 
-Beyond that: connectors so a kept fix lands in the designers' own tools, checks against site photos and scans, and
-saved projects ([20 · Decisions, limits and roadmap](docs/architecture/20-decisions-limits-and-roadmap.md)).
+<!-- screenshot: drawings → docs/media/drawings.png (the 2D drawing reader: confirmed items and mismatches)
+![The 2D drawing reader](docs/media/drawings.png)
+-->
 
-## Documentation
+<!-- screenshot: visionbench → docs/media/visionbench-report.png (the VisionBench report: categories and controls)
+![The VisionBench report](docs/media/visionbench-report.png)
+-->
 
-[docs/architecture/](docs/architecture/README.md) maps the whole application: product and journeys, architecture,
-flows, server and web code, geometry, fixes, AI models and prompts, the API and MCP, files, configuration, security,
-deployment, tests and evals, with diagrams. Feature designs are in [docs/](docs/); the brand kit is in
-[assets/brand/iris/](assets/brand/iris/).
+## Team
+
+Built by **Techjays**.

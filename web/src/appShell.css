@@ -78,7 +78,7 @@
 .side-steps { margin: 2px 0 0 20px; padding-left: 8px; border-left: 1px solid var(--line, #e6e6e6); }
 .side-item.sub { height: 38px; font-size: 13.5px; gap: 10px; }
 
-/* Help, Settings, then the reviewer */
+/* Help, Settings, then "Built by Techjays" */
 .side-foot { flex: none; padding: 8px 12px 0; }
 /* "Built by Techjays": quiet, small, the mark beside it */
 .side-built { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 10px; min-width: 0; color: var(--muted, #6a6a6a);
@@ -86,12 +86,6 @@
 .sidebar-rail .side-built { justify-content: center; padding: 0; }
 .side-built-text b { font-weight: 500; color: var(--ink, #1a1a1a); }
 .side-divider { height: 1px; margin: 8px 0 0; border: 0; background: var(--line, #e6e6e6); }
-  border: 1.5px solid transparent; color: var(--accent-ink, #6f3fc0); font: 600 13px/1 var(--body, "IBM Plex Sans", system-ui, sans-serif);
-  background: linear-gradient(135deg, #eef0ff, #f5ecfe 50%, #ffeefa) padding-box,
-    var(--holo, linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%)) border-box; }
-  color: var(--accent-ink, #6f3fc0); font: 500 12.5px/1.2 var(--body, "IBM Plex Sans", system-ui, sans-serif); }
-  background: var(--surface, #fff); color: var(--ink, #1a1a1a); font: 400 13.5px var(--body, "IBM Plex Sans", system-ui, sans-serif);
-  outline: none; box-shadow: 0 0 0 3px var(--accent-soft, #f4ecfd); }
 
 /* The rail: icons only, centred on the 64 px column */
 .sidebar.sidebar-rail .side-top { padding: 0 16px; }
@@ -196,3 +190,16 @@
   .sidebar, .sidebar.side-drawer, .sidebar.side-drawer.open, .side-scrim, .side-scrim.open, .side-item, .side-group-head, .side-icon,
   .side-chevron, .topbar-btn, .search-field { transition: none; }
 }
+
+/* Settings (App.tsx, the sidebar's sheet at /settings): the name field sits inside the sheet's gutter, the full width of
+   the sections' text, never at the sheet's edge. */
+.menu-panel .reviewer-field { margin: 0 6px; gap: 6px; line-height: 1.45; }
+.menu-panel .reviewer-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: 8px 10px; font-size: 13px; border-radius: var(--radius, 8px); }
+.menu-panel .reviewer-field input:focus-visible { outline: 2px solid var(--accent, #c026d3); outline-offset: 1px; }
+
+/* Settings' owner section (App.tsx): the owner's button beside one line; hidden when the server has no owner (Owner.tsx
+   then draws nothing). Its menu opens to the right of the button, inside the sheet. */
+.menu-panel .owner-row { display: flex; align-items: flex-start; gap: 10px; padding: 0 6px; }
+.menu-panel .owner-row .hint { margin: 4px 0 0; }
+.menu-panel .owner-pop .pop-menu { left: 0; right: auto; }
+.menu-panel .owner-section:not(:has(.owner-pop > *)) { display: none; }

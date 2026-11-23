@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compiled } from "./app-host.mjs";
+import { appHost, compiled } from "./app-host.mjs";
 
 const r = await import(await compiled("../src/projectRoute.ts"));
 
@@ -121,4 +121,41 @@ test("in a page: the route is read from the path (an old hash too), pushed or re
 test("a plain click is the page's; a click meant for a new tab or window is the browser's", () => {
   assert.equal(r.ownClick({ button: 0 }), true);
   for (const e of [{ button: 1 }, { metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }]) assert.equal(r.ownClick(e), false);
+});
+
+test("the app's own pages are known; any other path is not (it shows Page not found)", () => {
+  for (const path of ["", "/", "/index.html", "/home", "/home/", "/workspace", "/settings", "/help", "/about", "/about/fixes", "/projects",
+    "/projects/", "/projects/abc", "/projects/abc/clashes/3", "/projects/abc/reports"]) assert.equal(r.isAppPath(path), true, path);
+  for (const path of ["/nope-page", "/elsewhere", "/homes", "/home/x", "/projects/a b", "/about/a/b", "/Projects", "/settings/x"]) {
+    assert.equal(r.isAppPath(path), false, path);
+  }
+});
+
+test("an unknown address shows the app's Page not found, not Home, and its Home button goes Home", async () => {
+  const host = await appHost({ path: "/nope-page", initial: { sceneId: null, stats: null, report: null, clash: null } });
+  await host.settle();
+  const lost = host.component("NotFound");
+  assert.ok(lost, "Page not found is shown");
+  assert.equal(host.component("StartScreen"), undefined, "not Home");
+  lost.props.onHome(); host.render();
+  assert.equal(host.location.pathname, "/home");
+  assert.ok(host.component("StartScreen"));
+  assert.equal(host.component("NotFound"), undefined);
+});
+
+test("a project's address shows the workspace only for a known project: a missing one's every step is the not-found page", () => {
+  assert.deepEqual(r.PROJECT_STEPS.filter((t) => r.isWorkStep(t.id)).map((t) => t.id), ["models", "coordination", "clash"]);
+  assert.equal(r.isWorkStep(null), false);
+  for (const { id } of r.PROJECT_STEPS) {
+    assert.equal(r.projectView(id, true, false), r.isWorkStep(id) ? "workspace" : "page", id);
+    assert.equal(r.projectView(id, false, true), "missing", `${id}: a missing project's step is not found, never the workspace`);
+    assert.equal(r.projectView(id, false, false), "loading", `${id}: read first`);
+  }
+  for (const path of ["/projects/doesnotexist123", "/projects/doesnotexist123/models", "/projects/doesnotexist123/coordination",
+    "/projects/doesnotexist123/drawings", "/projects/doesnotexist123/clashes", "/projects/doesnotexist123/clashes/5",
+    "/projects/doesnotexist123/reports", "/projects/doesnotexist123/activity", "/projects/doesnotexist123/nonsense"]) {
+    const route = r.parseProjectPath(path);
+    assert.equal(route.view, "project", path);
+    assert.equal(r.projectView(route.step, false, true), "missing", path);
+  }
 });

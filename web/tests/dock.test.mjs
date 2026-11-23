@@ -186,3 +186,12 @@ test("the collapsed Activity bar reads as one calm status line: nothing before a
   assert.ok(![done.props.children].flat().some((c) => c?.props?.className === "spinner"), "done: no spinner");
   assert.equal(text(done), "Done in 30 s: 1 of 2 ideas passed the geometry check");
 });
+
+test("the left panel's tab follows the project step it shows: Models, Coordination, Clashes", async () => {
+  assert.deepEqual(dock.stepTitles("models"), { clashes: "Models" });
+  assert.deepEqual(dock.stepTitles("clash"), { clashes: "Clashes" });
+  for (const step of ["coordination", "overview", null, undefined]) assert.deepEqual(dock.stepTitles(step), {}, String(step));
+  assert.equal(dock.titleOf("clashes"), "Coordination", "the panel's own name, on Coordination and outside a project");
+  const source = await readFile(new URL("../src/dock.tsx", import.meta.url), "utf8");
+  assert.match(source, /ctx\.titles\?\.\[id\] \?\? api\.title/, "the tab draws the step's name over the panel's own");
+});

@@ -10,6 +10,7 @@ import { ViewCube } from "./cube";
 import { CAP_LAYER, CUT, DrawingStyle, DrawingView, farBehind, PAPER, targets, toIfc } from "./drawing";
 import { annotate, type Handle } from "./annotate";
 import type { RuleView } from "../filters";
+import { NoWebGL, webglAvailable } from "../webgl";
 import { candidatesOf, clipSegment, cutSegments, measureText, mergeRuns, pickSnap, type Candidates, type Measurement, type Segment,
   type SnapKind } from "./measure";
 import { CameraHistory, defaultKinds, facingFor, levelsOrModel, paneRects, planThrough, sectionFrame, sectionThrough, shownBy,
@@ -20,6 +21,12 @@ const GREEN = new THREE.Color("#1f9d3a");
 const PURPLE = new THREE.Color("#8e44ad");  // one element on both sides: a port and its own valve, two parts of a door
 const GREY = new THREE.Color("#b9c2cc");
 const GHOST = new THREE.Color("#9aa7b4");
+/** "Both": what a fix replaces, ghosted in its old place. Where the fix leaves a face where it was (a seat or trim keeps
+ * most of the element; a short move keeps its sides in their planes) the ghost lies on the fix's solid face, and the two
+ * fought for each pixel in stripes. The ghost writes no depth, is pushed back a little (`polygonOffset`) so a shared
+ * face is always the solid's, and draws after the fix's pieces (`BEFORE_GHOST_ORDER`). */
+const BEFORE_GHOST = { color: "#e67e22", opacity: 0.35, offsetFactor: 1, offsetUnits: 4 };
+const BEFORE_GHOST_ORDER = 1;
 
 // The server works in IFC axes (metres, Z up); web-ifc and three.js are Y up. A delta is only turned; a point is also
 // drawn relative to the models' origin (viewer/origin.ts).
@@ -240,7 +247,14 @@ export class Viewer {
 
   constructor(private host: HTMLElement) {
     this.homeHost = host;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    // No WebGL (turned off, blocklisted, no GPU the browser will use): say so before anything is made, and turn three's
+    // own "Error creating WebGL context" into the same. App shows its note in the stage and goes on without 3D.
+    if (!webglAvailable()) throw new NoWebGL();
+    try {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    } catch (e) {
+      throw new NoWebGL(e);
+    }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.localClippingEnabled = true;
     this.own(this.renderer.domElement);
@@ -1038,21 +1052,23 @@ export class Viewer {
           }
         }
         if (mode === "both" && opt.before) {
-          this.addMeshes(opt.before, new THREE.MeshBasicMaterial({ color: "#e67e22", transparent: true, opacity: 0.35,
-            depthWrite: false, side: THREE.DoubleSide, clippingPlanes: this.clipping }));
+          this.addMeshes(opt.before, new THREE.MeshBasicMaterial({ color: BEFORE_GHOST.color, transparent: true,
+            opacity: BEFORE_GHOST.opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: BEFORE_GHOST.offsetFactor,
+            polygonOffsetUnits: BEFORE_GHOST.offsetUnits, side: THREE.DoubleSide, clippingPlanes: this.clipping }), BEFORE_GHOST_ORDER);
         }
       }
     }
     this.applyMode();
   }
 
-  private addMeshes(meshes: Mesh[], material: THREE.Material) {
+  private addMeshes(meshes: Mesh[], material: THREE.Material, renderOrder = 0) {
     const capped = !material.transparent;   // a fix's solid pieces are cut like the model; ghosts are not
     for (const p of meshes) {
       const pos = serverVerts(p.verts);   // IFC Z up → three.js Y up, from the origin
       // The server welds a preview's corners: creased normals keep a box's faces flat and a round duct smooth.
       const g = creased(pos, p.faces);
       const mesh = new THREE.Mesh(g, material);
+      mesh.renderOrder = renderOrder;
       if (capped) mesh.layers.enable(CAP_LAYER.preview);
       this.overlay.add(mesh);
     }

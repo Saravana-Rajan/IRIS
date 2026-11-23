@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { compiled, find } from "./app-host.mjs";
 
@@ -237,6 +238,25 @@ test("an empty list says what ran, without numbers it does not have", () => {
   assert.ok(none.includes("No checks have run"));
   const ran = text(expand(CoordinationOverview({ summary: summary({ total: 0 }), triaged: false, onFilter() {}, onRunChecks() {}, onTriage() {} })));
   assert.ok(ran.includes("No clashes on the list") && ran.includes("4 touching pairs") && ran.includes("9 pairs meant to"));
+});
+
+test("in the dock the overview sits under the list's head with a gap and an inset, and its totals reflow, never ellipsed", async () => {
+  const css = (await readFile(new URL("../src/coordination.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (selector) => css.match(new RegExp(`(?:^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "m"))?.[1] ?? "";
+  // ReportList's first head keeps 2px under it (index.css): the card brings its own gap, inset and height, like the triage card.
+  const docked = rule(".left-view > .coord");
+  assert.match(docked, /flex-shrink: 0/, "the card never shrinks under the head in the scrolling view");
+  const [top, side] = docked.match(/margin: (\d+)px (\d+)px/)?.slice(1).map(Number) ?? [];
+  assert.ok(top >= 10 && top <= 16, `a normal gap under the head (${top}px)`);
+  assert.ok(side >= 12 && side <= 16, `an inset from the dock's edges (${side}px)`);
+  assert.ok(!/\.coord[\w-]*[^{]*\{[^}]*(margin[^;]*:\s*-|position:\s*(absolute|sticky|fixed))/.test(css), "nothing pulls the card over the head");
+  assert.match(rule(".coord"), /border: 1px solid var\(--line\)/);
+  assert.match(rule(".coord"), /container: coord \/ inline-size/, "the totals and rows follow the dock's width, not the window's");
+  // The totals: four across when there is room, two by two in a narrow dock; numbers in tabular mono, labels whole.
+  assert.match(rule(".coord-totals"), /grid-template-columns: repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/);
+  assert.match(css, /@container coord \(width < \d+px\) \{\s*\.coord-totals \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(rule(".coord-total b"), /font-family: var\(--mono\).*font-variant-numeric: tabular-nums/s);
+  assert.ok(!/ellipsis|nowrap/.test(rule(".coord-total span")), "a total's label wraps, never cut");
 });
 
 test("the clash header: its number and id, class, AI-assessed severity, status, both elements and the measure", () => {

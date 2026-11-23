@@ -91,11 +91,66 @@ test("Settings and Help open from the sidebar; the ☰ Menu button is gone", asy
   const host = await appHost();
   assert.equal(host.find((n) => n.props?.["data-tour"] === "menu"), undefined, "no menu button");
   const settings = host.menu();
-  assert.ok(settings && hasText(settings, "Coordinate"), "Settings holds what the menu held");
+  assert.ok(settings && hasText(settings, "Your name for review decisions"), "Settings holds the settings");
+  assert.equal(hasText(settings, "Coordinate"), false, "the workspace's actions are in the workspace");
   settings.props.onClose(); host.render();
   sidebar(host).props.onHelp(); host.render();
   const help = host.find((n) => n.type?.name === "MenuSheet" && n.props.title === "Help");
   assert.ok(help && hasText(help, "How Iris works"));
   assert.ok(find(help, (n) => n.type === "ol" && n.props.className === "help-flow"), "the eight steps");
   host.unmount();
+});
+
+const nothingOpen = { sceneId: null, a: null, b: null, stats: null, clash: null, report: null, matches: null };
+const sheet = (host, title) => host.find((n) => n.type?.name === "MenuSheet" && n.props.title === title);
+
+test("/settings opens Settings over Home; the sidebar's Settings and Help have their address, closing puts the page's back", async () => {
+  const fresh = await appHost({ path: "/settings", initial: nothingOpen });
+  await fresh.settle();
+  assert.ok(sheet(fresh, "Settings"), "the address opens Settings");
+  assert.ok(fresh.component("StartScreen"), "over Home");
+  assert.equal(fresh.location.pathname, "/settings");
+  sheet(fresh, "Settings").props.onClose(); fresh.render();
+  assert.equal(sheet(fresh, "Settings"), undefined);
+  assert.equal(fresh.location.pathname, "/home", "opened as it is, closing leaves Home's address");
+  fresh.unmount();
+
+  const host = await appHost({ path: "/projects", initial: nothingOpen });
+  await host.settle();
+  sidebar(host).props.onSettings(); host.render();
+  assert.equal(host.location.pathname, "/settings", "the sidebar's Settings is at /settings");
+  assert.ok(host.component("ProjectsHome"), "over the page it was opened from");
+  find(sheet(host, "Settings"), (n) => n.type === "button" && hasText(n, "How Iris works")).props.onClick(); host.render();
+  assert.equal(sheet(host, "Settings"), undefined);
+  assert.ok(sheet(host, "Help"), "Settings' Help opens Help");
+  assert.equal(host.location.pathname, "/help");
+  sheet(host, "Help").props.onClose(); host.render();
+  assert.equal(host.location.pathname, "/projects", "closing goes back to where Settings was opened");
+  sidebar(host).props.onHelp(); host.render();
+  assert.equal(host.location.pathname, "/help");
+  sheet(host, "Help").props.onClose(); host.render();
+  assert.equal(host.location.pathname, "/projects");
+  host.unmount();
+});
+
+test("every step of a project that is not there is the not-found page: no workspace, nothing opened, no clash picked", async () => {
+  const c = { id: "five", name: "Clash", number: 5, a: {}, b: {}, images: [] };
+  // Each host compiles App (seconds): the pages for every step are projectRoute.projectView's (project-route.test.mjs).
+  const session = { clash: null, report: { id: "report", title: "Report", clashes: [c] } };
+  for (const [path, initial] of [["/projects/gone123/clashes/5", nothingOpen], ["/projects/gone123/models", nothingOpen],
+    ["/projects/gone123/clashes/5", session]]) {
+    {
+      const host = await appHost({ path, initial, projects: { getProject: async () => { throw new Error("404 Not Found"); } } });
+      await host.settle(); await host.settle();
+      const missing = host.find((n) => n.type?.name === "EmptyState" && n.props.className === "proj-missing");
+      assert.ok(missing, `${path}: the not-found page`);
+      assert.equal(missing.props.glass, "ring", `${path}: with its one glass still`);
+      assert.ok(missing.props.action?.type === "button" && hasText(missing.props.action, "All projects"), `${path}: and the way back`);
+      assert.equal(host.component("ProjectStart"), undefined, `${path}: never the workspace's import`);
+      assert.deepEqual(host.projects.calls.filter((x) => x[0] === "open"), [], `${path}: nothing opens for it`);
+      assert.equal(host.state.clash, null, `${path}: the open report's clash #5 is not picked`);
+      assert.equal(host.location.pathname, path, `${path}: the address stays`);
+      host.unmount();
+    }
+  }
 });

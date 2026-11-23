@@ -355,12 +355,13 @@ _WS_HOSTS = object()   # `_resolve_items`' default: the Workspace's host reader
 
 def _resolve_items(ws: Workspace, scene_id: str, report_id: str | None, items: list[Item], notes: str,
                    emit: Callable[[dict], None], prefer: dict[str, str] | None = None, *,
-                   model=None, hosts_model=_WS_HOSTS, label: str = "") -> None:
+                   model=None, hosts_model=_WS_HOSTS, label: str = "", pictures: bool = True) -> None:
     """Run the fix agent on every item at once (their model calls overlap; geometry trials take turns).
 
     `model`: the proposal model (None: `ws.model`); `hosts_model`: what reads hosts (by default `ws.hosts_model`;
     None: no reading, walls and slabs only); `label`: the model's name on every option (empty: from its id). The
-    review queue replays saved replies through the same loop this way (prepare.py)."""
+    review queue replays saved replies through the same loop this way (prepare.py); `pictures` False: each question
+    from model data alone, no views of the clash (`Workspace.clash_for`), as a saved set is made and replayed."""
     def one(it: Item) -> None:
         emit({"type": "item", "key": it.key, "status": "thinking"})
         try:
@@ -372,7 +373,7 @@ def _resolve_items(ws: Workspace, scene_id: str, report_id: str | None, items: l
                                                           for o in it.others) + ". One fix must clear all of them.")
             clash = ws.clash_for(it.element_a, it.element_b, it.distance_m, None,
                                  "\n".join(filter(None, [notes, (prefer or {}).get(it.key, ""), also])), report_id, cid,
-                                 scene_id)
+                                 scene_id, pictures=pictures)
             clash.others = list(it.others)
 
             def progress(e: dict) -> None:

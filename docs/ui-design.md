@@ -857,8 +857,9 @@ reports and activity. If not, it goes.
 
 ### 10.1 The first screen
 
-> Superseded (Nov 22): the first screen is the Home dashboard (`StartScreen.tsx`): a greeting, New project, the two
-> samples, recent projects, See it work and How Iris works.
+> Superseded (Nov 22): the first screen is the Home dashboard (`StartScreen.tsx`): the hero, the start tiles (New
+> project and the two samples), How Iris works as eight cards (`HowIrisWorks.tsx`) and recent projects. "See it work"
+> was removed; the brand at the top of the sidebar is "Iris", and "Built by Techjays" sits in its footer.
 
 The app no longer opens on the marketing landing. With no hash, `App.tsx:3722-3740` renders `About` today. Instead it
 renders a lean **start screen**. `#projects` stays the Projects home and `#about` stays the product page.

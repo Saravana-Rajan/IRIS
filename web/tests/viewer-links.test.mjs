@@ -68,3 +68,28 @@ test("a picture frames the pair where it is in the model, not where a previewed 
   assert.deepEqual([framed[0].min.y, framed[0].max.y], [0, 1], "framed where they meet in the model");
   assert.equal(v.moved, moved, "the preview is back afterwards");
 });
+
+test("Both shows the fix solid with what it replaces as a ghost that never fights the solid for a shared face", () => {
+  // A seat keeps most of the element where it was: the ghost of the whole element lies on the cut piece's faces.
+  const v = Object.create(Viewer.prototype);
+  Object.assign(v, { overlay: new THREE.Group(), hidden: new Set(), moved: new Map(), clipping: [], applyMode() {} });
+  const cube = (z0, z1) => ({ verts: [0, 0, z0, 1, 0, z0, 1, 1, z0, 0, 1, z0, 0, 0, z1, 1, 0, z1, 1, 1, z1, 0, 1, z1],
+    faces: [0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7] });
+  const opt = { kind: "seat", moved: ["W"], deltaM: [0, 0, 0], pieces: [cube(0.6, 3)], before: [cube(0, 3)] };
+
+  v.showOption(opt, "both", "#1f9d3a");
+  const [solid, ghost] = v.overlay.children;
+  assert.equal(v.overlay.children.length, 2);
+  assert.equal(solid.material.transparent, false); assert.equal(solid.material.depthWrite, true);
+  // The ghost: see-through, writes no depth, pushed back behind a coplanar solid face, drawn after the solid.
+  assert.equal(ghost.material.transparent, true); assert.equal(ghost.material.depthWrite, false);
+  assert.equal(ghost.material.polygonOffset, true);
+  assert.ok(ghost.material.polygonOffsetFactor > 0 && ghost.material.polygonOffsetUnits > 0);
+  assert.ok(ghost.renderOrder > solid.renderOrder);
+  assert.ok(ghost.material.opacity > 0 && ghost.material.opacity < 1);
+
+  v.showOption(opt, "after", "#1f9d3a");   // no ghost
+  assert.equal(v.overlay.children.length, 1); assert.equal(v.overlay.children[0].material.transparent, false);
+  v.showOption(opt, "before", "#1f9d3a");  // the model as it is
+  assert.equal(v.overlay.children.length, 0); assert.equal(v.hidden.size, 0);
+});

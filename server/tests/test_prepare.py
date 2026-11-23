@@ -19,7 +19,7 @@ GZIP = {"Accept-Encoding": "gzip, deflate, br, zstd"}
 
 class Failing:
     """Proposes only a drop of the duct onto the pipe below the beam, every round: nothing passes."""
-    model = "gemini-4-argon"
+    model = "gemini-3.8-flash"
 
     def __init__(self):
         self.calls = 0
@@ -32,14 +32,14 @@ class Failing:
 
 class Recorded(prepare.ScriptedModel):
     """The scripted moves as if the configured proposal model had made them (its id and thinking level)."""
-    model = "gemini-4-argon"
+    model = "gemini-3.8-flash"
     label = ""
     thinking_level = "low"
 
 
 class Refuses:
     """A model that must never be asked."""
-    model = "gemini-4-argon"
+    model = "gemini-3.8-flash"
 
     def complete_json(self, *a, **k):
         raise AssertionError("the model was called")
@@ -147,7 +147,7 @@ def _generate(tmp_path, monkeypatch, model=None) -> Path:
 def test_a_saved_set_is_replayed_through_the_check_and_costs_nothing(tmp_path, monkeypatch, client):
     path = _generate(tmp_path, monkeypatch)
     data = json.loads(path.read_text())
-    assert data["format"] == 1 and data["model"] == "gemini-4-argon" and data["model_label"] == "Gemini Pro"
+    assert data["format"] == 1 and data["model"] == "gemini-3.8-flash" and data["model_label"] == "Gemini Flash"
     assert data["label"] == prepare.LABEL and len(data["calls"]) == 1 and list(data["items"].values())[0]["options"] == 2
     assert not list(path.parent.glob("*.tmp"))
 
@@ -162,12 +162,12 @@ def test_a_saved_set_is_replayed_through_the_check_and_costs_nothing(tmp_path, m
     events = _events(r)
     start = events[0]
     assert start["items"][0]["saved"] is True
-    assert start["saved"]["model"] == "Gemini Pro" and start["saved"]["label"] == prepare.LABEL
-    assert start["saved"]["title"].startswith(f"{prepare.LABEL} (Gemini Pro, ")
+    assert start["saved"]["model"] == "Gemini Flash" and start["saved"]["label"] == prepare.LABEL
+    assert start["saved"]["title"].startswith(f"{prepare.LABEL} (Gemini Flash, ")
     [p] = [e for e in events if e["type"] == "prepared"]
-    assert p["status"] == "ready" and p["source"] == "saved" and p["model"] == "Gemini Pro"
+    assert p["status"] == "ready" and p["source"] == "saved" and p["model"] == "Gemini Flash"
     for o in p["options"]:   # tried and checked again here, not read from the file
-        assert o["min_clearance_m"] is not None and o["before"] and o["model"] == "Gemini Pro" and o["pair"]
+        assert o["min_clearance_m"] is not None and o["before"] and o["model"] == "Gemini Flash" and o["pair"]
 
 
 def test_a_tampered_saved_reply_is_checked_and_not_shown(tmp_path, monkeypatch, client):
@@ -206,7 +206,7 @@ def test_the_saved_key_misses_on_any_difference(tmp_path, monkeypatch):
     assert prepare.load_saved(ws, sid).path == path
 
     with monkeypatch.context() as m:   # another proposal model configured
-        m.setenv("GEMINI_MODEL", "gemini-3.8-flash")
+        m.setenv("GEMINI_MODEL", "gemini-4-argon")
         assert prepare.load_saved(ws, sid) is None
     with monkeypatch.context() as m:   # another thinking level
         m.setenv("GEMINI_THINKING_LEVEL", "high")
@@ -266,3 +266,120 @@ def test_the_generator_runs_offline_unless_told_to_call_gemini(monkeypatch):
         model_client.GeminiModel().complete_json("s", "t")
     assert model_client.model_id("proposal")   # the key still names the configured model
     sys.modules.pop("prepare_saved", None)
+
+
+def test_with_no_credentials_saved_pairs_replay_and_live_ones_fail_plainly_uncharged(tmp_path, monkeypatch, client):
+    """No GOOGLE_CLOUD_PROJECT, no GEMINI_API_KEY (conftest drops them): the default model cannot be called, so a saved
+    pair still replays (no client is made) and a pair the set does not hold fails with NO_MODEL, charging nothing."""
+    path = _generate(tmp_path, monkeypatch)
+    assert not model_client.configured()
+    ws, sid, rid = _open(tmp_path, None)   # the default: a GeminiModel with no client and no credentials
+    assert isinstance(ws.model, model_client.GeminiModel) and not model_client.can_call(ws.model)
+    monkeypatch.setattr(model_client, "make_client", lambda: pytest.fail("a client was made"))
+    monkeypatch.setattr(app_module, "ws", ws)
+    events = _events(client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "pick": "deepest"}))
+    [p] = [e for e in events if e["type"] == "prepared"]
+    assert p["source"] == "saved" and p["status"] == "ready" and p["options"]
+
+    data = json.loads(path.read_text())
+    data["items"] = {}   # the set holds no pair now: it would be prepared live
+    path.write_text(json.dumps(data))
+    for _ in range(2):   # an allowance of one an hour: nothing is charged
+        r = client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "pick": "deepest"})
+        assert r.status_code == 200
+    events = _events(r)
+    [p] = [e for e in events if e["type"] == "prepared"]
+    assert p["source"] == "live" and p["status"] == "failed" and p["why"] == prepare.NO_MODEL
+    assert "RuntimeError" not in r.text
+
+
+NORTHBANK_SET = Path(__file__).resolve().parents[2] / "samples" / "prepared" / "Northbank.json"
+
+
+@pytest.mark.skipif(not NORTHBANK_SET.exists(), reason="no saved set for Northbank")
+def test_a_fresh_clone_replays_northbank_s_saved_fixes_with_no_credentials(monkeypatch, client):
+    """The sample as the demo card opens it, on the code's own defaults and no credentials: the saved set's key matches
+    and its answer-key pairs replay through the geometry check, with no model client made."""
+    from iris import demos
+    from iris.service import SAMPLES
+    monkeypatch.delenv("IRIS_PREPARED_DIR", raising=False)
+    monkeypatch.setattr(model_client, "make_client", lambda: pytest.fail("a client was made"))
+    demo = next(d for d in demos.DEMOS if d.id == "northbank")
+    ws = Workspace(samples=SAMPLES)   # the default model: Gemini with no credentials
+    sid = ws.open(list(demo.files))
+    rid = ws.detect(sid)["report"]["id"]
+    saved = prepare.load_saved(ws, sid)
+    assert saved is not None and saved.path.name == "Northbank.json", prepare.saved_key(ws, sid)
+    monkeypatch.setattr(app_module, "ws", ws)
+    girder = "1eVHoPtl1IhAbbhivqVqb0"
+    ids = [cid for k, it in saved.items.items() if girder in k for cid in it["clash_ids"]]
+    assert ids
+    r = client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "clash_ids": ids})
+    assert r.status_code == 200 and "No model configured" not in r.text
+    cards = [e for e in _events(r) if e["type"] == "prepared"]
+    assert cards and all(c["source"] == "saved" for c in cards)
+    assert any(c["status"] == "ready" for c in cards)
+    for c in cards:
+        for o in c["options"]:   # checked by geometry here
+            assert o["min_clearance_m"] is not None and o["before"]
+
+
+def _png() -> bytes:
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "white").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_views_taken_of_a_clash_after_the_set_was_made_do_not_change_its_replay(tmp_path, monkeypatch, client):
+    """The page takes views of the clash on screen (the first in the list, before anyone opens the queue). A saved
+    set was made from model data alone, so its replay asks without them: the views' line ("Images are views of this
+    clash.") once changed the question, and the first clash always missed."""
+    _generate(tmp_path, monkeypatch)
+    ws, sid, rid = _open(tmp_path, Refuses())
+    monkeypatch.setattr(app_module, "ws", ws)
+    [cid] = [c.id for c in ws.report(rid).clashes]
+    for label in "ABC":
+        ws.save_capture(rid, cid, label, _png())
+    assert len(ws.report(rid).clash(cid).images) == 3
+    events = _events(client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "clash_ids": [cid]}))
+    [p] = [e for e in events if e["type"] == "prepared"]
+    assert p["source"] == "saved" and p["status"] == "ready", p.get("why")
+    c = ws.report(rid).clash(cid)
+    asked = ws.clash_for(c.a.global_id, c.b.global_id, None, None, "", rid, cid, sid, pictures=False)
+    assert asked.images == [] and "Images are views" not in asked.notes
+    live = ws.clash_for(c.a.global_id, c.b.global_id, None, None, "", rid, cid, sid)
+    assert len(live.images) == 3 and "Images are views of this clash." in live.notes   # a live proposal sees them
+
+
+SAMPLES = Path(__file__).resolve().parents[2] / "samples"
+
+
+@pytest.mark.skipif(not (SAMPLES / "prepared" / "Northbank.json").exists(), reason="no saved Northbank set")
+def test_the_northbank_saved_set_replays_eight_of_eight_with_no_model_call(monkeypatch, client):
+    """The committed set (made on Gemini, evals/prepare_saved.py) replays every pair it holds as ready, with views
+    taken of the first clash as the page takes them, and no model is asked."""
+    from iris import demos
+    saved_file = json.loads((SAMPLES / "prepared" / "Northbank.json").read_text())
+    monkeypatch.delenv("IRIS_PREPARED_DIR", raising=False)
+    monkeypatch.setenv("GEMINI_MODEL", saved_file["key"]["model"])
+    monkeypatch.setenv("GEMINI_THINKING_LEVEL", saved_file["key"]["thinking"])
+    ws = Workspace(samples=SAMPLES, model=Refuses())
+    monkeypatch.setattr(app_module, "ws", ws)
+    sid = ws.open(list(next(d for d in demos.DEMOS if d.id == "northbank").files))
+    rid = ws.detect(sid)["report"]["id"]
+    first = prepare.deepest(ws, sid, rid, [])[0]
+    for label in "ABC":
+        ws.save_capture(rid, first, label, _png())
+    events = _events(client.post(f"/api/scenes/{sid}/prepare/stream", json={"report_id": rid, "pick": "deepest"},
+                                 headers=GZIP))
+    start, done = events[0], events[-1]
+    assert start["saved"] is not None and all(it["saved"] for it in start["items"])
+    cards = [e for e in events if e["type"] == "prepared"]
+    assert {c["key"] for c in cards} == set(saved_file["items"])
+    assert [c["status"] for c in cards] == ["ready"] * 8, [(c["label"], c.get("why")) for c in cards]
+    assert all(c["source"] == "saved" for c in cards)
+    assert done["type"] == "done" and done["ready"] == 8 and done["failed"] == 0
+    duct = next(c for c in cards if first in c["clash_ids"])
+    assert duct["options"] and duct["options"][0]["kind"] == "offset"

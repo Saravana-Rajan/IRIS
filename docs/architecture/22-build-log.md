@@ -1181,6 +1181,138 @@ the shell: Review fixes is Clash review's primary action at the right of the top
 secondary, and the queue covers the shell's body, so the sidebar and the top bar stay
 ([docs/review-queue.md](../review-queue.md), "Mounting it in `App.tsx`").
 
+Later on Nov 22 (2026-11-22), three of the owner's calls. **The sidebar's footer** (9434dda, f3b1bbb): the user block
+(avatar, name, Reviewer, Edit) is gone; the sidebar ends with `BuiltBy`, the small Aperture mark and "Built by
+Techjays" (the mark alone, with that tip, on the rail), and the brand at the top and in the phone's top bar is the mark
+and "Iris". The reviewer's name (`iris.reviewer`) is asked above the proposals again (always) and in Settings ("Your
+name for review decisions"); Home's greeting still uses it. **White and pink on every screen** (84e3d61: `index.css`'s
+tokens, the end of `frame.css`, `viewer/Viewer.ts`): white surfaces with lavender-grey hairlines (`--panel` #f5f4f8
+only for tracks and header bands), `--pink` #ff5cd6 and a pink-magenta `--accent-ink` #b0269a, primary buttons on
+`--holo-cta` (#d3249c → #9a46dd → #5f62e0, each stop 4.5:1 or more with white text) with a pink glow on hover and an
+ink focus ring, secondary buttons pink on hover, the selected clash row a pink tint with a pink edge, chips and badges
+on white or pink, pink form controls, every spinner the Aperture in the holo colours, white dock tabs underlined in
+pink, and the 3D background #f3f1f8. **Home** lost "See it work" (`DemoClips.tsx` and `demoClips.css` deleted; the
+clips stay in `web/public/demos/` for the submission video) for **How Iris works** (`HowIrisWorks.tsx`,
+`howIrisWorks.css`, 4edc4cb): eight cards in four phases (Bring in, Find, Fix, Share) with icon tiles, step pills and
+measured proof chips, Propose with the AI holo edge and Validate with a green "Geometry" badge, "AI proposes → geometry
+proves" between them; a card opens its step on the sample building (`onSampleStep` → `trySample(step)`). Tests:
+`sidebar.test.mjs` (the footer), `shell.test.mjs`, `start-screen.test.mjs` and `how-iris-works.test.mjs`. The owner then asked to drop the striped holographic ribbon everywhere: `HoloRibbon` is gone; empty states, the loading card and Home's quiet lines show the Aperture in a soft pink circle (`MarkBadge`), and the hero keeps a soft pink wash until the 3D glass aperture (`feature/hero-ribbon`) arrives. A pink glow now follows the cursor over the pages, never the 3D workspace (`CursorGlow.tsx`: eased, a trailing periwinkle glow, a breath at rest, a still wash on touch or under reduced motion), and the start tiles and How Iris works cards light under the cursor. Checked: `cursor-glow.test.mjs`, the full web suite, `npm run build`.
+
+**Nov 22 (2026-11-22), server QA fixes: Flash defaults, saved fixes with no credentials, no model 500s, unknown pages**
+([08](08-ai-models-prompts-and-spend.md), [10](10-http-api-and-streams.md), [12](12-web-app.md),
+[15](15-requirements-settings-and-config.md), [docs/review-queue.md](../review-queue.md)). **Defaults:** the owner
+chose Gemini 3.8 Flash as the main model, so `model_client.DEFAULT_MODELS` now runs proposals (`GEMINI_MODEL`) and
+second tries (`GEMINI_ESCALATION_MODEL`) on `gemini-3.8-flash`, as `deploy/deploy.sh` already set (Cloud Run worked
+only through it); the thinking defaults were already the deploy's (`low`, fast empty, escalation `high`). The code's
+key now equals `samples/prepared/Northbank.json`'s (`gemini-3.8-flash`, `low`), so a fresh clone gets the saved
+review-queue fixes, and with no credentials at all they still replay, each checked by geometry (a replay needs no model
+and no client). `gemini-4-argon` stays priced and labelled, an option by env var; `.env.example`, README, CLAUDE.md
+follow. **No model:** `model_client.can_call(model)` (any stand-in, a `GeminiModel` given a client, or `configured()`).
+The page's automatic patterns reading (`POST .../patterns/{scene_id}/triage`) answered 500 "RuntimeError: No model
+configured" on every sample open with no credentials; it now skips the reading (`{}`, no call, nothing charged), so
+the browser logs no failed request. The review queue's live pairs with no model are not charged and fail plainly
+(`prepare.NO_MODEL`). **Unknown pages:** `/nope-page` showed `{"detail":"Not Found"}` on one origin and locally;
+`app._is_page` now gives `index.html` to any browser page address (GET or HEAD, `Accept` HTML, no file extension, the
+first segment not in `NOT_PAGES`: api, mcp, docs, redoc, openapi.json, assets, wasm; no `..`, `%` or backslash), and
+the app shows its own Page not found page (`web/src/NotFound.tsx`, `isAppPath` in `projectRoute.ts`, `App`'s
+`lostPage`, with a Home button; both App test stub lists name it). Firebase Hosting's `**` rewrite already did this on
+the split deploy. **Report PDF on Cloud Run:** the `Dockerfile` already installs WeasyPrint's libraries
+(`libpango-1.0-0`, which pulls `libglib2.0-0` with `libgobject-2.0`, `libpangoft2-1.0-0`, `libharfbuzz0b`,
+`libharfbuzz-subset0`, `fonts-dejavu-core`), so it is unchanged; only a Mac without them fails the two pango tests.
+Checked: server tests (new: the defaults equal `deploy.sh`'s; Northbank's saved set replays with no credentials and
+no live call; the patterns reading skipped with no model; an unknown page gets `index.html` while `/api`, files and
+anything that walks up stay 404), `test_docs_map.py`, the web suite, `tsc` and `vite build`; no Gemini call.
+Nov 22 (2026-11-22), the Drawings page after QA (`fix/qa2-fix-drawings`: `DrawingsPanel.tsx`, `drawings.css`).
+**The sample sheets open already read:** a sheet with a saved reading whose items come back empty replays it by itself
+(`autoReplays`, once per sheet, after the page stops being busy), so "Try the sample drawings" lands on the items and
+the four mismatches with no click, under the "Saved AI reading of this sample (Gemini 3.8 Flash)" note; its card no
+longer says both "Saved reading" and "Not read yet", and its button reads "Replay the reading". The user's own PDFs
+still wait for **Read with AI**. **The read button is reachable on a phone:** the header, the saved note and the
+reading line keep their own height (`.dwg-centre > :not(.dwg-viewer) { flex: none }`), so a wrapped button no longer
+slides under the note and taps reach it. **The viewer opens at "Fit"**, its zoom said against the fitted width, not the
+page image's pixels ("10 %", "6 %" on a phone); the zoom and the key share one row under the sheet, and on a phone the
+stage takes the sheet's shape. **White and pink:** the selected readings tab is the pink accent (word, underline,
+count), tabs hover pink; a mismatch is red when the drawing differs from the model and amber when an element is
+missing (was the other way round), on the sheet, in the list and in the key, which puts the two on a row under the
+reading statuses. Checked: `drawings-samples.test.mjs` (auto replay on a
+sample, none on an upload, none before the items are fetched or while busy, once; the tab and mismatch colours and
+the key), `drawings.test.mjs`, the full web
+suite, `tsc`, `npm run build`, and headless Chromium on a local one-origin server with no Gemini credentials (desktop
+1512×805, phone 390×844).
+Nov 23 (2026-11-23), the review queue after QA (`fix/qa2-fix-queue`). **Clash #1 always failed with the saved set**,
+though the owner-approved Gemini run (d22fe34: gemini-3.8-flash at thinking low, 8 calls, $0.057) made 8 of 8 ready.
+The cause: the page takes views of the clash on screen (#1 before the queue opens), and `Workspace.clash_for` then
+added "Images are views of this clash." to the question, so its hash missed the recorded reply (`prepare.MISS`). A
+saved set is made from model data alone, so its replay now asks the same way: `plans._resolve_items(..., pictures=False)`
+→ `clash_for(..., pictures=False)` (no images, no views line); `generate` records the same way, and a live pair still
+sends the views. No `prepare.VERSION` bump: the recorded questions are unchanged. Tests: `test_prepare.py` (views
+taken after a set was made; the committed Northbank set replays 8 of 8 ready through the route with views on the first
+clash and no model call; both fail without the fix). **The report counts queue accepts:** the queue's `onKept` in
+`App.tsx` now records the report's evidence as `accept()` does (both pictures, every clash on the pair; an uncut
+penetration a recommendation), so "Fixes: 2 applied" and the fixes' pages (`report-queue-kept.test.mjs`). **The
+queue's layout:** one friendly title (the pair by name, or the clash's own title over it; never the raw IFC label
+too), and the decision bar (`.rq-decide`: name, Accept, Reject, Request another) is always in view at the left pane's
+foot, the card scrolling above it (sticky at the screen's foot on a phone). **Plain whys:** `reviewQueueModel.plainError`
+maps a server exception or a model's status to a sentence ("No AI model is configured on this server", "Gemini Flash
+didn't answer in time", …), the raw words only in a tooltip. **Phones and tablets:** the entry is the compact top
+bar's primary (`reviewLeads` without `!compact`), and a phone shows Propose fixes once: the sheet's peek line
+keeps it (on screen at every height of the sheet) and the Fix tab's copy, half cut off at a half-raised sheet's foot,
+steps aside (`review-queue-phone.test.mjs`). **Both** no longer z-fights: the before ghost writes no depth, has a
+polygon offset and draws after the solid (`Viewer.ts`, `viewer-links.test.mjs`). Checked: server `pytest` (all but
+the two known pango PDF tests), web `npm test`, `tsc`, `vite build`, and headless Chromium (real GPU) at 1512×805 and
+390×844 against a local one-origin server with no credentials (`GEMINI_MODEL=gemini-3.8-flash`): 8 of 8 ready with
+#1 opened first, Accept and Reject in view, Both on #17 clean, and the report "2 applied, 0 proposed" after two accepts.
+**Nov 22 (2026-11-22), Home's hero: the Aperture in 3D glass** ([12](12-web-app.md)). The owner asked for a hero like a
+glass reference site's; we did not reuse that site's video or any of its assets, and the striped CSS ribbon (and a
+first glass ribbon) were dropped at the owner's word. Home's hero (`StartScreen.tsx`, `home.css`) now has the greeting,
+the tagline in two lines of large regular type ("AI proposes. Geometry proves." / "The engineer decides.") and what
+Iris does at the left, and at the right **our Aperture logo as thick iridescent 3D glass** (`HeroGlass.tsx`,
+`heroGlass.css`, `glass.ts`, `glassModel.ts`): the mark's six blades parsed from `Brand.tsx`'s paths and extruded with a
+rounded bevel round an ink hexagonal pupil, floating over a white pedestal with a contact shadow, turning slowly,
+breathing open and closed (8 s; the blades slide out and turn a little, the pupil grows) and leaning toward the mouse
+(about ±12°, eased in the render loop; it opens a little more while the pointer is over the hero; off on touch and
+under reduced motion). Rendered live with three.js (`MeshPhysicalMaterial` with transmission, thickness, iridescence,
+clearcoat and dispersion; a generated studio environment in the holo colours with PMREM; a backdrop only the
+transmission pass sees, so the page stays white while the glass bends colour; ACES, sRGB), lazy-loaded with
+`React.lazy`, drawn only while visible and the tab is showing, at most 2x pixels, one still frame under reduced
+motion, freed on unmount; a square "↓" cue scrolls to the start tiles. Stills from the same code
+(`web/scripts/render-glass.mjs`, `render-glass.html`, `glassStill.ts`, headless Chromium on the GPU):
+`web/public/hero/aperture.webp` (the poster and the no-WebGL picture, 27 KB) and transparent `web/public/glass/`
+`aperture.webp`, `ring.webp`, `pill.webp` (2x, 15–38 KB) for empty states and cards; Home's no-projects line uses the
+aperture. Checked: `npm test` (new `tests/hero-glass.test.mjs`; `start-screen.test.mjs` updated), `tsc`, `vite build`,
+`test_docs_map.py`, and headless Chromium screenshots of `/home` at 1512×805 and 390×844 on the GPU against a local
+one-origin server (no Gemini call).
+
+**Nov 22 (2026-11-22), no WebGL no longer blanks the page** ([13](13-3d-viewer.md)). With WebGL turned off,
+`new THREE.WebGLRenderer()` threw in App's mount effect and the whole app rendered blank. `web/src/webgl.ts` adds
+`webglAvailable()` (a probe canvas, WebGL 2 else 1, its context given back at once) and `NoWebGL`; `Viewer`'s constructor
+throws `NoWebGL` before it makes anything when there is none, and wraps three's own failure the same way. `App` catches
+it, keeps `viewer` null (every call on it was already `?.` except the four loads, now `?.` with `UNDRAWN` stats), hides
+the 3D toolbar and shows "3D needs WebGL" in the stage (`.no-webgl`, workspace.css); models still open, without being
+fetched or drawn, for the clash list, drawings and reports. Checked: new `tests/webgl-guard.test.mjs` (the probe, and the
+real `Viewer` throwing `NoWebGL` on a stub page), `viewer-mount.test.mjs`, the full `npm test`, `tsc`, `test_docs_map.py`.
+
+**Nov 23 (2026-11-23), the QA layout pass finished** ([12](12-web-app.md)). After the 3D glass hero's merge
+(`feature/hero-ribbon`), the second QA round's layout and copy fixes. Clash rows: a compact group of 24 px icons at the
+row's right end (two to a column, never over the title, a press never also opening the clash); a click anywhere else on
+the row opens it (index.css `.row-actions`, ReportList). Any step of an unknown project (`/projects/doesnotexist/clashes/5`
+too) is a calm "No project with this address" page with the glass ring and All projects, never the workspace's import
+(`projectRoute.projectView`). The Models step has a gutter and its dock tab says "Models" (`dockLayout.stepTitles`); the
+Coordination overview follows its card's width (`@container coord`), labels wrap, nothing overlaps. Activity's Decisions
+card moved into `ProjectOverview` (fixed column widths, one line in the short columns, `shortWhen` "Nov 22, 14:05").
+Settings is a real sheet at `/settings` (your name for review decisions, This session, Panels, Owner settings when the
+server has an owner, a Help link); the workspace's own actions (samples, upload, checks, a Navisworks report) moved
+to the workspace (`workMore`). The list heading reads "3 models checked · Site is context" (`listTitle`). Home keeps the
+merged shell's decisions (just "Iris" at the top, "Built by Techjays" at the bottom, no user block, no See it work, no
+striped ribbon) with the glass aperture hero; less space above the greeting; the three start tiles alike, highlighted on
+hover only; How cards a scroll-snap row on a phone; the Understand chip "4 models · 1,997 elements" as the Models step
+shows it. Glass stills at most one per view: Projects' empty state, Reports' empty state, the not-found page and the
+loading card. No WebGL: "3D needs WebGL" in the stage, the rest works. A test-host fix: `appHost`'s `workActions()` no
+longer shadows its viewer-call log. Checked: `npm test` (566), `tsc`, `vite build`, `test_docs_map.py` and
+`test_web_pages.py`, and headless Chromium (GPU) screenshots of Home, the clash row hover, Models, Coordination,
+Activity, Settings, the unknown project and no-WebGL at 1512×805 and 390×844 on a local one-origin server with no
+Gemini key.
+
 **Nov 22 (2026-11-22), demo videos on Home** ([12](12-web-app.md), [19](19-demo-data.md), [18](18-testing-and-evals.md)).
 Home gains three narrated demo videos, each played in a light lightbox. `web/src/DemoVideo.tsx`, with its own
 `demoVideo.css`, holds `DEMO_VIDEOS` (`3d` "Fix clashes in your building models", `2d` "Check drawings against the

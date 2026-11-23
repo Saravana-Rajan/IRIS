@@ -43,7 +43,7 @@ export async function viewerModule(loader = "export const loadIfc=()=>null;") {
     "./measure": await compiled("../src/viewer/measure.ts", { three, "./origin": origin }),
     "./normals": normals, "./origin": origin,
     "./patch": await compiled("../src/viewer/patch.ts", { three, "./normals": normals, "./origin": origin }),
-    "./edit": await compiled("../src/viewer/edit.ts", { three }) }));
+    "./edit": await compiled("../src/viewer/edit.ts", { three }), "../webgl": await compiled("../src/webgl.ts", {}) }));
 }
 /** The first element in a tree that `predicate` accepts: through children, and through the app shell's slots that
  * hold elements (a top bar's `actions` and `search`, a page header's `status`). */
@@ -137,7 +137,7 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
   globalThis.setInterval = () => Symbol(); globalThis.clearInterval = () => {};
   const react = url(`const h=globalThis.${key}.hooks; export const useState=(...a)=>h.useState(...a),useRef=(...a)=>h.useRef(...a),useMemo=(...a)=>h.useMemo(...a),useEffect=(...a)=>h.useEffect(...a);`);
   const apiModule = url(`export const api=globalThis.${key}.api; export class ApiError extends Error { constructor(message,status){super(message);this.status=status;} } export const setRequirements=()=>{}; export const setGoneHandler=(fn)=>{globalThis.${key}.gone=fn;}; export const apiUrl=(p)=>p; export const wsUrl=(p)=>p; export const apiFetch=(p,i)=>globalThis.fetch(p,i);`);
-  const names = ["DrawingsPanel", "serverLine", "StartScreen", "ImportPanel", "ModelSummary", "CoordinationOverview", "ClashHeader", "ProposalCard", "ReviewFixesEntry", "ReviewQueue", "ProjectsHome", "ProjectOverview", "ProjectSteps", "SaveButton", "Activity", "ActivityLine", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "ApertureMark", "Lockup", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon", "Sidebar", "TopBar", "SearchBox", "PageHeader", "NewProjectDialog", "EmptyState", "HoloRibbon", "CountUp", "TextReveal"];
+  const names = ["DrawingsPanel", "serverLine", "StartScreen", "ImportPanel", "ModelSummary", "CoordinationOverview", "ClashHeader", "ProposalCard", "ReviewFixesEntry", "ReviewQueue", "ProjectsHome", "ProjectOverview", "ProjectSteps", "SaveButton", "Activity", "ActivityLine", "editText", "statusLine", "ChatPanel", "ReportDialog", "ReviewBlock", "OwnerSettingsMenu", "Tour", "About", "AgentDialog", "timeLeft", "ClashPanel", "Lightbox", "PlanPanel", "Insights", "TriageCard", "ReportList", "ViewerToolbar", "Popover", "Tooltips", "DetectSetupCard", "DetectSummary", "CheckPicker", "RequirementsDialog", "ProjectStart", "addByDesign", "hasByDesign", "load", "save", "shortLabel", "useLayout", "useCoarse", "follow", "SheetBar", "MenuSheet", "addPenetration", "hasPenetration", "BuiltView", "builtStep", "cutText", "projectName", "ViewPanes", "DockHost", "SlotHost", "MeasurePanel", "PropertySets", "FiltersPanel", "blankRule", "ElementCard", "Wordmark", "AppIcon", "Notch", "ApertureMark", "Lockup", "LoadCard", "KeptToast", "IrisMark", "EditPanel", "EditTool", "EditIcon", "Sidebar", "TopBar", "SearchBox", "PageHeader", "NewProjectDialog", "EmptyState", "MarkBadge", "CursorGlow", "CountUp", "TextReveal", "NotFound"];
   // The page's layout is none (not desktop, phone or tablet) unless a test asks for one: appHost({ layout }).
   const mocks = url(`${names.filter((name) => name !== "useLayout").map((name) => `export function ${name}(){return null;}`).join("\n")}
     export function useLayout(){return globalThis.__hostLayout ?? null;}
@@ -178,7 +178,7 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     "./sampleDrawings": await compiled("../src/sampleDrawings.ts", {}), "./shellNav": await compiled("../src/shellNav.ts", {}),
     "./projectsApi": projectsModule };
   for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons",
-    "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ReviewQueue", "./ProjectsHome", "./ProjectOverview", "./AppShell", "./PageHeader", "./Holo"]) dependencies[name] = mocks;
+    "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ReviewQueue", "./ProjectsHome", "./ProjectOverview", "./AppShell", "./PageHeader", "./Holo", "./CursorGlow", "./NotFound"]) dependencies[name] = mocks;
   const { App } = await import(await compiled("../src/App.tsx", dependencies, true));
   function render() {
     let passes = 0;
@@ -194,17 +194,20 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     component(name) { return find(tree, (n) => n.type?.name === name); },
     find(predicate) { return find(tree, predicate); },
     input(id) { return find(tree, (n) => n.type === "input" && n.props.id === id); },
-    /** What the old menu held, now Settings (the sidebar's Settings): opened, and what it holds. */
+    /** Settings (the sidebar's Settings): opened, and what it holds. */
     menu() { find(tree, (n) => n.type?.name === "Sidebar").props.onSettings(); render();
       return find(tree, (n) => n.type?.name === "MenuSheet" && n.props.title === "Settings"); },
-    reportMenu() { return this.menu(); },
+    /** The workspace's own actions (models, checks, a Navisworks report: App's workMore), where the page shows them:
+     *  the Models step, or the top of the workspace's left panel. */
+    workActions() { return find(tree, (n) => n.props?.["data-work-actions"] !== undefined); },
+    reportMenu() { return this.workActions(); },
     fileInput(kind) { return find(tree, (n) => n.type === "input" && n.props.type === "file"
       && (kind === "folder" ? "webkitdirectory" in n.props : String(n.props.accept ?? "").includes(".xml"))); },
     chat(event) { find(tree, (n) => n.type?.name === "ChatPanel").props.onEvent(event); render(); },
     /** The server answered that a scene or report is gone (api.ts, X-Iris-Gone). */
     gone(g) { globalThis[key].gone?.(g); render(); },
-    open() { find(this.menu(), (n) => n.props?.id === "open").props.onClick(); render(); },
-    loadReport() { find(this.menu(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
+    open() { find(this.workActions(), (n) => n.props?.id === "open").props.onClick(); render(); },
+    loadReport() { find(this.workActions(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
     runTimers() { const entries = [...timers.values()]; timers.clear(); for (const fn of entries) fn(); render(); },
     unmount() { for (const cell of cells) cell?.cleanup?.(); delete globalThis[key]; },
   };

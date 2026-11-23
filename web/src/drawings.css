@@ -1,6 +1,6 @@
 /* The Drawings step (DrawingsPanel.tsx, docs/drawings.md): AI reads, data checks, the engineer decides. The proof
    grammar of docs/ui-design.md §1 and §3.2: AI-read = dashed indigo, confirmed by data = solid teal, text layer only =
-   dotted grey, mismatch = amber (differs) or red (missing), the engineer's choice = the accent, filled. Colours come from the app's
+   dotted grey, mismatch = red (differs from the model) or amber (missing on one side), the engineer's choice = the accent, filled. Colours come from the app's
    tokens only (index.css :root); each new token falls back to its legacy alias until index.css carries it. Light
    theme only (owner decision): no dark-mode block here. */
 .dwg {
@@ -39,15 +39,15 @@
 .dwg-badge.st-confirmed { border-color: var(--d-proved); color: var(--d-proved); background: var(--d-proved-soft); }
 .dwg-badge.st-ai { border-style: dashed; border-color: var(--d-ai); color: var(--d-ai); background: var(--d-ai-soft); }
 .dwg-badge.st-text { border-style: dotted; border-color: var(--d-control); color: var(--muted); }
-.dwg-badge.mk-missing { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
-.dwg-badge.mk-differs { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
+.dwg-badge.mk-differs { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-badge.mk-missing { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
 .dwg-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
   background: var(--d-sunken); color: var(--d-ink2); font: 500 11px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .dwg-count.warn { background: var(--warn-soft); color: var(--warn); }
 .dwg-mk { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 4px; border: 1px solid; border-radius: 3px;
   font: 600 11px/1 var(--body); vertical-align: middle; }
-.dwg-mk.mk-missing { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
-.dwg-mk.mk-differs { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
+.dwg-mk.mk-differs { border-color: var(--d-failed); color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-mk.mk-missing { border-color: var(--d-warn-line); color: var(--warn); background: var(--warn-soft); }
 
 /* Notices: errors with Retry, run lines, the AI-only note */
 .dwg-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--d-failed-line);
@@ -67,9 +67,11 @@
 .dwg-note { margin: 0; padding: 4px 8px; border: 1px dashed var(--d-ai); border-radius: 3px; background: var(--d-ai-soft); color: var(--d-ai);
   font-size: 12px; line-height: 16px; }
 /* A saved reading (the sample sheets): said once, calmly, in the AI's dashed indigo; never shown as a live reading */
-.dwg-saved { display: flex; align-items: center; gap: 6px; margin: 0; padding: 5px 12px; border-bottom: 1px solid var(--line);
+.dwg-saved { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 5px 12px; border-bottom: 1px solid var(--line);
   border-left: 2px dashed var(--d-ai); background: var(--d-ai-soft); color: var(--d-ink2);
   font-size: 12px; line-height: 16px; }
+.dwg-saved > svg { margin-top: 1px; }
+.dwg-saved > span { min-width: 0; }
 .dwg-saved > svg { flex: none; color: var(--d-ai); }
 .dwg-run-saved { color: var(--d-ai); }
 .dwg-badge.dwg-saved-badge { border-color: var(--line); background: var(--d-sunken); color: var(--muted); font-weight: 500; }
@@ -100,7 +102,11 @@
   border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
 .dwg-col-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px; border-bottom: 1px solid var(--line); }
 .dwg-col-head h3 { margin: 0; font-size: 13px; font-weight: 600; min-width: 0; }
-.dwg-view-head h3 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.dwg-view-head { flex-wrap: wrap; row-gap: 6px; }
+.dwg-view-head h3 { display: block; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+/* The read button never shrinks, wraps or sits under the note below: the header and every line above the sheet keep
+   their own height (a flex column would otherwise squeeze them and let a wrapped button slide under the note). */
+.dwg-read { flex: none; }
 
 .dwg-sheets { min-width: 0; min-height: 0; overflow: auto; border-right: 1px solid var(--line); }
 .dwg-sheets ul { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
@@ -114,6 +120,7 @@
 .dwg-sheet-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; color: var(--muted); font-size: 11.5px; line-height: 16px; }
 
 .dwg-centre { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.dwg-centre > :not(.dwg-viewer) { flex: none; }
 .dwg-pager { display: inline-flex; align-items: center; gap: 2px; color: var(--d-ink2); font-size: 12px; white-space: nowrap; }
 .dwg-ibtn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent;
   color: var(--ink); cursor: pointer; }
@@ -138,31 +145,41 @@
 .dwg-box.st-text:hover { fill: var(--d-sunken); }
 .dwg-box.picked { stroke-width: 2.5px; }
 .dwg-halo { fill: none; stroke: var(--accent); stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; }
-.dwg-mis { stroke-width: 2px; vector-effect: non-scaling-stroke; pointer-events: none; fill-opacity: .35; }
-.dwg-mis.mk-missing { stroke: var(--d-failed); fill: var(--d-failed-soft); }
-.dwg-mis.mk-differs { stroke: var(--warn); fill: var(--warn-soft); }
+.dwg-mis { stroke-width: 2.5px; vector-effect: non-scaling-stroke; pointer-events: none; fill-opacity: .55; }
+.dwg-mis.mk-differs { stroke: var(--d-failed); fill: var(--d-failed-soft); }
+.dwg-mis.mk-missing { stroke: var(--warn); fill: var(--warn-soft); }
 .dwg-stage-note { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 6px 10px; border: 1px solid var(--line);
   border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; }
 .dwg-stage-note.err { display: flex; align-items: center; gap: 8px; border-color: var(--d-failed-line); color: var(--ink); }
-.dwg-tools { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 2px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-1, var(--shadow)); }
-.dwg-zoom { min-width: 44px; color: var(--d-ink2); font-size: 11px; text-align: center; }
-.dwg-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; padding: 6px 12px; list-style: none;
-  border-top: 1px solid var(--line); color: var(--d-ink2); font-size: 11px; line-height: 16px; }
-.dwg-swatch { display: inline-block; width: 14px; height: 10px; margin-right: 5px; border: 1.5px solid var(--line); vertical-align: -1px; }
+/* Under the sheet, one row: the key, then the zoom (never over the sheet) */
+.dwg-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 2px 8px 2px 0; border-top: 1px solid var(--line);
+  background: var(--surface); }
+.dwg-tools { display: flex; flex: none; align-items: center; gap: 2px; margin-left: auto; }
+.dwg-zoom { min-width: 44px; color: var(--d-ink2); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+.dwg-legend { display: flex; flex: 1 1 260px; min-width: 0; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 0; padding: 6px 12px; list-style: none;
+  color: var(--d-ink2); font-size: 11px; line-height: 16px; }
+.dwg-swatch { display: inline-block; flex: none; width: 14px; height: 10px; margin-right: 6px; border: 1.5px solid var(--line); border-radius: 2px;
+  background: var(--surface); }
 .dwg-swatch.st-confirmed { border-color: var(--d-proved); }
 .dwg-swatch.st-ai { border-style: dashed; border-color: var(--d-ai); }
 .dwg-swatch.st-text { border-style: dotted; border-color: var(--d-control); }
-.dwg-swatch.mk-missing { border-width: 2px; border-color: var(--d-failed); background: var(--d-failed-soft); }
-.dwg-swatch.mk-differs { border-width: 2px; border-color: var(--warn); background: var(--warn-soft); }
+.dwg-swatch.mk-differs { border-width: 2px; border-color: var(--d-failed); background: var(--d-failed-soft); }
+.dwg-swatch.mk-missing { border-width: 2px; border-color: var(--warn); background: var(--warn-soft); }
+.dwg-legend li { display: inline-flex; align-items: center; white-space: nowrap; }
+/* Two rows: the reading statuses, then the mismatches (the empty ::after is a flex break, a whole row wide) */
+.dwg-legend::after { content: ""; order: 1; flex-basis: 100%; height: 0; }
+.dwg-legend .dwg-legend-mk, .dwg-legend .dwg-legend-mk ~ li { order: 2; }
 
 /* Readings: tabs, filter chips, the items table, the picked item, mismatches */
 .dwg-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); }
-.dwg-tabs { display: flex; flex: none; border-bottom: 1px solid var(--line); }
+/* White tabs; the selected one in the pink accent (its word, its underline, its count) */
+.dwg-tabs { display: flex; flex: none; gap: 2px; padding: 0 4px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .dwg-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 0;
-  border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; }
-.dwg-tabs [role="tab"]:hover { color: var(--ink); }
-.dwg-tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: color var(--dur-2, 180ms) var(--ease, ease-out), background-color var(--dur-2, 180ms) var(--ease, ease-out); }
+.dwg-tabs [role="tab"]:hover { color: var(--ink); background: var(--hover); }
+.dwg-tabs [role="tab"][aria-selected="true"] { color: var(--accent-ink); border-bottom-color: var(--pink, var(--accent)); background: transparent; }
+.dwg-tabs [role="tab"][aria-selected="true"] .dwg-count:not(.warn) { background: var(--accent-soft); color: var(--accent-ink); }
 .dwg-tabs [role="tab"]:focus-visible { outline-offset: -2px; }
 .dwg-tabpanel { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .dwg-tabpanel[hidden] { display: none; }
@@ -193,8 +210,8 @@
 
 .dwg-mms { list-style: none; margin: 0; padding: 0; }
 .dwg-mm { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
-.dwg-mm.mk-missing { box-shadow: inset 2px 0 var(--d-failed); }
-.dwg-mm.mk-differs { box-shadow: inset 2px 0 var(--warn); }
+.dwg-mm.mk-differs { box-shadow: inset 3px 0 var(--d-failed); }
+.dwg-mm.mk-missing { box-shadow: inset 3px 0 var(--warn); }
 .dwg-mm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .dwg-mm-head b { overflow-wrap: anywhere; }
 .dwg-mm-vals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--line); border-radius: 6px; }
@@ -208,17 +225,22 @@
 @media (max-width: 1100px) {
   .dwg-grid { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(440px, 1fr) auto; }
   .dwg-side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); max-height: 60vh; }
+  /* The key's two rows and the zoom fit under the sheet inside the 440 px row */
+  .dwg-stage { min-height: 280px; }
 }
 @media (max-width: 760px) {
   .dwg { padding: 8px; height: auto; }
-  .dwg-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; min-height: 0; }
+  /* Every part at its own height, one under another: a grid squeezed to the page let the sheet run under the readings */
+  .dwg-grid { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; min-height: 0; }
+  .dwg-centre, .dwg-side { min-height: auto; }
   .dwg-sheets { border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; }
   .dwg-sheets ul { flex-direction: row; overflow-x: auto; }
   .dwg-sheets li { flex: 0 0 220px; }
-  .dwg-viewer { min-height: 0; }
-  .dwg-stage { flex: none; height: 60vh; min-height: 280px; }
+  .dwg-viewer { flex: none; min-height: 0; }
+  /* The stage takes the sheet's shape, so the fitted sheet fills it with no empty band; zoom and pan inside it */
+  .dwg-stage { flex: none; height: auto; aspect-ratio: var(--dwg-sheet-ar, 1.414); min-height: 240px; max-height: 70vh; }
   .dwg-side { max-height: none; }
-  .dwg-view-head { flex-wrap: wrap; }
+  .dwg-view-head h3 { flex: 1 1 100%; }
   .dwg-drop { margin: 8px 0; padding: 28px 16px; }
   .dwg-samples { margin-top: 0; }
 }
@@ -229,7 +251,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dwg-pulse { animation: none; }
-  .dwg-bar > i { transition: none; }
+  .dwg-bar > i, .dwg-tabs [role="tab"] { transition: none; }
 }
 @media (forced-colors: active) {
   .dwg-badge, .dwg-chip, .dwg-rule-step, .dwg-mk { border: 1px solid CanvasText; }

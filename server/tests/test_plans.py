@@ -214,3 +214,24 @@ def test_pairs_sharing_a_movable_element_become_one_fix():
     assert "2 elements" in one[0].label
     # the girder stays put, so the duct and the tray each keep their own fix
     assert sorted(it.key for it in merged if not it.others) == ["duct|girder", "girder|tray"]
+
+
+
+def test_with_no_model_configured_the_page_s_pattern_reading_is_skipped_not_a_500(tmp_path, monkeypatch):
+    """A server with no credentials (no GOOGLE_CLOUD_PROJECT, no GEMINI_API_KEY): the page's automatic reading answers
+    200 with no verdicts, makes no model call and charges nothing, instead of a 500 "No model configured"."""
+    from iris import model_client
+    ws, sid, rid, main, beam = _setup(tmp_path)
+    pats = plans.patterns(ws, sid, rid, min_pairs=1)
+    assert pats
+    monkeypatch.setattr(plans, "patterns", lambda *a, **k: pats)
+    ws._model = None   # the default: Gemini, with no credentials
+    assert not model_client.configured() and not model_client.can_call(ws.model)
+    monkeypatch.setattr(model_client, "make_client", lambda: pytest.fail("a client was made"))
+    monkeypatch.setattr(app_module, "ws", ws)
+    monkeypatch.setattr(app_module, "propose_limit", ProposeLimit(per_day=1))
+    c = TestClient(app_module.app, raise_server_exceptions=False)
+    for _ in range(2):   # nothing charged: the day's one proposal is still there after
+        r = c.post(f"/api/reports/{rid}/patterns/{sid}/triage", json={})
+        assert r.status_code == 200 and r.json() == {}
+    assert app_module.propose_limit.take("testclient") is None

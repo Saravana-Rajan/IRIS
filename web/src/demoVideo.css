@@ -13,7 +13,7 @@
 .watch-demo-play svg { margin-left: 2px; }
 .watch-demo-sep { color: var(--muted); }
 .watch-demo-time { color: var(--muted); font-size: 12px; font-weight: 400; }
-/* The hero's: larger, usually with the holographic edge (.holo-edge, holo.css) */
+/* The hero's: larger */
 .watch-demo.watch-demo-hero { height: 40px; gap: 9px; padding: 0 16px 0 6px; font-size: 14px; }
 .watch-demo-hero .watch-demo-play { width: 28px; height: 28px; }
 .watch-demo-hero .watch-demo-time { font-size: 13px; }

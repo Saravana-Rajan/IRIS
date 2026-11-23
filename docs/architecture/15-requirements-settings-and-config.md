@@ -9,7 +9,7 @@
 > `env_float`, every environment variable the server, deploy and evals read,
 > `.env.example`, `web/src/reqFile.ts`, `web/src/Requirements.tsx`, the header plumbing in `web/src/api.ts` ·
 > **Checked against code:** 2026-11-22 (the projects and drawing variables; `IRIS_PREPARED_DIR`: review queue
-> 2026-11-22; re-branded on 2026-11-11) · **Deeper design:** [docs/requirements.md](../requirements.md),
+> 2026-11-22; the model defaults, all `gemini-3.8-flash` as `deploy/deploy.sh` sets them, server QA fixes 2026-11-22; re-branded on 2026-11-11) · **Deeper design:** [docs/requirements.md](../requirements.md),
 > [docs/review-queue.md](../review-queue.md)
 
 Three layers decide how Iris behaves for a request. **Coordination requirements** are a project's own standard
@@ -271,13 +271,13 @@ everyone per rolling day; 0 means no limit, and unset or empty is the default co
 | `GOOGLE_CLOUD_PROJECT` | none | `model_client.make_client` (every Gemini call), `model_client.configured` | The Google Cloud project whose Vertex AI endpoint serves every Gemini call (with Application Default Credentials) |
 | `GOOGLE_CLOUD_LOCATION` | `global` | `model_client.make_client` | The Vertex AI location (region) of that endpoint |
 | `GEMINI_API_KEY` | none (secret, optional) | `model_client.make_client`, `configured` | Gemini API key, used only when `GOOGLE_CLOUD_PROJECT` is empty (local development); normally unset |
-| `GEMINI_MODEL` | `model_client.DEFAULT_MODELS` (`proposal`) | `model_client.model_id("proposal")`: `GeminiModel` | The main model: proposals, chat, plans, patterns, report text |
+| `GEMINI_MODEL` | `gemini-3.8-flash` (`model_client.DEFAULT_MODELS`, `proposal`; owner decision Nov 22: Flash for every role, as `deploy/deploy.sh` sets; `gemini-4-argon` is priced and labelled, an option) | `model_client.model_id("proposal")`: `GeminiModel` | The main model: proposals, chat, plans, patterns, report text |
 | `GEMINI_THINKING_LEVEL` | `low` | `model_client.thinking_level`, `settings.defaults` | The main model's thinking level; empty sends none |
-| `GEMINI_FAST_MODEL` | `model_client.DEFAULT_MODELS` (`fast`, `voice`) | `model_client.triage_model_info`, `triage_model`, `transcribe`; `built.main_judge_model`, `main_judge_label` | The fast model: triage, titles, STEP part names, voice transcription (hold to talk and live) and the lighter Show it built judges |
+| `GEMINI_FAST_MODEL` | `gemini-3.8-flash` (`model_client.DEFAULT_MODELS`, `fast`, `voice`) | `model_client.triage_model_info`, `triage_model`, `transcribe`; `built.main_judge_model`, `main_judge_label` | The fast model: triage, titles, STEP part names, voice transcription (hold to talk and live) and the lighter Show it built judges |
 | `GEMINI_FAST_THINKING_LEVEL` | empty (the model's default) | `model_client.thinking_level("fast")` (`triage_model`), `settings.defaults` | The fast model's thinking level for triage, titles and part names |
-| `GEMINI_ESCALATION_MODEL` | `model_client.DEFAULT_MODELS` (`escalation`) | `model_client.escalation_info`, `escalation_model`, `built.judge_model` | Second tries and the full Show it built judges |
+| `GEMINI_ESCALATION_MODEL` | `gemini-3.8-flash` (`model_client.DEFAULT_MODELS`, `escalation`), at thinking `high` | `model_client.escalation_info`, `escalation_model`, `built.judge_model` | Second tries and the full Show it built judges |
 | `GEMINI_ESCALATION_THINKING_LEVEL` | `high` | `model_client.escalation_model`, `settings.defaults` | The escalation model's thinking level for second tries |
-| `GEMINI_IMAGE_MODEL` | `model_client.DEFAULT_MODELS` (`image`) | `model_client.generate_image` (`built.restyle`) | Show it built's image model |
+| `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image` (`model_client.DEFAULT_MODELS`, `image`) | `model_client.generate_image` (`built.restyle`) | Show it built's image model |
 | `IRIS_MODEL_LABELS` | empty | `model_client.model_label` (each call) | JSON object, model-id prefix → the name people read (`{"acme-coder": "Acme Coder"}`), over the built-in Gemini names (`model_client.LABELS`); the longest prefix wins. The page gets each role's name from `GET /api/models` (`labels`) |
 | `IRIS_MODEL_PRICES` | empty | `model_client.prices`, `cost` (each call) | JSON object, model-id prefix → [USD per million input tokens, per million output tokens], over the built-in `model_client.PRICES`. Spend and the day's budget count what it prices |
 | `GEMINI_INCLUDE_THOUGHTS` | `1` | `GeminiModel` (each client) | `0` stops asking Gemini to stream thought summaries (plain calls then) |
@@ -409,7 +409,8 @@ or deployment settings and need no `.env` entries. Brand-tool inventory checked 
 The checked-in template lists what a local run usually needs: `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`
 (set to `global`), `GEMINI_THINKING_LEVEL` (set to `low`) and `IRIS_OWNER_TOKEN` (with how to make one). Commented
 out, with their defaults: the optional `GEMINI_API_KEY`, the four model ids (`GEMINI_MODEL`, `GEMINI_FAST_MODEL`,
-`GEMINI_ESCALATION_MODEL`, `GEMINI_IMAGE_MODEL`; empty takes `model_client.DEFAULT_MODELS`),
+`GEMINI_ESCALATION_MODEL`, `GEMINI_IMAGE_MODEL`; empty takes `model_client.DEFAULT_MODELS`: `gemini-3.8-flash` for all
+but the image model, `gemini-3.1-flash-image`),
 `GEMINI_FAST_THINKING_LEVEL`, `GEMINI_ESCALATION_THINKING_LEVEL`, `IRIS_ESCALATION_MAX_USD_DAY`,
 `IRIS_TRIAGE_WORKERS`, the propose, chat and voice caps and the requirements and preview caps (0 is no limit; unset
 or empty is the default, which is no limit except requirements files and previews), `IRIS_VOICE_LIVE_MAX_S` and

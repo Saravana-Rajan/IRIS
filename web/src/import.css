@@ -67,3 +67,25 @@
   .imp-bar > i { transition: none; }
   .imp-bar.busy > i { animation: none; width: 100%; opacity: .35; }
 }
+
+/* The Models step in the left panel (App.tsx, modelsStep): a gutter like the other panels', so the import, the models
+   and the summary never touch the panel's edges. */
+.pane.left > .proj-work { padding: 14px 14px 18px; }
+
+/* The workspace's own actions (App.tsx, workMore): sample models, your own files, checks and a Navisworks report, as a
+   closed line under the Models step's import and at the top of the workspace's left panel. */
+.work-more { flex: none; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 13px; min-width: 0; }
+.pane.left > .work-more { margin: 12px 14px 0; }
+.work-more > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none;
+  font-weight: 600; color: var(--ink-2); border-radius: inherit; }
+.work-more > summary::-webkit-details-marker { display: none; }
+.work-more > summary::before { content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px; border: solid var(--muted);
+  border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s ease; }
+.work-more[open] > summary::before { transform: rotate(45deg); }
+.work-more > summary:hover { background: var(--hover); }
+.work-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.work-more[open] { padding-bottom: 8px; }
+.work-more[open] > summary { border-bottom: 1px solid var(--line-soft); border-radius: var(--radius) var(--radius) 0 0; margin-bottom: 6px; }
+.work-more > .menu-section { padding: 0 6px; }
+.work-more > .menu-section + .menu-section { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .work-more > summary::before { transition: none; } }

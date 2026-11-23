@@ -26,7 +26,7 @@ stays on screen with a **bottom sheet** over it, and **every feature stays reach
 On both, the top bar is slim and light: a hamburger ("Open the menu") and the logo at its left, the page's actions at
 its right, and the search box on a tablet (none on a phone). The hamburger opens the sidebar as a drawer from the left
 (`Sidebar` with `drawer`, AppShell.tsx): Home, Projects, the open project's steps with their counts, Help, Settings and
-the reviewer's name. Escape, the scrim, its ✕ or picking an item closes it; Tab stays inside it while it is open and the
+"Built by Techjays". Escape, the scrim, its ✕ or picking an item closes it; Tab stays inside it while it is open and the
 focus goes back where it was. There is no step picker in the header any more: the project's steps are in the drawer.
 
 `useLayout()` picks the layout from the window width; `(pointer: coarse)` sets touch sizes on its own, so an iPad in

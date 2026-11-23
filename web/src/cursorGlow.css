@@ -1,0 +1,36 @@
+/* The pink glow that follows the cursor over the pages (CursorGlow.tsx). One fixed layer above the page, blended with
+   multiply: white turns faintly pink where it passes, cards stay calm, nothing takes a click. The 3D workspace never
+   has it. Every animation is off under prefers-reduced-motion; a coarse pointer gets the still wash. */
+.cursor-glow { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; mix-blend-mode: multiply;
+  opacity: 0; transition: opacity .4s ease; }
+.cursor-glow.on { opacity: 1; }
+.cursor-glow[data-mode="off"] { display: none; }
+.cursor-glow > i { position: absolute; left: 0; top: 0; display: block; will-change: transform; }
+.cursor-glow > i > b { position: absolute; display: block; border-radius: 50%; }
+/* The lead glow: pink to lavender to nothing, about 720 px across, centred on the cursor */
+.cg-lead > b { width: 720px; height: 720px; left: -360px; top: -360px;
+  background: radial-gradient(closest-side, rgba(255, 92, 214, .14), rgba(176, 122, 242, .08) 55%, rgba(176, 122, 242, 0) 100%); }
+/* The trailing glow: smaller, periwinkle, a little behind */
+.cg-trail > b { width: 380px; height: 380px; left: -190px; top: -190px;
+  background: radial-gradient(closest-side, rgba(143, 155, 255, .12), rgba(143, 155, 255, 0) 100%); }
+/* Resting: a slow breath */
+.cursor-glow.resting > i > b { animation: cg-breathe 6s ease-in-out infinite; }
+.cursor-glow.resting > .cg-trail > b { animation-delay: -3s; }
+@keyframes cg-breathe { 0%, 100% { transform: scale(.95); } 50% { transform: scale(1.05); } }
+/* A coarse pointer or less motion: a still soft wash at the top right */
+.cursor-glow[data-mode="still"] > .cg-lead { transform: translate3d(78vw, 18vh, 0); }
+.cursor-glow[data-mode="still"] > .cg-trail { transform: translate3d(88vw, 8vh, 0); }
+
+/* The cards' spotlight: a pink highlight under the cursor inside the card, and a small lift */
+.home-tile, .hiw-card { --mx: 50%; --my: 50%; }
+@media (hover: hover) and (pointer: fine) {
+  .home-tile:hover:not(:disabled), .hiw-card:hover {
+    background-image: radial-gradient(260px circle at var(--mx) var(--my), rgba(255, 92, 214, .10), rgba(176, 122, 242, .05) 45%, transparent 70%);
+    transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor-glow { transition: none; }
+  .cursor-glow > i > b { animation: none !important; }
+  .home-tile:hover, .hiw-card:hover { transform: none; }
+}

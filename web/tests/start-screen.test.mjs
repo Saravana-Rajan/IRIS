@@ -8,8 +8,9 @@ import { appHost, compiled, projectOf } from "./app-host.mjs";
 
 /** Home (StartScreen.tsx) and its ways in: the greeting, the start tiles ("Try the sample drawings" opens the sample
  * building as a project on its Drawings step with the sample PDF sheets attached, POST .../drawings/samples, in the order
- * sampleDrawings.ts keeps), the demo videos' Watch buttons (DemoVideo.tsx: on the two sample tiles and in the hero), the
- * recent projects, "See it work" (DemoClips.tsx, the two demo clips side by side) and Iris's eight steps. */
+ * sampleDrawings.ts keeps), the demo videos' Watch buttons (DemoVideo.tsx: on the two sample tiles and in the hero),
+ * Iris's eight steps (HowIrisWorks.tsx, stubbed here; its own test is how-iris-works) and
+ * the recent projects. */
 
 const url = (js) => `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
 const react = { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
@@ -21,20 +22,24 @@ async function moduleUrl(path, css, deps = {}) {
   assert.match(input, line, `${path} brings its own stylesheet`);
   let { outputText } = ts.transpileModule(input.replace(line, ""), { compilerOptions: {
     target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX } });
-  for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`);
+  for (const [name, target] of Object.entries({ ...react, ...deps })) outputText = outputText.replaceAll(`from "${name}"`, `from ${JSON.stringify(target)}`)
+    .replaceAll(`import("${name}")`, `import(${JSON.stringify(target)})`);
   return url(outputText);
 }
-const clipsUrl = await moduleUrl("../src/DemoClips.tsx", "demoClips.css");
-const clips = await import(clipsUrl);
-const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css");
+const glassUrl = await compiled("../src/glassModel.ts");
+const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css", { "./glassModel": glassUrl });
 const holo = await import(holoUrl);
 const videoUrl = await moduleUrl("../src/DemoVideo.tsx", "demoVideo.css", { "react-dom": import.meta.resolve("react-dom") });
 const videos = (await import(videoUrl)).DEMO_VIDEOS;
 const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
-const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./DemoClips": clipsUrl, "./Holo": holoUrl,
-  "./DemoVideo": videoUrl,
+/** HowIrisWorks stands in as one section that names the steps in order, so Home's order shows in its markup. */
+const howStub = url(`import { jsx } from ${JSON.stringify(import.meta.resolve("react/jsx-runtime"))};
+export function HowIrisWorks() { return jsx("section", { className: "hiw", children: "How Iris works: ${FLOW.join(", ")}" }); }`);
+/** HeroGlass (three.js) never loads here: a lazy stand-in that never resolves, so the static render shows the still. */
+const heroStub = url("export default function HeroGlass() { return null; }; await new Promise(() => {});");
+const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./HowIrisWorks": howStub, "./Holo": holoUrl,
+  "./glassModel": glassUrl, "./HeroGlass": heroStub, "./DemoVideo": videoUrl,
   "./About": url("export const projectName = (files) => files.join(' + ');"),
-  "./ProjectsHome": url(`export const PROJECT_FLOW = ${JSON.stringify(FLOW.map((name) => ({ name, text: `${name} text.` })))};`),
   "./projectRoute": await compiled("../src/projectRoute.ts"),
   "./projectsApi": await compiled("../src/projectsApi.ts", {
     "./api": url("export class ApiError extends Error {}; export const apiFetch = async () => null; export const apiUrl = (p) => p;") }) }));
@@ -45,7 +50,6 @@ const NOW = new Date(2026, 10, 22, 15, 10).getTime();
 const props = (p = {}) => ({ onProjects: noop, onNewProject: noop, now: NOW, ...p });
 const markup = (p) => renderToStaticMarkup(h(start.StartScreen, props(p)));
 const startButton = (html, which) => html.match(new RegExp(`<button[^>]*data-start="${which}"[^>]*>.*?</button>`))?.[0];
-const entity = (t) => t.replaceAll("'", "&#x27;");
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 /** The elements StartScreen returns (its own, not its children components'), to call their handlers without a DOM. */
 function elements(node, out = []) {
@@ -65,24 +69,32 @@ test("the greeting: the time of day and the reviewer's name, or 'there' without 
   const at = (h) => new Date(2026, 10, 22, h, 5).getTime();
   assert.deepEqual([at(5), at(11), at(12), at(17), at(18), at(23), at(2)].map(start.greetingFor),
     ["Good morning", "Good morning", "Good afternoon", "Good afternoon", "Good evening", "Good evening", "Good evening"]);
-  assert.match(markup({ name: "Priya", now: at(9) }), /<h1 class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/h1>/);
-  assert.match(markup({ name: "  " }), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/);
-  assert.match(markup({}), /<h1 class="home-greeting">.*?Good afternoon, there.*?<\/h1>/, "no name at all");
+  assert.match(markup({ name: "Priya", now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/p>/);
+  assert.match(markup({ name: "  " }), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/);
+  assert.match(markup({}), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/, "no name at all");
 });
 
-test("the hero: the principle, what Iris does, the ribbon; no brand header, and the page scrolls in its container", async () => {
+test("the hero: the principle in two lines beside the 3D glass aperture (its still until three loads), the cue down", async () => {
   const html = markup({});
-  assert.match(html, /^<div class="home">/);
-  assert.match(html, /<p class="home-tagline">.*AI proposes\. Geometry proves\. The engineer decides\..*?<\/p>/);
+  assert.match(html, /^(<link rel="preload" as="image" href="[^"]+"\/>)*<div class="home">/, "React may hint the stills");
+  assert.deepEqual(start.TAGLINE, ["AI proposes. Geometry proves.", "The engineer decides."]);
+  assert.match(html, /<h1 class="home-tagline"><span class="home-tagline-line">.*?AI proposes\. Geometry proves\..*?<\/span><span class="home-tagline-line">.*?The engineer decides\..*?<\/span><\/h1>/);
   assert.match(text(html), /Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked, and report what was decided\./);
-  assert.match(html, /<div class="home-art"><div class="holo-ribbon"[^>]*aria-hidden="true"/, "the ribbon, decorative");
+  assert.match(html, /<div class="home-hero-text">.*?<\/div><div class="home-art" aria-hidden="true"><div class="hero-glass home-glass"><img class="hero-glass-still" src="\/hero\/aperture\.webp" alt=""\/><\/div><\/div>/,
+    "the aperture beside the words, decorative: the still while the live one loads");
+  assert.doesNotMatch(html, /holo-ribbon|holo-fan/, "no striped CSS ribbon on Home");
+  assert.match(html, /<button type="button" class="home-cue" aria-label="Down to start"><svg/, "the square ↓ cue");
+  assert.ok(html.indexOf("home-cue") < html.indexOf("home-body"), "the cue sits in the hero, above the tiles");
+  const src = await readFile(new URL("../src/StartScreen.tsx", import.meta.url), "utf8");
+  assert.match(src, /lazy\(\(\) => import\("\.\/HeroGlass"\)\)/, "three.js loads after the first paint");
+  assert.doesNotMatch(src, /from "\.\/HeroGlass"|from "\.\/glass"|from "three"/, "nothing three.js in Home's own module");
   assert.doesNotMatch(html, /wordmark|by Techjays|start-brand/i, "the shell has the brand");
   const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
   assert.match(css, /\.home \{[^}]*height: 100%;[^}]*overflow: hidden auto;/, "scrolls inside the main panel, never sideways");
   assert.doesNotMatch(css, /prefers-color-scheme|\bdark\b/i, "light only");
 });
 
-test("three start tiles: New project (dashed), the sample building, the sample drawings, each with a line", () => {
+test("three start tiles, styled alike: New project, the sample building, the sample drawings, each with a line", async () => {
   const html = markup({ onSample: noop, onSampleDrawings: noop });
   const order = ["new-project", "sample", "sample-drawings"].map((k) => html.indexOf(`data-start="${k}"`));
   assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), `in order: ${order}`);
@@ -91,7 +103,12 @@ test("three start tiles: New project (dashed), the sample building, the sample d
   assert.match(made, /New project/);
   assert.match(made, /<span class="home-tile-line">[^<]+<\/span>/);
   assert.match(startButton(html, "sample"), /Try the sample building.*home-tile-line/);
-  assert.match(startButton(html, "sample-drawings"), /holo-edge.*Try the sample drawings.*home-tile-line/, "the AI one wears the holo edge");
+  assert.match(startButton(html, "sample-drawings"), /^<button type="button" class="home-tile" data-start="sample-drawings".*Try the sample drawings.*home-tile-line/,
+    "no tile wears a holo edge or a tint of its own");
+  assert.doesNotMatch(html, /holo-edge/);
+  const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\.home-tile-new \{[^}]*(dashed|background)/, "New project is not dashed or tinted");
+  assert.match(css, /\.home-tile:hover:not\(:disabled\) \{[^}]*border-color/, "the highlight comes on hover only");
   assert.match(html, /<section class="home-tiles" aria-label="Start" style="--tiles:3">/);
   assert.match(markup({}), /style="--tiles:1"/, "no samples listed: New project alone");
   let made2 = 0;
@@ -110,8 +127,8 @@ test("Watch the demo: the 3D video on the sample building's tile, the 2D on the 
     assert.equal(startButton(html, tile).match(/<button/g).length, 1, `${tile}: no button inside the tile`);
   }
   assert.match(html, /<section class="home-tiles"[^>]*><button type="button" class="home-tile home-tile-new"/, "New project is still a tile of its own");
-  const full = html.match(/<button type="button" class="watch-demo watch-demo-hero holo-edge" data-video="full"[^>]*>.*?<\/button>/)?.[0];
-  assert.ok(full, "the full demo in the hero, with the holo edge");
+  const full = html.match(/<button type="button" class="watch-demo watch-demo-hero" data-video="full"[^>]*>.*?<\/button>/)?.[0];
+  assert.ok(full, "the full demo in the hero, the larger button (no holo edge: none on Home)");
   assert.ok(text(full).includes(`Watch the full demo · ${videos.full.duration}`));
   const hero = html.slice(html.indexOf('<div class="home-hero-text">'), html.indexOf('<div class="home-body">'));
   assert.ok(hero.indexOf('class="home-tagline"') < hero.indexOf('data-video="full"') && hero.indexOf('data-video="full"') < hero.indexOf('class="home-what"'),
@@ -207,18 +224,24 @@ test("no projects yet: one inline line and 'Create one'; while listing: light pl
   assert.doesNotMatch(listed, /home-skeleton|Loading your projects/, "cards already there stay while the list refreshes");
 });
 
-test("Home shows the demo clips and then Iris's eight steps, in order, Propose with the AI's edge and Validate the check", () => {
+test("Home's order: the hero, the start tiles, Iris's eight steps (HowIrisWorks), then the recent projects", () => {
   const html = markup({});
-  assert.match(html, /<figure[^>]*data-start="see-it-work"/);
-  assert.doesNotMatch(html, /northbank\.webp|start-pic/, "the still they replaced is gone");
-  assert.ok(html.indexOf("Recent projects") < html.indexOf('data-start="see-it-work"'));
-  assert.ok(html.indexOf('data-start="see-it-work"') < html.indexOf("How Iris works"));
-  const steps = html.match(/<li class="home-step[^"]*" data-step="[^"]+">.*?<\/li>/g);
-  assert.deepEqual(steps.map((s) => s.match(/data-step="([^"]+)"/)[1]), FLOW);
-  steps.forEach((s, i) => assert.match(s, new RegExp(`home-step-n mono">${i + 1}<.*${FLOW[i]} text\\.`)));
-  assert.match(steps[4], /class="home-step holo-edge"/);
-  assert.match(steps[5], /home-step-ok/);
-  assert.equal(steps.filter((s) => /holo-edge|home-step-ok/.test(s)).length, 2);
+  assert.doesNotMatch(html, /see-it-work|demo-clip|northbank\.webp|start-pic/, "no demo clips on Home");
+  assert.match(html, /<section class="hiw">How Iris works: Import, Understand, Detect, Investigate, Propose, Validate, Review, Report<\/section>/);
+  const at = (s) => { const n = html.indexOf(s); assert.ok(n >= 0, s); return n; };
+  assert.ok(at('class="home-hero"') < at('data-start="new-project"'));
+  assert.ok(at('data-start="new-project"') < at('class="hiw"'));
+  assert.ok(at('class="hiw"') < at("Recent projects"));
+});
+
+test("a step's card opens it on the sample building: onSampleStep goes to HowIrisWorks as onStep, absent without it", () => {
+  const steps = [];
+  const onSampleStep = (step) => steps.push(step);
+  const how = (p) => tree(p).find((e) => e.type?.name === "HowIrisWorks");
+  assert.equal(how({ onSampleStep }).props.onStep, onSampleStep);
+  how({ onSampleStep }).props.onStep("coordination");
+  assert.deepEqual(steps, ["coordination"]);
+  assert.equal(how({}).props.onStep, undefined, "static cards without the sample");
 });
 
 test("the last session: Resume (primary) and Start fresh (ghost), with what was kept and when, in the server's seconds", () => {
@@ -238,53 +261,18 @@ test("the last session: Resume (primary) and Start fresh (ghost), with what was 
   assert.deepEqual([resumed, fresh], [1, 1]);
 });
 
-test("the ribbon: its size in pixels or any CSS length, fewer threads when small; still where there is no window", async () => {
-  const ribbon = (p) => renderToStaticMarkup(h(holo.HoloRibbon, p));
-  const big = ribbon({ size: 480 });
-  assert.match(big, /^<div class="holo-ribbon" style="--hr:480px" aria-hidden="true">/);
-  assert.equal(big.match(/style="--t:/g).length, 11);
-  assert.match(ribbon({ size: 120 }), /class="holo-ribbon holo-small"/);
-  assert.equal(ribbon({ size: 72 }).match(/style="--t:/g).length, 4);
-  assert.match(ribbon({ size: "clamp(220px, 42cqi, 500px)" }), /style="--hr:clamp\(220px, 42cqi, 500px\)"/);
+test("the mark badge (empty states, loading, Home's quiet lines) and the still motion where there is no window", async () => {
+  assert.equal(renderToStaticMarkup(h(holo.MarkBadge, { size: 72 })), '<span class="mark-badge" style="--mb:72px" aria-hidden="true"></span>');
+  assert.match(renderToStaticMarkup(h(holo.EmptyState, { title: "No reports yet" })), /<span class="mark-badge empty-state-art" style="--mb:72px" aria-hidden="true"><\/span>/);
+  assert.match(renderToStaticMarkup(h(holo.EmptyState, { title: "No projects", glass: "aperture" })),
+    /<div class="empty-state "><img class="empty-state-art empty-state-glass" src="\/glass\/aperture\.webp" width="104" height="104" alt="" aria-hidden="true"\/>/,
+    "a main empty state may show one 3D glass still in place of the mark");
+  assert.equal(holo.HoloRibbon, undefined, "no ribbon any more");
   assert.equal(holo.prefersReducedMotion(), true, "no window: still");
   assert.equal(renderToStaticMarkup(h(holo.TextReveal, { text: "Good morning, Ana", once: "t" })), "<span class=\"\">Good morning, Ana</span>");
   const css = await readFile(new URL("../src/holo.css", import.meta.url), "utf8");
-  assert.match(css, /prefers-reduced-motion: reduce\)[^}]*\.holo-glow, \.holo-sway, \.holo-fan[^}]*animation: none/, "still under reduced motion");
-});
-
-test("'See it work': the 3D check and the 2D reader side by side, each lazily, sized, captioned, its still under reduced motion", () => {
-  assert.deepEqual(clips.DEMO_CLIPS.map((c) => [c.id, c.label, c.src, c.still]), [
-    ["check", "3D clash check", "/demos/check.webp", "/demos/check-still.webp"],
-    ["drawings", "2D drawing reader", "/demos/drawings.webp", "/demos/drawings-still.webp"]]);
-  assert.equal(clips.DEMO_CLIPS[0].caption, "Northbank's check: the clashes found, numbered and listed.");
-  assert.equal(clips.DEMO_CLIPS[1].caption, "The sample sheets read by Gemini, checked against the PDF's own text, then compared with the 3D model.");
-  const html = renderToStaticMarkup(h(clips.DemoClips));
-  assert.match(html, /^<figure[^>]*data-start="see-it-work"/);
-  assert.match(html, />See it work</);
-  assert.equal(html.match(/<img[^>]*>/g).length, 2, "both clips at once");
-  for (const c of clips.DEMO_CLIPS) {
-    const item = html.match(new RegExp(`<figure[^>]*data-clip="${c.id}"[^>]*>.*?</figure>`))?.[0];
-    assert.ok(item, `${c.id}: its own figure, by data-clip`);
-    assert.ok(item.includes(`>${c.label}<`), `${c.id}: its label`);
-    assert.ok(item.includes(`<source media="(prefers-reduced-motion: reduce)" srcSet="${c.still}"/>`), `${c.id}: its still under reduced motion`);
-    assert.ok(item.includes(`<picture class="demo-clip-frame" style="background-image:url(${c.still})">`),
-      `${c.id}: its still shows in the frame until the clip loads`);
-    const img = item.match(/<img[^>]*>/)[0];
-    for (const attr of [`src="${c.src}"`, 'width="1000"', 'height="625"', 'loading="lazy"', `alt="${entity(c.alt)}"`])
-      assert.ok(img.includes(attr), `${c.id}: ${attr}`);
-    assert.ok(c.alt.length > 60, `${c.id}: alt text that says what it shows`);
-    assert.ok(item.includes(`<figcaption class="demo-clip-caption">${entity(c.caption)}</figcaption>`), `${c.id}: its caption`);
-    assert.ok(item.indexOf("</picture>") < item.indexOf(`>${c.label}<`), `${c.id}: label and caption under the clip`);
-  }
-  assert.ok(html.indexOf('data-clip="check"') < html.indexOf('data-clip="drawings"'), "3D first");
-});
-
-test("the clips' stylesheet is light, on the page's tokens: white cards side by side, stacked when there is no room", async () => {
-  const css = await readFile(new URL("../src/demoClips.css", import.meta.url), "utf8");
-  assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|prefers-color-scheme|\bdark\b/i, "colours only from tokens, no dark mode");
-  assert.match(css, /\.demo-clips-row \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, \d+px\), 1fr\)\)/);
-  assert.match(css, /\.demo-clip \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 12px;[^}]*background: var\(--surface\)/);
-  assert.match(css, /\.demo-clip-frame \{[^}]*background-size: cover;/, "the still placeholder covers the frame");
+  assert.match(css, /\.mark-badge::after \{[^}]*mask: url\("\/brand\/iris-spinner\.svg"\)/, "the Aperture's blades through a mask");
+  assert.doesNotMatch(css, /holo-ribbon|holo-fan/);
 });
 
 // ------------------------------------------------------------------------------------------------- sampleDrawings.ts
