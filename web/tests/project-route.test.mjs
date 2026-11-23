@@ -124,9 +124,10 @@ test("a plain click is the page's; a click meant for a new tab or window is the 
 });
 
 test("the app's own pages are known; any other path is not (it shows Page not found)", () => {
-  for (const path of ["", "/", "/index.html", "/home", "/home/", "/workspace", "/settings", "/help", "/about", "/about/fixes", "/projects",
+  for (const path of ["", "/", "/index.html", "/home", "/home/", "/workspace", "/videos", "/videos/", "/settings", "/help", "/about", "/about/fixes", "/projects",
     "/projects/", "/projects/abc", "/projects/abc/clashes/3", "/projects/abc/reports"]) assert.equal(r.isAppPath(path), true, path);
-  for (const path of ["/nope-page", "/elsewhere", "/homes", "/home/x", "/projects/a b", "/about/a/b", "/Projects", "/settings/x"]) {
+  for (const path of ["/nope-page", "/elsewhere", "/homes", "/home/x", "/projects/a b", "/about/a/b", "/Projects", "/settings/x",
+    "/demos", "/videos/x", "/video"]) {
     assert.equal(r.isAppPath(path), false, path);
   }
 });

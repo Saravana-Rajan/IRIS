@@ -43,7 +43,7 @@ const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").rep
 const noop = () => {};
 const PID = "3f9a1c0b2d4e5f6a7b8c9d0e";
 const SEG = { overview: "", clash: "/clashes" };
-const hrefOf = (id) => ({ home: "/home", projects: "/projects", workspace: "/workspace" })[id] ?? `/projects/${PID}${SEG[id] ?? `/${id}`}`;
+const hrefOf = (id) => ({ home: "/home", projects: "/projects", workspace: "/workspace", demos: "/videos" })[id] ?? `/projects/${PID}${SEG[id] ?? `/${id}`}`;
 const props = (over = {}) => ({ active: "home", rail: false, onNav: noop, hrefOf, reviewer: "Priya Raman", onReviewer: noop,
   onHelp: noop, onSettings: noop, ...over });
 const sidebar = (over) => renderToStaticMarkup(h(real.Sidebar, props(over)));
@@ -55,12 +55,13 @@ const STEPS = ["Overview", "Models", "Drawings", "Coordination", "Clash review",
 
 /* ---------------------------------------------------------------------------------------------------------------- */
 
-test("the sidebar is the Main nav with the logo, Home and Projects as real links, Help, Settings and no log out", () => {
+test("the sidebar is the Main nav with the logo, Home, Projects and Demos as real links, Help, Settings and no log out", () => {
   const html = sidebar();
   assert.match(html, /^<nav class="sidebar" aria-label="Main">/);
   const t = text(html);
-  assert.match(t, /^Iris Home Projects Help Settings Built by Techjays$/);
-  assert.deepEqual(hrefs(html), ["/home", "/home", "/projects"]);   // the logo (mouse only), then the items
+  assert.match(t, /^Iris Home Projects Demos Help Settings Built by Techjays$/);
+  assert.deepEqual(hrefs(html), ["/home", "/home", "/projects", "/videos"]);   // the logo (mouse only), then the items
+  assert.match(html, /<a class="side-item" href="\/videos"><svg[^>]*lucide-clapperboard[^>]*>/, "Demos: a lucide icon, at /videos");
   assert.match(html, /<a class="side-brand" href="\/home" tabindex="-1" aria-hidden="true">/);
   assert.doesNotMatch(t, /log ?out|sign ?out/i);
   assert.doesNotMatch(html, /side-drawer|side-scrim|Workspace|side-group/);
@@ -70,13 +71,13 @@ test("the sidebar is the Main nav with the logo, Home and Projects as real links
 
 test("a session open outside a project adds a Workspace item under Projects", () => {
   const html = sidebar({ workspace: { label: "Workspace" }, active: "workspace" });
-  assert.match(text(html), /Home Projects Workspace Help/);
-  assert.deepEqual(hrefs(html), ["/home", "/home", "/projects", "/workspace"]);
+  assert.match(text(html), /Home Projects Workspace Demos Help/);
+  assert.deepEqual(hrefs(html), ["/home", "/home", "/projects", "/workspace", "/videos"]);
   assert.match(html, /<a class="side-item active" href="\/workspace" aria-current="page">/);
 });
 
 test("exactly the page shown is marked current", () => {
-  for (const active of ["home", "projects"]) {
+  for (const active of ["home", "projects", "demos"]) {
     const html = sidebar({ active });
     const current = tags(html).filter((tag) => tag.includes('aria-current="page"'));
     assert.equal(current.length, 1, active);
@@ -90,10 +91,10 @@ test("exactly the page shown is marked current", () => {
 test("the open project's group: its name, the seven steps in order with their links, counts only where given", () => {
   const html = sidebar({ project, active: "projects" });
   const t = text(html);
-  assert.match(t, /Projects Project : Riverside Block C Overview Models 4 Drawings Coordination Clash review 463 Reports Activity Help/);
+  assert.match(t, /Projects Demos Project : Riverside Block C Overview Models 4 Drawings Coordination Clash review 463 Reports Activity Help/);
   assert.match(html, /<button type="button" class="side-group-head" aria-expanded="true" aria-controls="[^"]+">/);
   assert.match(html, /<ul class="side-list side-steps" id="[^"]+" aria-label="Project: Riverside Block C">/);
-  assert.deepEqual(hrefs(html).slice(3), ["/projects/" + PID, `/projects/${PID}/models`, `/projects/${PID}/drawings`,
+  assert.deepEqual(hrefs(html).slice(4), ["/projects/" + PID, `/projects/${PID}/models`, `/projects/${PID}/drawings`,
     `/projects/${PID}/coordination`, `/projects/${PID}/clashes`, `/projects/${PID}/reports`, `/projects/${PID}/activity`]);
   assert.equal((html.match(/class="side-item sub/g) ?? []).length, 7);
   // Two counts, two pills: the open clashes tinted, nothing invented for the rest
@@ -126,7 +127,7 @@ test("the rail: icons only, every item keeps its name as an aria-label and a rig
   assert.doesNotMatch(html, /side-label|side-badge|side-group-head|side-brand-text|side-user-text|Edit/);
   const items = tags(html).filter((tag) => tag.includes("side-item"));
   const labels = items.map((tag) => /aria-label="([^"]*)"/.exec(tag)?.[1]);
-  assert.deepEqual(labels, ["Home", "Projects", "Workspace", "Overview", "Models (4)", "Drawings", "Coordination",
+  assert.deepEqual(labels, ["Home", "Projects", "Workspace", "Demos", "Overview", "Models (4)", "Drawings", "Coordination",
     "Clash review (463)", "Reports", "Activity", "Help", "Settings"]);
   for (const tag of items) {
     assert.equal(/data-tip="([^"]*)"/.exec(tag)?.[1], /aria-label="([^"]*)"/.exec(tag)?.[1]);
@@ -151,7 +152,7 @@ test("phones and tablets: the drawer is open or closed over a light scrim, with 
   const open = sidebar({ drawer: "open", rail: true });
   assert.match(open, /^<div class="side-scrim open" aria-hidden="true"><\/div><nav class="sidebar side-drawer open" aria-label="Main">/);
   assert.match(open, /<button type="button" class="side-close" aria-label="Close the menu">/);
-  assert.match(text(open), /Home Projects/);                          // the drawer never uses the rail
+  assert.match(text(open), /Home Projects Demos/);                    // the drawer never uses the rail; Demos is in it
   const closed = sidebar({ drawer: "closed" });
   assert.match(closed, /^<div class="side-scrim closed" aria-hidden="true"><\/div><nav class="sidebar side-drawer closed" aria-label="Main">/);
 });

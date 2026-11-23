@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
-  Box, Boxes, ChevronDown, CircleHelp, ClipboardList, CornerDownLeft, Crosshair, FileText, FolderKanban, FolderOpen,
+  Box, Boxes, ChevronDown, CircleHelp, Clapperboard, ClipboardList, CornerDownLeft, Crosshair, FileText, FolderKanban, FolderOpen,
   History, House, LayoutDashboard, Menu, PanelLeft, Radar, Search, Settings, X, type LucideIcon,
 } from "lucide-react";
 import { ApertureMark } from "./Brand";
@@ -100,8 +100,8 @@ export interface SidebarProps {
   onSettings(): void;
 }
 
-/** The left sidebar: the logo, Home, Projects, the workspace, the open project's steps, then Help, Settings and the
- *  reviewer. A `nav` landmark labelled "Main". */
+/** The left sidebar: the logo, Home, Projects, the workspace, Demos (the demo videos' page), the open project's steps,
+ *  then Help, Settings and the reviewer. A `nav` landmark labelled "Main". */
 export function Sidebar({ active, project = null, workspace = null, rail: railPref, drawer, onCloseDrawer, onNav, hrefOf,
   onHelp, onSettings }: SidebarProps) {
   const inDrawer = drawer !== undefined;
@@ -183,6 +183,7 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
             {item("home", "Home", House)}
             {item("projects", "Projects", FolderKanban)}
             {workspace && item("workspace", workspace.label, Box)}
+            {item("demos", "Demos", Clapperboard)}
           </ul>
           {project && (
             <div className={`side-group${showSteps ? " open" : ""}${stepActive ? " has-active" : ""}`}>

@@ -2,8 +2,17 @@
  *  the avatar's initial, the search's grouping and the "/" shortcut's test. Nothing here touches React or the page. */
 import type { ProjectStep } from "./projectRoute";
 
-/** A sidebar item: the main pages, then the open project's steps (their ids are the project group's items). */
-export type NavId = "home" | "projects" | "workspace" | ProjectStep;
+/** A sidebar item: the main pages (Home, Projects, the workspace, Demos), then the open project's steps (their ids are
+ *  the project group's items). */
+export type NavId = "home" | "projects" | "workspace" | "demos" | ProjectStep;
+
+/** The Demos page's address. Not `/demos`: that is the folder of the video files (web/public/demos/). */
+export const DEMOS_PATH = "/videos";
+
+/** Whether a path is the Demos page's (`/videos`, a trailing slash too): the sidebar's Demos is the active item there. */
+export function isDemosPath(path: string | null | undefined): boolean {
+  return /^\/videos\/?$/.test((path ?? "").trim());
+}
 
 /** Where the rail state is remembered: ordinary pages, or the 3D workspace pages. */
 export type RailWhere = "pages" | "workspace";
