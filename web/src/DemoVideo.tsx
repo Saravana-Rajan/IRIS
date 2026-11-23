@@ -62,10 +62,19 @@ function edge(root: HTMLElement | null, last: boolean): HTMLElement | null {
   return (last ? all[all.length - 1] : all[0]) ?? root;
 }
 
-/** Captions on: `default` alone is ignored by some browsers on a track added after the page loaded. */
+/** Captions on, drawn by the page: the track is "hidden" (the browser draws nothing; some systems force their own dark
+ *  caption box over a page's style) while its cues still fire `cuechange`, which the page shows as a light caption.
+ *  `default` alone is ignored by some browsers on a track added after the page loaded, so the mode is set here. */
 function captionsOn(video: HTMLVideoElement) {
   const track = video.textTracks?.[0];
-  if (track && track.mode !== "showing") track.mode = "showing";
+  if (track && track.mode !== "hidden") track.mode = "hidden";
+}
+
+/** The text of a track's active cues, tags stripped, one line per cue line. */
+export function cueText(track: { activeCues?: ArrayLike<{ text?: string }> | null } | undefined): string {
+  const cues = track?.activeCues;
+  if (!cues || !cues.length) return "";
+  return Array.from(cues).map((c) => (c.text ?? "").replace(/<[^>]+>/g, "")).join("\n").trim();
 }
 
 /**
@@ -97,6 +106,8 @@ export function DemoVideo({ id, open, onClose, opener }: {
   const close = useRef(onClose);
   close.current = onClose;
   const [failed, setFailed] = useState(false);
+  const [cue, setCue] = useState("");
+  const [ccOn, setCcOn] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -107,6 +118,15 @@ export function DemoVideo({ id, open, onClose, opener }: {
     if (d && !d.open) d.showModal?.();
     closeButton.current?.focus({ preventScroll: true });
     const v = player.current;
+    const track = v?.textTracks?.[0];
+    const onCue = () => setCue(cueText(track as unknown as Parameters<typeof cueText>[0]));
+    // The video's own CC menu: "showing" means on (shown by the page, so set back to hidden), "disabled" means off.
+    const onTracks = () => {
+      if (!track) return;
+      if (track.mode === "showing") { track.mode = "hidden"; setCcOn(true); } else if (track.mode === "disabled") setCcOn(false);
+    };
+    track?.addEventListener?.("cuechange", onCue);
+    v?.textTracks?.addEventListener?.("change", onTracks);
     if (v) {
       captionsOn(v);
       v.play()?.catch(() => {});
@@ -122,6 +142,9 @@ export function DemoVideo({ id, open, onClose, opener }: {
     };
     document.addEventListener("keydown", onKey);
     return () => {
+      track?.removeEventListener?.("cuechange", onCue);
+      v?.textTracks?.removeEventListener?.("change", onTracks);
+      setCue(""); setCcOn(true);
       document.removeEventListener("keydown", onKey);
       if (d?.open) d.close();
       body.style.overflow = overflow;
@@ -161,6 +184,10 @@ export function DemoVideo({ id, open, onClose, opener }: {
               onError={(e) => { if (e.target === e.currentTarget) setFailed(true); }}>
               <track kind="captions" src={video.vtt} srcLang="en" label="English" default />
             </video>)}
+          {!failed && ccOn && cue && (
+            <div className="demo-video-caption" aria-hidden="true">
+              {cue.split("\n").map((line, i) => <span key={i}>{line}</span>)}
+            </div>)}
         </div>
       </div>
       <span className="demo-video-guard" tabIndex={0} data-guard="end" onFocus={(e) => guard(e.relatedTarget, false)} />

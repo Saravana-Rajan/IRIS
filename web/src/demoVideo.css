@@ -149,3 +149,18 @@
   .home-demo, .home-demo-poster, .home-demo-poster > img, .home-demo-play { transition: none; }
   .home-demo:hover, .home-demo:hover .home-demo-poster > img, .home-demo:hover .home-demo-play { transform: none; }
 }
+
+/* Captions drawn by the page (DemoVideo: the track is "hidden"): a light rounded box with ink text, above the controls.
+   Never the browser's dark caption box, whatever the system's caption style says. */
+.demo-video-frame { position: relative; }
+.demo-video video::-webkit-media-text-track-container { display: none; }
+.demo-video-caption {
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); max-width: 88%;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; z-index: 2;
+}
+.demo-video-caption span {
+  background: rgba(255, 255, 255, 0.94); color: #1a1a1a; text-align: center;
+  font: 500 clamp(14px, 1.7vw, 22px)/1.35 "IBM Plex Sans", system-ui, sans-serif;
+  padding: 4px 14px; border-radius: 10px; box-shadow: 0 2px 12px rgba(26, 26, 26, 0.12);
+}
+@media (max-width: 640px) { .demo-video-caption { bottom: 48px; } }
