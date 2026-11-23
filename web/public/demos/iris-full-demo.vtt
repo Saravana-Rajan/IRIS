@@ -1,256 +1,140 @@
 WEBVTT
 
-00:00:01.209 --> 00:00:02.623
-On a building project,
+00:00:01.211 --> 00:00:02.600
+Building models clash.
 
-00:00:02.623 --> 00:00:07.568
-separate teams model the structure,
-the ducts, the pipes and the cable trays.
+00:00:02.681 --> 00:00:04.401
+Drawings disagree with the model.
 
-00:00:07.901 --> 00:00:10.769
-When their 3D models come together,
-they collide.
+00:00:04.571 --> 00:00:06.892
+Checking it all by hand takes days.
 
-00:00:11.085 --> 00:00:12.662
-These are clashes.
+00:00:06.985 --> 00:00:09.943
+AI can help,
+but it can be confidently wrong.
 
-00:00:12.816 --> 00:00:15.397
-And the 2D drawings often disagree
-with the model.
+00:00:10.940 --> 00:00:12.028
+Meet Iris.
 
-00:00:15.965 --> 00:00:18.644
-Finding all of this takes engineers days.
-
-00:00:19.157 --> 00:00:20.767
-AI could help.
-
-00:00:20.829 --> 00:00:22.446
-But does AI truly see?
-
-00:00:22.792 --> 00:00:24.250
-It can be confidently wrong.
-
-00:00:25.262 --> 00:00:26.965
-Our answer is Iris.
-
-00:00:27.321 --> 00:00:28.503
+00:00:12.226 --> 00:00:13.304
 AI proposes.
 
-00:00:28.814 --> 00:00:30.204
+00:00:13.541 --> 00:00:14.687
 Geometry proves.
 
-00:00:30.307 --> 00:00:31.765
+00:00:14.913 --> 00:00:16.021
 The engineer decides.
 
-00:00:32.415 --> 00:00:33.772
-Let's open the sample building.
+00:00:17.030 --> 00:00:22.186
+In the sample building's four models,
+Iris finds 464 clashes.
 
-00:00:34.797 --> 00:00:40.923
-Northbank has four models
-from different teams, with 1,732 elements.
+00:00:23.194 --> 00:00:27.611
+Clash #1: a supply-air duct runs right
+through a steel girder.
 
-00:00:41.379 --> 00:00:46.328
-Iris finds 464 clashes,
-in about 11 seconds on the cloud.
+00:00:28.621 --> 00:00:31.243
+Gemini proposes a fix for each clash.
 
-00:00:47.335 --> 00:00:53.309
-Clash #1: a 600×300 supply-air duct runs
-through a transfer girder,
-
-00:00:53.309 --> 00:00:55.307
-one metre deep, on Level 02.
-
-00:00:55.553 --> 00:00:57.985
-They overlap by 300 mm.
-
-00:00:58.995 --> 00:01:03.762
-Gemini 3.8 Flash proposes fixes
-that are real edits to the model.
-
-00:01:04.176 --> 00:01:07.837
+00:00:31.618 --> 00:00:36.179
 Then geometry re-checks every one:
-the clash is gone,
+the clash is gone, and nothing new is hit.
 
-00:01:08.066 --> 00:01:11.293
-the clearance is met,
-and nothing new is hit.
+00:00:37.319 --> 00:00:39.224
+All 8 fixes are verified.
 
-00:01:11.701 --> 00:01:15.698
-Here, Gemini's saved replies replay,
-and every check runs again.
+00:00:39.728 --> 00:00:40.744
+On the girder clashes,
 
-00:01:16.721 --> 00:01:19.454
-All 8 clashes got a verified fix.
+00:00:40.744 --> 00:00:46.154
+they match the designer's own revision:
+up 400, 250 and 280 mm.
 
-00:01:19.933 --> 00:01:24.499
-On the 3 girder clashes, the fixes match
-the human designer's real revision,
+00:00:47.369 --> 00:00:49.968
+Here it is before, and after the fix.
 
-00:01:24.499 --> 00:01:28.920
-exactly: the duct up 400 mm
-through the web opening,
+00:00:52.096 --> 00:00:54.800
+Nothing changes
+until the engineer accepts it.
 
-00:01:29.306 --> 00:01:33.217
-the cable tray 250,
-the cold-water pipe 280.
+00:00:55.867 --> 00:00:58.176
+Iris also checks the 2D drawings.
 
-00:01:34.224 --> 00:01:35.483
-See it for yourself.
-
-00:01:35.958 --> 00:01:37.566
-Before shows the clash.
-
-00:01:37.857 --> 00:01:39.337
-After shows the fix.
-
-00:01:39.718 --> 00:01:42.646
-Both shows them together,
-in the same 3D view.
-
-00:01:43.656 --> 00:01:45.262
-The engineer decides.
-
-00:01:45.529 --> 00:01:49.240
-Nothing is applied until you press Accept,
-with your name on it.
-
-00:01:50.249 --> 00:01:53.901
-The report goes out as a PDF
-and a BCF file,
-
-00:01:54.298 --> 00:01:58.776
-for Revit, Navisworks,
-Solibri and BIMcollab.
-
-00:01:59.800 --> 00:02:03.422
-Iris also checks the 2D drawings
-against the same model.
-
-00:02:03.862 --> 00:02:07.810
-Here is sheet M-201,
-the Level 02 mechanical plan.
-
-00:02:08.819 --> 00:02:12.027
+00:00:59.743 --> 00:01:03.049
 Gemini reads every tag
-and size on the sheet.
+and size on the PDF sheet.
 
-00:02:12.548 --> 00:02:15.452
-Here, the saved reading is replayed,
-at no cost.
+00:01:04.090 --> 00:01:07.542
+Iris checks each one
+against the PDF's own text.
 
-00:02:16.474 --> 00:02:20.227
-Then each item is checked
-against the PDF's own text layer.
+00:01:08.549 --> 00:01:11.524
+Then Iris compares the sheet
+with the 3D model.
 
-00:02:20.704 --> 00:02:24.002
-119 of 123 are confirmed.
+00:01:11.788 --> 00:01:13.810
+On this clean sheet, nothing differs.
 
-00:02:25.021 --> 00:02:28.142
-Iris compares the drawings
-with the model's own data.
+00:01:14.884 --> 00:01:17.090
+Then a sheet with four planted mistakes.
 
-00:02:28.643 --> 00:02:31.323
-On the clean sheet,
-nothing differs from the model.
+00:01:17.290 --> 00:01:21.790
+Iris finds exactly those four:
+a wrong size, a missing tray,
 
-00:02:32.333 --> 00:02:36.688
-A sheet with four planted mistakes
-gives exactly those four:
-
-00:02:37.169 --> 00:02:40.259
-a wrong duct size,
-a tray missing from the model,
-
-00:02:40.499 --> 00:02:44.433
+00:01:21.960 --> 00:01:25.196
 a duct that is really a pipe,
-and a branch left off the drawing.
+and a missing branch.
 
-00:02:45.449 --> 00:02:47.635
-But does AI truly see?
+00:01:26.202 --> 00:01:28.947
+For Track 2, we built Iris VisionBench.
 
-00:02:48.098 --> 00:02:52.424
-For Track 2, Visual Task Factory,
-we built Iris VisionBench.
+00:01:29.036 --> 00:01:31.008
+It generates synthetic building scenes,
 
-00:02:52.860 --> 00:02:56.524
-Iris turns its geometry
-into a factory of visual tasks.
+00:01:31.008 --> 00:01:33.575
+renders pictures,
+and asks engineering questions.
 
-00:02:56.882 --> 00:02:59.368
-It generates
-synthetic building-services scenes,
-
-00:02:59.496 --> 00:03:03.521
-renders pictures of them, and asks
-engineering questions in eight categories,
-
-00:03:03.769 --> 00:03:06.917
-from spotting a clash
-to judging if a fix is valid.
-
-00:03:07.919 --> 00:03:11.703
+00:01:36.402 --> 00:01:40.141
 Every answer comes only from geometry,
 never from a model.
 
-00:03:12.151 --> 00:03:15.126
-And integrity checks guard
-against leaks and cheating.
+00:01:41.149 --> 00:01:44.143
+With the pictures, Gemini scored 58%.
 
-00:03:16.457 --> 00:03:20.735
-We tested Gemini 3.8 Flash
-on 95 picture questions.
-
-00:03:21.348 --> 00:03:23.729
-With the pictures, it scored 58%.
-
-00:03:24.326 --> 00:03:26.640
+00:01:44.339 --> 00:01:46.091
 With no picture, 36%.
 
-00:03:26.881 --> 00:03:31.046
-With the wrong picture,
-just 14%, so it really does look.
+00:01:46.411 --> 00:01:48.387
+With the wrong picture, 14%.
 
-00:03:31.675 --> 00:03:34.140
+00:01:48.869 --> 00:01:51.321
 Given the measurements as text, 90%.
 
-00:03:35.150 --> 00:03:37.558
-So it reasons well from numbers,
+00:01:52.340 --> 00:01:56.295
+So it looks, but it misreads geometry,
+and it's overconfident:
 
-00:03:37.698 --> 00:03:40.366
-but reading geometry
-from pictures is hard.
-
-00:03:41.180 --> 00:03:44.795
-It was best at choosing
-which element to move: 100%.
-
-00:03:44.881 --> 00:03:48.930
-It was weakest at judging
-if a fix is valid, 27%,
-
-00:03:48.998 --> 00:03:51.418
-and at picking openings, 29%.
-
-00:03:52.093 --> 00:03:57.225
-On average it was 96% sure,
+00:01:56.295 --> 00:02:01.657
+on average 96% sure,
 but right only 58% of the time.
 
-00:03:58.248 --> 00:04:02.826
-That is exactly why Iris checks
-every AI answer with geometry.
+00:02:02.666 --> 00:02:05.606
+That's why Iris checks every answer
+with geometry.
 
-00:04:03.832 --> 00:04:05.163
+00:02:06.673 --> 00:02:07.965
 AI proposes.
 
-00:04:05.435 --> 00:04:06.596
+00:02:08.154 --> 00:02:09.522
 Geometry proves.
 
-00:04:06.975 --> 00:04:08.681
+00:02:09.662 --> 00:02:11.002
 The engineer decides.
 
-00:04:08.951 --> 00:04:14.318
-Iris runs on Google Cloud, with Gemini
-on Vertex AI, Cloud Run and Firebase.
+00:02:11.300 --> 00:02:13.120
+Iris, built by Techjays.
 
-00:04:14.943 --> 00:04:16.279
-Built by Techjays.
+00:02:13.387 --> 00:02:16.398
+Try it at iris-techjays.web.app.

@@ -1,7 +1,7 @@
 import { ArrowDown, Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
 import { lazy, Suspense, type CSSProperties, type MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
-import { WatchDemoButton } from "./DemoVideo";
+import { WatchDemoButton, WatchDemos } from "./DemoVideo";
 import { HERO_POSTER } from "./glassModel";
 import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
@@ -59,9 +59,10 @@ function ProjectStatus({ p }: { p: Project }) {
  * hero: the greeting, Iris's principle in large regular type and what it does, revealed word by word, beside our logo as
  * a 3D glass aperture floating over a white pedestal, breathing and leaning toward the pointer (HeroGlass, lazy; its
  * still until it loads), and a square "↓" cue down to the rest; then the last session to resume; three ways to start
- * (a new project, the sample building, the sample drawings), all styled alike; Iris's eight steps as cards
- * (HowIrisWorks); and the recent projects. No brand header or chrome of its own: the shell has
- * them. It scrolls inside its container. Props only; nothing here calls the server.
+ * (a new project, the sample building, the sample drawings), all styled alike; the three demo videos as cards to watch
+ * (WatchDemos: posters only until one is opened); Iris's eight steps as cards (HowIrisWorks); and the recent
+ * projects. No brand header or chrome of its own: the shell has them. It scrolls inside its container. Props only;
+ * nothing here calls the server.
  */
 export function StartScreen({
   now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
@@ -111,7 +112,7 @@ export function StartScreen({
               <span className="home-tagline-line"><TextReveal text={TAGLINE[0]} once="home-tagline" delay={helloMs} step={80} /></span>
               <span className="home-tagline-line"><TextReveal text={TAGLINE[1]} once="home-tagline-2" delay={helloMs + 80 * 4} step={80} /></span>
             </h1>
-            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero" />
+            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero" thumb />
             <p className="home-what">Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked,
               and report what was decided.</p>
           </div>
@@ -166,6 +167,8 @@ export function StartScreen({
               <WatchDemoButton id="2d" />
             </div>)}
         </section>
+
+        <WatchDemos />
 
         <HowIrisWorks onStep={onSampleStep} />
 

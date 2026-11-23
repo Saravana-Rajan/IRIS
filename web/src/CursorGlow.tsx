@@ -8,7 +8,7 @@ import "./cursorGlow.css";
  * blended with `multiply`, so white turns faintly pink and cards stay calm. Moved by transform from a
  * `requestAnimationFrame` loop that runs only while it catches up (no React render per frame), paused in a hidden tab.
  * A touch or coarse pointer, or less motion asked for, shows a still soft pink wash instead. It also lights the cards
- * under the cursor (`.home-tile`, `.hiw-card`): `--mx` / `--my` say where, cursorGlow.css draws the spotlight.
+ * under the cursor (`.home-tile`, `.hiw-card`, `.home-demo`): `--mx` / `--my` say where, cursorGlow.css draws the spotlight.
  */
 
 export type GlowMode = "follow" | "still" | "off";
@@ -26,7 +26,7 @@ export const TRAIL_EASE = 0.055;
 /** One frame's step from `at` toward `to`. */
 export const ease = (at: number, to: number, k: number) => at + (to - at) * k;
 /** Cards that take the spotlight under the cursor. */
-export const SPOTLIGHT = ".home-tile, .hiw-card";
+export const SPOTLIGHT = ".home-tile, .hiw-card, .home-demo";
 
 const media = (q: string) => {
   try { return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(q).matches; } catch { return false; }

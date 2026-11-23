@@ -1,161 +1,93 @@
 WEBVTT
 
-00:00:01.150 --> 00:00:04.950
-On a building project,
-different teams model the structure,
+00:00:01.150 --> 00:00:04.824
+Teams model a building's structure,
+ducts and pipes separately.
 
-00:00:04.951 --> 00:00:07.884
-the ducts, the pipes
-and the cable trays separately.
+00:00:05.190 --> 00:00:07.336
+When the models come together, they clash.
 
-00:00:08.334 --> 00:00:10.756
-When the models come together,
-they collide.
+00:00:07.503 --> 00:00:11.015
+Finding and fixing those
+clashes takes engineers days.
 
-00:00:11.046 --> 00:00:12.859
-These are called clashes.
-
-00:00:13.128 --> 00:00:15.775
-Finding and fixing them
-takes engineers days.
-
-00:00:16.038 --> 00:00:19.171
+00:00:11.314 --> 00:00:14.186
 AI can help,
 but it can be confidently wrong.
 
-00:00:20.182 --> 00:00:21.606
-This is Iris.
+00:00:15.195 --> 00:00:16.283
+Meet Iris.
 
-00:00:21.888 --> 00:00:23.260
+00:00:16.481 --> 00:00:17.559
 AI proposes.
 
-00:00:23.404 --> 00:00:24.908
+00:00:17.796 --> 00:00:18.942
 Geometry proves.
 
-00:00:25.016 --> 00:00:26.344
+00:00:19.168 --> 00:00:20.276
 The engineer decides.
 
-00:00:26.866 --> 00:00:28.172
-Let's try the sample building.
+00:00:21.285 --> 00:00:25.088
+Northbank, the sample building,
+has four models from different teams.
 
-00:00:29.181 --> 00:00:35.163
-Northbank has four models
-from different teams, with 1,732 elements.
+00:00:25.461 --> 00:00:29.879
+Iris finds 464 clashes,
+in about 11 seconds on the cloud.
 
-00:00:35.784 --> 00:00:38.930
-Iris finds 464 clashes.
+00:00:30.889 --> 00:00:36.374
+Clash #1: a supply-air duct runs right
+through a transfer girder, one metre deep.
 
-00:00:39.174 --> 00:00:41.863
-Live on the cloud,
-that takes about 11 seconds.
-
-00:00:42.531 --> 00:00:47.337
-Here, the sample replays a saved check
-that matches a live run, bit for bit.
-
-00:00:48.345 --> 00:00:50.570
-Let's open clash #1.
-
-00:00:50.956 --> 00:00:56.093
-A 600×300 supply-air duct runs right
-through a transfer girder,
-
-00:00:56.093 --> 00:00:58.056
-one metre deep, on Level 02.
-
-00:00:58.171 --> 00:01:00.278
+00:00:36.767 --> 00:00:39.259
 They overlap by 300 mm.
 
-00:01:01.050 --> 00:01:05.141
-Iris shows it in 3D,
-with three pictures: A, B and C.
+00:00:39.344 --> 00:00:41.932
+Iris shows it in 3D, with three pictures.
 
-00:01:06.497 --> 00:01:08.012
-Now, Prepare fixes.
+00:00:43.289 --> 00:00:46.855
+Prepare fixes.
+Gemini proposes real edits to the model.
 
-00:01:08.482 --> 00:01:13.184
-Gemini 3.8 Flash proposes fixes
-that are real edits to the model.
+00:00:47.009 --> 00:00:51.374
+Then geometry re-checks every one:
+the clash is gone, the clearance met,
 
-00:01:13.883 --> 00:01:16.519
-Then geometry re-checks every one.
+00:00:51.474 --> 00:00:52.593
+and nothing new hit.
 
-00:01:16.671 --> 00:01:20.578
-The clash must be gone,
-the clearance met, and nothing new hit.
+00:00:53.604 --> 00:00:55.509
+All 8 fixes are verified.
 
-00:01:21.295 --> 00:01:26.363
-In this sample, Gemini's saved replies
-are replayed, and every check runs again.
+00:00:56.013 --> 00:00:57.029
+On the girder clashes,
 
-00:01:27.389 --> 00:01:28.841
-The review queue is ready.
+00:00:57.029 --> 00:01:02.439
+they match the designer's own revision:
+up 400, 250 and 280 mm.
 
-00:01:29.275 --> 00:01:32.777
-All 8 clashes got a fix
-the geometry verified.
+00:01:03.654 --> 00:01:06.253
+Here it is before, and after the fix.
 
-00:01:33.086 --> 00:01:34.569
-On the 3 girder clashes,
+00:01:08.381 --> 00:01:11.085
+Nothing changes
+until the engineer accepts it.
 
-00:01:34.569 --> 00:01:37.839
-the fixes match the human designer's
-real revision, exactly.
+00:01:12.095 --> 00:01:18.688
+Then export the report: a PDF, and a BCF
+file for Revit, Navisworks and Solibri.
 
-00:01:38.563 --> 00:01:43.138
-The duct rises 400 mm
-through the web opening, with 50 mm clear.
-
-00:01:43.683 --> 00:01:48.481
-The cable tray rises 250 mm,
-and the cold-water pipe 280 mm.
-
-00:01:49.491 --> 00:01:50.750
-See it for yourself.
-
-00:01:51.225 --> 00:01:52.833
-Before shows the clash.
-
-00:01:53.124 --> 00:01:54.604
-After shows the fix.
-
-00:01:54.985 --> 00:01:57.913
-Both shows them together,
-in the same 3D view.
-
-00:01:58.923 --> 00:02:00.535
-The engineer decides.
-
-00:02:00.705 --> 00:02:04.483
-Nothing is applied until you press Accept,
-with your name on it.
-
-00:02:04.872 --> 00:02:06.498
-Or reject it, with a reason.
-
-00:02:06.990 --> 00:02:09.291
-Then Iris moves on to the next clash.
-
-00:02:10.301 --> 00:02:13.814
-When you're done,
-export the report: a PDF,
-
-00:02:13.853 --> 00:02:19.218
-and a BCF file that opens in Revit,
-Navisworks, Solibri and BIMcollab.
-
-00:02:20.244 --> 00:02:21.575
+00:01:19.752 --> 00:01:21.044
 AI proposes.
 
-00:02:21.847 --> 00:02:23.008
+00:01:21.233 --> 00:01:22.601
 Geometry proves.
 
-00:02:23.387 --> 00:02:25.093
+00:01:22.741 --> 00:01:24.081
 The engineer decides.
 
-00:02:25.363 --> 00:02:30.730
-Iris runs on Google Cloud, with Gemini
-on Vertex AI, Cloud Run and Firebase.
+00:01:24.379 --> 00:01:26.199
+Iris, built by Techjays.
 
-00:02:31.355 --> 00:02:32.691
-Built by Techjays.
+00:01:26.466 --> 00:01:29.477
+Try it at iris-techjays.web.app.
