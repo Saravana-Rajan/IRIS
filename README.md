@@ -506,9 +506,13 @@ See it live at <https://iris-techjays.web.app>.
 
 Built by **Techjays** for the Innodata AI Hackathon 2026 (Track 2, Visual Task Factory).
 
-| Member | |
-|---|---|
-| **Saravana Rajan B** | Team leader |
-| **Ishwarya KB** | |
-| **Sarmitha S** | |
-| **Kanish V** | |
+Four Google Cloud certified AI engineers.
+
+| Member | Role | Google Cloud certifications |
+|---|---|---|
+| **Saravana Rajan B** (team lead) | Senior AI Engineer | Professional Cloud Architect |
+| **Kanish V** | Senior AI Engineer | Professional ML Engineer · Associate Cloud Engineer |
+| **Ishwarya KB** | Staff AI Engineer | Associate Cloud Engineer |
+| **Sarmitha S** | AI Engineer | Professional ML Engineer · Associate Cloud Engineer |
+
+Earlier wins as Team Techjays: **1st place**, Google Cloud Build with AI: Code for Communities (national, India) · **2nd place**, India AI Impact Summit Buildathon by HCL GUVI (national, India).
