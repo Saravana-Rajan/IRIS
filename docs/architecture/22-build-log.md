@@ -1197,3 +1197,28 @@ clips stay in `web/public/demos/` for the submission video) for **How Iris works
 measured proof chips, Propose with the AI holo edge and Validate with a green "Geometry" badge, "AI proposes → geometry
 proves" between them; a card opens its step on the sample building (`onSampleStep` → `trySample(step)`). Tests:
 `sidebar.test.mjs` (the footer), `shell.test.mjs`, `start-screen.test.mjs` and `how-iris-works.test.mjs`. The owner then asked to drop the striped holographic ribbon everywhere: `HoloRibbon` is gone; empty states, the loading card and Home's quiet lines show the Aperture in a soft pink circle (`MarkBadge`), and the hero keeps a soft pink wash until the 3D glass aperture (`feature/hero-ribbon`) arrives. A pink glow now follows the cursor over the pages, never the 3D workspace (`CursorGlow.tsx`: eased, a trailing periwinkle glow, a breath at rest, a still wash on touch or under reduced motion), and the start tiles and How Iris works cards light under the cursor. Checked: `cursor-glow.test.mjs`, the full web suite, `npm run build`.
+
+**Nov 22 (2026-11-22), server QA fixes: Flash defaults, saved fixes with no credentials, no model 500s, unknown pages**
+([08](08-ai-models-prompts-and-spend.md), [10](10-http-api-and-streams.md), [12](12-web-app.md),
+[15](15-requirements-settings-and-config.md), [docs/review-queue.md](../review-queue.md)). **Defaults:** the owner
+chose Gemini 3.8 Flash as the main model, so `model_client.DEFAULT_MODELS` now runs proposals (`GEMINI_MODEL`) and
+second tries (`GEMINI_ESCALATION_MODEL`) on `gemini-3.8-flash`, as `deploy/deploy.sh` already set (Cloud Run worked
+only through it); the thinking defaults were already the deploy's (`low`, fast empty, escalation `high`). The code's
+key now equals `samples/prepared/Northbank.json`'s (`gemini-3.8-flash`, `low`), so a fresh clone gets the saved
+review-queue fixes, and with no credentials at all they still replay, each checked by geometry (a replay needs no model
+and no client). `gemini-4-argon` stays priced and labelled, an option by env var; `.env.example`, README, CLAUDE.md
+follow. **No model:** `model_client.can_call(model)` (any stand-in, a `GeminiModel` given a client, or `configured()`).
+The page's automatic patterns reading (`POST .../patterns/{scene_id}/triage`) answered 500 "RuntimeError: No model
+configured" on every sample open with no credentials; it now skips the reading (`{}`, no call, nothing charged), so
+the browser logs no failed request. The review queue's live pairs with no model are not charged and fail plainly
+(`prepare.NO_MODEL`). **Unknown pages:** `/nope-page` showed `{"detail":"Not Found"}` on one origin and locally;
+`app._is_page` now gives `index.html` to any browser page address (GET or HEAD, `Accept` HTML, no file extension, the
+first segment not in `NOT_PAGES`: api, mcp, docs, redoc, openapi.json, assets, wasm; no `..`, `%` or backslash), and
+the app shows its own Page not found page (`web/src/NotFound.tsx`, `isAppPath` in `projectRoute.ts`, `App`'s
+`lostPage`, with a Home button; both App test stub lists name it). Firebase Hosting's `**` rewrite already did this on
+the split deploy. **Report PDF on Cloud Run:** the `Dockerfile` already installs WeasyPrint's libraries
+(`libpango-1.0-0`, which pulls `libglib2.0-0` with `libgobject-2.0`, `libpangoft2-1.0-0`, `libharfbuzz0b`,
+`libharfbuzz-subset0`, `fonts-dejavu-core`), so it is unchanged; only a Mac without them fails the two pango tests.
+Checked: server tests (new: the defaults equal `deploy.sh`'s; Northbank's saved set replays with no credentials and
+no live call; the patterns reading skipped with no model; an unknown page gets `index.html` while `/api`, files and
+anything that walks up stay 404), `test_docs_map.py`, the web suite, `tsc` and `vite build`; no Gemini call.

@@ -6,7 +6,8 @@
 > (the set-up, `_CrossOrigin`, headers, owner routes, `GET /`, `GET /api/health`, the voice origin check, projects and
 > decisions routes, 2D drawing routes with the sample drawings and saved readings, the detect stream's `phase` and
 > `done`, the route count, the front door and the errors table; review queue 2026-11-22: the prepare route, its stream
-> and the route count; re-branded 2026-11-11) ·
+> and the route count; server QA fixes 2026-11-22: `_is_page` serves any browser page address, the patterns reading
+> skipped with no model, live prepared pairs with no model; re-branded 2026-11-11) ·
 > **Deeper design:** [docs/voice.md](../voice.md), [docs/uploads.md](../uploads.md), [docs/mcp.md](../mcp.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md),
 > [docs/review-queue.md](../review-queue.md)
@@ -48,10 +49,14 @@ inside is in [09](09-agent-workflows.md) and [07](07-fixes-and-edits.md); the ca
   `index.html`, and `app.mount("/", _WebApp(directory=WEB_DIST, html=True), name="web")` serves the rest,
   declared last so `/api` wins. Split, nothing is mounted and `/` answers `API_ROOT`:
   `{"service": "iris-api", "docs": "/docs", "health": "/api/health"}` (also the answer when there is no build).
-  `_WebApp` is `StaticFiles` with one fallback: a browser asking for one of the app's own pages that has no file
-  (`_is_page`: GET or HEAD, a first segment in `WEB_PAGES` (`home`, `projects`, `workspace`, `about`, `settings`), no
-  file extension, no `..`, `%` or backslash, an `Accept` that takes HTML) gets `index.html`, so a reload or a shared
-  link like `/projects/<pid>/drawings` opens the app. Anything else missing stays a plain 404.
+  `_WebApp` is `StaticFiles` with one fallback: a browser asking for a page that has no file (`_is_page`: GET or
+  HEAD, a first segment not in `NOT_PAGES` (`api`, `mcp`, `docs`, `redoc`, `openapi.json`, `assets`, `wasm`), no file
+  extension in the last segment, no `..`, `%` or backslash in the path or the raw path, an `Accept` that takes HTML)
+  gets `index.html`, so a reload or a shared link like `/projects/<pid>/drawings` opens the app, and an address the
+  app has no page for (`/nope-page`) shows the app's own Page not found page (`web/src/NotFound.tsx`,
+  [12](12-web-app.md)) instead of `{"detail":"Not Found"}`. Anything else missing (an `/api` route, a file, a JSON
+  request) stays a plain 404. Firebase Hosting's `**` → `/index.html` rewrite (`firebase.json`) does the same on the
+  split deploy; this fallback is for one origin and local runs.
 - **Lifespan:** `_lifespan` replaces the router's lifespan. On start it builds the MCP transport
   (`_mcp_gate.inner = _mcp_transport()`) and runs `_mcp.session_manager.run()` for the server's life
   ([11](11-mcp-and-agent-links.md)).
@@ -369,7 +374,7 @@ the files instead of patching by index. `_with_patch` holds
 |---|---|---|---|---|---|
 | `GET` | `/api/reports/{report_id}/root_causes/{scene_id}` | Elements in several real clashes, plus geometry hits missing from the report (`plans.root_causes`) | `?fixed=` comma-separated clash ids | `[RootCause]` | free |
 | `GET` | `/api/reports/{report_id}/patterns/{scene_id}` | The same kind of clash many times over (`plans.patterns`), no model call | `?fixed=` | `[Pattern]` | free |
-| `POST` | `/api/reports/{report_id}/patterns/{scene_id}/triage` | One Gemini Pro call judging every pattern (`plans.read_patterns` → `triage_patterns`), kept on the Workspace by report, scene, pattern ids and the requirements' `model_key`, and shared with chat and MCP `find_patterns` | `PatternTriage {fixed}` | `{pattern_id: {verdict, cause, action, rule}}` | one proposal, only when not cached |
+| `POST` | `/api/reports/{report_id}/patterns/{scene_id}/triage` | One main-model call judging every pattern (`plans.read_patterns` → `triage_patterns`), kept on the Workspace by report, scene, pattern ids and the requirements' `model_key`, and shared with chat and MCP `find_patterns`. With no model that can be called (`model_client.can_call(ws.model)` false: no credentials), the reading is skipped: `{}`, no call, nothing charged, so the page's automatic reading gets no 500 | `PatternTriage {fixed}` | `{pattern_id: {verdict, cause, action, rule}}`, or `{}` | one proposal, only when not cached and a model can be called |
 
 ### Triage and titles
 
@@ -400,7 +405,7 @@ tried again first), and Reject and Request another through `decisions` and `prop
 
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
-| `POST` | `/api/scenes/{scene_id}/prepare/stream` | Runs Fix together's loop (`plans._resolve_items` → `agent.resolve`) on each distinct physical pair the clashes stand for, one card each and never merged (`prepare.pairs`, `plans.pairs_for(..., merge=False)`), at most `plans.MAX_ITEMS` (8) (`prepare.run`). Pairs the scene's saved set holds (`prepare.load_saved`) are replayed first from the model's recorded replies, each option checked again by geometry; the rest are asked live | `PrepareRequest {report_id, clash_ids=[], pick="ids", fixed=[]}`: `pick` `"ids"` prepares `clash_ids` less `fixed`; `"deepest"` lets the server pick the deepest open hard clashes not in `fixed` (`prepare.deepest`) | NDJSON (below) | one proposal per pair prepared live (`prepare.live_count`), all or none (`propose_limit.take_many`), charged before the stream; a pair replayed from a saved set is free; the owner has no caps. Before the stream: 404 scene, report, or a clash id the report does not hold; 422 "Nothing to prepare."; 429 the proposal cap |
+| `POST` | `/api/scenes/{scene_id}/prepare/stream` | Runs Fix together's loop (`plans._resolve_items` → `agent.resolve`) on each distinct physical pair the clashes stand for, one card each and never merged (`prepare.pairs`, `plans.pairs_for(..., merge=False)`), at most `plans.MAX_ITEMS` (8) (`prepare.run`). Pairs the scene's saved set holds (`prepare.load_saved`) are replayed first from the model's recorded replies, each option checked again by geometry; the rest are asked live | `PrepareRequest {report_id, clash_ids=[], pick="ids", fixed=[]}`: `pick` `"ids"` prepares `clash_ids` less `fixed`; `"deepest"` lets the server pick the deepest open hard clashes not in `fixed` (`prepare.deepest`) | NDJSON (below) | one proposal per pair prepared live (`prepare.live_count`), all or none (`propose_limit.take_many`), charged before the stream; a pair replayed from a saved set is free (it needs no model and no credentials); with no model that can be called (`model_client.can_call` false) the live pairs are not charged and each fails with `prepare.NO_MODEL`, with no call; the owner has no caps. Before the stream: 404 scene, report, or a clash id the report does not hold; 422 "Nothing to prepare."; 429 the proposal cap |
 
 ### Chat and voice
 
@@ -569,7 +574,7 @@ last `item` (`status` done) followed at once by its `prepared` (one lock, so no 
 |---|---|
 | `prepare_start` | `total`, `items` (`[{key, clash_ids, element_a, element_b, label, distance_m, saved}]`, `saved` true for a pair the saved set holds), `skipped` (why some clashes cannot be prepared, as words), `saved` (`Saved.info()`: `{label, model, made, title}` of the saved set in use, or null when none is used) |
 | `item` | as `plan/stream`'s: `key`, `status` thinking, checking (`attempt`, `passed`, `seconds?`, `checked?`, `reason?`) or done (`ok`, `title`: the best option's title, or why not; a replay miss without its exception's name) |
-| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready`: at least one option passed the check in this run; `failed`), `source` (`live` or `saved`), `options` (every option that passed, best first, each an `agent.Option` as a dict), `understanding`, `tried` (attempts), `model` (who proposed: the live model's label, or the saved set's `model_label`), `recommended` (the requirements allow no edit), `why` (failed only: `plans.failure_summary`, the recommendation, or `prepare.MISS`), `done` (how many have finished, this one included), `total` |
+| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready`: at least one option passed the check in this run; `failed`), `source` (`live` or `saved`), `options` (every option that passed, best first, each an `agent.Option` as a dict), `understanding`, `tried` (attempts), `model` (who proposed: the live model's label, or the saved set's `model_label`), `recommended` (the requirements allow no edit), `why` (failed only: `plans.failure_summary`, the recommendation, `prepare.MISS`, or `prepare.NO_MODEL` for a live pair with no model that can be called), `done` (how many have finished, this one included), `total` |
 | `done` | `ready`, `failed`, `total`, `seconds` |
 | `error` | `detail` (`<kind>: <words>`; the run failed, and no `done` follows) |
 

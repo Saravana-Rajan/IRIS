@@ -123,3 +123,10 @@ export function showProjectRoute(route: ProjectRoute | null, push: boolean, fall
 export function ownClick(e: { button?: number; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean }): boolean {
   return !e.button && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
+
+/** Whether a path is one of the app's own pages: "/", Home, the workspace, Settings, About and its tabs, the projects
+ *  (`parseProjectPath`). Any other shows "Page not found" (NotFound.tsx); "" (no location: tests) is the app's. */
+export function isAppPath(path: string): boolean {
+  const p = path.trim().replace(/\/+$/, "");
+  return /^(\/index\.html|\/home|\/workspace|\/settings|\/about(\/[\w-]+)?)?$/.test(p) || parseProjectPath(p) !== null;
+}

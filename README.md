@@ -189,7 +189,7 @@ with [01 · Product and journeys](docs/architecture/01-product-and-journeys.md) 
 
 | Layer | Technology |
 |---|---|
-| AI | **Gemini 3.8 Flash** (proposals, triage, titles, drawing reading, voice, benchmark runs), **Gemini 4 Argon** (configurable deeper proposals and second tries), **Gemini 3.1 Flash Image** (pictures of an accepted fix) · Vertex AI + google-genai SDK · multimodal prompts (3 views per clash plus measurements) · structured JSON output · agentic propose → verify → retry → rank loop · Model Context Protocol server |
+| AI | **Gemini 3.8 Flash** (every role by default: proposals, second tries at thinking high, triage, titles, drawing reading, voice, benchmark runs), **Gemini 4 Argon** (optional, by env var), **Gemini 3.1 Flash Image** (pictures of an accepted fix) · Vertex AI + google-genai SDK · multimodal prompts (3 views per clash plus measurements) · structured JSON output · agentic propose → verify → retry → rank loop · Model Context Protocol server |
 | Backend | Python 3.13, uv · FastAPI, Uvicorn, Pydantic · IfcOpenShell 0.9 · OpenCASCADE (cadquery-ocp) · NumPy · pypdfium2 + pdfplumber (PDF drawings) · ReportLab, WeasyPrint (PDF reports) · defusedxml |
 | Frontend | React 19, TypeScript 5.9, Vite 8 · three.js + web-ifc (batched meshes) · dockview · lucide-react |
 | Benchmark | Seeded scene generator, closed-form geometry checker · three.js renderer in headless Chromium (Playwright) · IFC4 export · bootstrap CIs, ECE, Brier |
@@ -245,7 +245,7 @@ no inline comments) or in the environment, then restart the server:
 |---|---|
 | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | The Vertex AI project and location (default `global`). Sign in once with `gcloud auth application-default login` |
 | `GEMINI_API_KEY` | Optional. A Gemini API key, used only when no project is set |
-| `GEMINI_MODEL` | The main model: proposals, chat, plans, report text |
+| `GEMINI_MODEL` | The main model: proposals, chat, plans, report text (default `gemini-3.8-flash`, as every role but images) |
 | `GEMINI_FAST_MODEL` | Bulk triage, clash titles, STEP part names, voice |
 | `GEMINI_ESCALATION_MODEL`, `GEMINI_IMAGE_MODEL` | Second tries on hard clashes, and pictures of an accepted fix |
 | `GEMINI_THINKING_LEVEL` (and `_FAST_`, `_ESCALATION_` variants) | The thinking level per role: `minimal`, `low`, `medium` or `high` |

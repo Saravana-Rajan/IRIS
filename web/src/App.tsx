@@ -64,7 +64,8 @@ import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
-import { PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
+import { PROJECTS_PATH, currentPath, currentProjectRoute, isAppPath, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
+import { NotFound } from "./NotFound";
 import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
 import { browserStorage, readRail, writeRail, type NavId } from "./shellNav";
@@ -4280,7 +4281,10 @@ export function App() {
     </div>);
   // Home (StartScreen.tsx): asked for at /home (the session, if any, stays open behind it), or the page with nothing
   // open and no project's page asked for.
-  const showHome = !route && (homeAsked || (!stats && !report && !blankish && !busy && !loading));
+  // An address the app does not know (a mistyped or old link): its own "Page not found" (NotFound.tsx), not Home.
+  const lost = !route && !homeAsked && !aboutTab && !isAppPath(currentPath());
+  const lostPage = lost && <div className="proj-shell" role="region" aria-label="Page not found"><NotFound onHome={goHome} /></div>;
+  const showHome = !lost && !route && (homeAsked || (!stats && !report && !blankish && !busy && !loading));
   const homePage = showHome && (
     <div className="proj-shell home-shell" role="region" aria-label="Home">
       {pageAlert}
@@ -4298,7 +4302,7 @@ export function App() {
   const sessionOpen = !!(sceneId || report);
   const sessionName = sceneFiles.length ? projectName(sceneFiles) : report && !sceneId ? "Clash report" : "Workspace";
   /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
-  const onPage = !!homePage || !!projectPage;
+  const onPage = !!homePage || !!projectPage || !!lostPage;
   const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
   const navProject = project ? { id: project.id, name: project.name || "Untitled project", counts: {
     ...(project.files.length ? { models: project.files.length } : {}),
@@ -4928,6 +4932,7 @@ export function App() {
             {popouts.map((w, i) => <Tooltips key={i} doc={w.document} />)}
             {homePage}
             {projectPage}
+            {lostPage}
             {removing && (
               <div className="about-dialog" role="dialog" aria-modal="true" aria-label="Remove a model" onClick={() => setRemoving(null)}>
                 <div className="report-dialog remove-dialog" onClick={(e) => e.stopPropagation()}>

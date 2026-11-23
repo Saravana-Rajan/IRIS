@@ -2091,8 +2091,11 @@ def patterns(report_id: str, scene_id: str, fixed: str = ""):
 @app.post("/api/reports/{report_id}/patterns/{scene_id}/triage")
 def triage_patterns(report_id: str, scene_id: str, body: PatternTriage, request: Request):
     """Ask the main model what each pattern is (one call for all). Counts as one proposal, once: the reading is shared with
-    the chat and MCP (`plans.read_patterns`)."""
+    the chat and MCP (`plans.read_patterns`). With no model to ask (no credentials: `model_client.can_call`), nothing
+    is read or charged: no verdicts, so the page's automatic reading never fails on a server without a model."""
     pats = plans.patterns(ws, _scene(scene_id), _report(report_id), body.fixed)
+    if not model_client.can_call(ws.model):
+        return {}
     verdicts, refused = plans.read_patterns(ws, scene_id, report_id, pats, lambda: _take(propose_limit, request))
     if refused:
         raise HTTPException(429, refused)
@@ -2546,7 +2549,8 @@ def prepare_stream(scene_id: str, body: PrepareRequest, request: Request):
     if not items:
         raise HTTPException(422, "Nothing to prepare.")
     saved = prepare.load_saved(ws, scene_id)
-    n_live = prepare.live_count(items, saved)
+    # No model to ask (no credentials): saved pairs still replay; live ones fail plainly (prepare.NO_MODEL), uncharged.
+    n_live = prepare.live_count(items, saved) if model_client.can_call(ws.model) else 0
     refused = None if owner.no_caps() or not n_live else propose_limit.take_many(who, n_live)
     if refused:
         raise HTTPException(429, refused)
@@ -3038,14 +3042,14 @@ def front_door():
     return API_ROOT
 
 
-# The app's own pages (web/src/projectRoute.ts, aboutRoute.ts): a browser asking for one of these gets index.html.
-WEB_PAGES = frozenset({"home", "projects", "workspace", "about", "settings"})
+# What is never one of the app's pages: the API, the MCP server, the API's own docs, and the built app's files.
+NOT_PAGES = frozenset({"api", "mcp", "docs", "redoc", "openapi.json", "assets", "wasm"})
 
 
 def _is_page(scope) -> bool:
-    """A browser asking for one of the app's pages: GET or HEAD, a path under WEB_PAGES with no file extension and
-    nothing that walks up or is encoded to ("..", "%", a backslash), and an Accept that takes HTML. Never /api, /mcp,
-    /docs, /openapi.json, /assets, /wasm or a file."""
+    """A browser asking for a page: GET or HEAD, a path with no file extension, not under NOT_PAGES, and nothing that
+    walks up or is encoded to ("..", "%", a backslash), and an Accept that takes HTML. The app reads its route from the
+    path (web/src/projectRoute.ts, aboutRoute.ts) and shows its own "Page not found" for one it does not know."""
     if scope.get("method") not in ("GET", "HEAD"):
         return False
     path = scope.get("path") or ""
@@ -3053,16 +3057,17 @@ def _is_page(scope) -> bool:
     if any(bad in s for s in (path, raw) for bad in ("..", "%", "\\")):
         return False
     parts = [p for p in path.split("/") if p]
-    if not parts or parts[0] not in WEB_PAGES or "." in parts[-1]:
+    if not parts or parts[0] in NOT_PAGES or "." in parts[-1]:
         return False
     accept = next((v for k, v in scope.get("headers") or [] if k == b"accept"), b"").decode("latin-1")
     return "text/html" in accept
 
 
 class _WebApp(StaticFiles):
-    """The built web app. One of its pages with no file of its own (/home, /projects/<id>/clashes/3, …: `_is_page`) is
-    the app itself, index.html, so a reload or a shared link opens it (the app reads its route from the path).
-    Everything else that is missing (an /api route, a file) stays a 404."""
+    """The built web app. A page with no file of its own (/home, /projects/<id>/clashes/3, an unknown /nope: `_is_page`)
+    is the app itself, index.html, so a reload or a shared link opens it (the app reads its route from the path and
+    shows its own "Page not found" for an unknown one). Everything else that is missing (an /api route, a file) stays a
+    404."""
 
     async def get_response(self, path: str, scope):
         try:

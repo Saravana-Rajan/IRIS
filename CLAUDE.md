@@ -8,7 +8,8 @@ Gemini multimodal models (README, "Roadmap").
 
 ## What it does
 
-1. **Understand** a clash from images (A/B/C, below) plus model data, with Gemini Pro (`GEMINI_MODEL`).
+1. **Understand** a clash from images (A/B/C, below) plus model data, with the main model (`GEMINI_MODEL`, Gemini
+   3.8 Flash by default).
 2. **Propose** 1–3 fixes by editing real IFC elements, each **verified** by geometry (clash gone, clearance met,
    nothing new hit) before the user sees it. Loop: propose → verify → retry with the failure reason → rank.
 3. **Review** in 3D in the browser (before/after, options 1–3), accept, export the edited IFC or STEP, PDF and BCF.
@@ -41,10 +42,11 @@ The headline is verified model edits. Image-only explanation is a fallback, neve
   `COORDINATE_TO_ORIGIN` is off: federated files share coordinates.
 - Server: Python 3.13 + FastAPI + IfcOpenShell 0.9 (the demo models pin 0.8.5; keep an eye on drift).
   MCP server over the same operations (`server/iris/service.py` is shared by API and MCP).
-- AI: Gemini on Vertex AI through `server/iris/model_client.py`. Roles: Pro for understanding, proposals, chat, plans
-  and report text; Flash for bulk triage, titles, STEP part names, voice (buffered segments, transcribed when silence
-  ends one) and the lighter Show it built judges; an escalation model for second tries and the full judges; the image
-  model for Show it built. Edits made by the model are logged with source `model`.
+- AI: Gemini on Vertex AI through `server/iris/model_client.py`, every role `gemini-3.8-flash` by default but the
+  image model. Roles: the main model for understanding, proposals, chat, plans and report text; Flash for bulk
+  triage, titles, STEP part names, voice (buffered segments, transcribed when silence ends one) and the lighter Show it
+  built judges; an escalation model for second tries and the full judges; the image model for Show it built. Edits
+  made by the model are logged with source `model`.
 - Hosting: the API on Cloud Run service `iris-api`, the web app on Firebase Hosting, deployed on every push to `main`
   (`.github/workflows/deploy.yml`; one-time `deploy/github-setup.sh`). `deploy/deploy.sh` still deploys by hand, one
   origin (web app and API together) when `IRIS_ALLOWED_ORIGINS` is unset. Cloud Storage for persisted files.

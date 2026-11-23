@@ -49,6 +49,8 @@ FORMAT = 1    # the saved file's layout
 LABEL = "Saved AI proposals for this sample"
 MISS = ("The saved AI proposals do not cover this clash as Iris asks about it now, so no fix was prepared: "
         "request another to ask the model live.")
+NO_MODEL = ("No AI model is configured on this server, so this clash was not prepared live: only saved proposals "
+            "replay.")
 
 
 # ---------------------------------------------------------------------------------------------------------- picking
@@ -336,8 +338,9 @@ def run(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str], emit
         saved: Saved | None = None, *, live_model=None, live_hosts=plans._WS_HOSTS,
         limit: int | None = plans.MAX_ITEMS) -> dict:
     """Prepare a fix for each distinct pair these clashes stand for (at most `limit`): the pairs `saved` holds first,
-    replayed (`ReplayModel`, no host reading), then the rest live (`live_model`, else `ws.model`; `live_hosts`, else
-    `ws.hosts_model`). Streams `prepare_start`, the loop's `item` events, a `prepared` event per item as it finishes and
+    replayed (`ReplayModel`, no host reading, no model client), then the rest live (`live_model`, else `ws.model`;
+    `live_hosts`, else `ws.hosts_model`; with no model to ask, `model_client.can_call`, each fails with `NO_MODEL`).
+    Streams `prepare_start`, the loop's `item` events, a `prepared` event per item as it finishes and
     `done` (docs/review-queue.md). Returns {ready, failed, total, seconds, skipped, live, saved, items}."""
     started = time.perf_counter()
     items, skipped = pairs(ws, scene_id, report_id, clash_ids, limit)
@@ -378,7 +381,11 @@ def run(ws: Workspace, scene_id: str, report_id: str, clash_ids: list[str], emit
     if replay:
         plans._resolve_items(ws, scene_id, report_id, replay, "", relay, model=ReplayModel(saved), hosts_model=None,
                              label=saved.model_label)
-    if live:
+    if live and not model_client.can_call(model):   # no credentials: nothing to ask, each fails plainly
+        for it in live:
+            it.error = NO_MODEL
+            relay({"type": "item", "key": it.key, "status": "done", "ok": False, "title": NO_MODEL})
+    elif live:
         plans._resolve_items(ws, scene_id, report_id, live, "", relay, model=model, hosts_model=live_hosts,
                              label=getattr(model, "label", "") or "")
     seconds = round(time.perf_counter() - started, 1)

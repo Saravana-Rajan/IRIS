@@ -10,6 +10,7 @@ Configuration comes from the environment (the repo's .env is read first, real en
     GEMINI_FAST_MODEL        bulk triage, clash titles, part names and voice transcription
     GEMINI_ESCALATION_MODEL  the second, longer try at a clash the main model found no verified fix for
     GEMINI_IMAGE_MODEL       "Show it built": restyles Iris's view of a fix as a presentation render
+                             (defaults: `DEFAULT_MODELS`, gemini-3.8-flash for every text role, as deploy/deploy.sh)
     GEMINI_THINKING_LEVEL    minimal | low (default) | medium | high, or empty for the model's default
     GEMINI_FAST_THINKING_LEVEL        the fast model's (empty: the model's default)
     GEMINI_ESCALATION_THINKING_LEVEL  the second try's (high by default)
@@ -47,14 +48,17 @@ def load_env(path: Path = ENV_FILE) -> None:
 
 # ------------------------------------------------------------------------------------------------- models and prices
 
-# THE defaults for every role, in one place. Checked Nov 11, 2026 against Vertex AI's "Model versions and lifecycle"
-# page (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions): gemini-4-argon is the newest
-# GA flagship (successor to the Pro line, released Oct 13, 2026), gemini-3.8-flash the newest GA Flash (Sep 2, 2026),
-# gemini-3.1-flash-image a GA image model (May 28, 2026; gemini-3-pro-image is the slower, higher-fidelity one).
-# The env var named beside each wins.
-DEFAULT_MODELS = {"proposal": ("GEMINI_MODEL", "gemini-4-argon"),
+# THE defaults for every role, in one place. Owner decision Nov 22, 2026: Gemini 3.8 Flash for every text role (the
+# second try at thinking level high), the same ids and levels `deploy/deploy.sh` sets, so a fresh clone matches the
+# deploy and the saved review-queue set (`samples/prepared/*.json`, keyed to the proposal model and its thinking level).
+# Checked Nov 11, 2026 against Vertex AI's "Model versions and lifecycle" page
+# (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions): gemini-3.8-flash is the newest GA
+# Flash (Sep 2, 2026), gemini-4-argon the newest GA flagship (successor to the Pro line, Oct 13, 2026; chosen with
+# GEMINI_MODEL or GEMINI_ESCALATION_MODEL), gemini-3.1-flash-image a GA image model (May 28, 2026; gemini-3-pro-image is
+# the slower, higher-fidelity one). The env var named beside each wins.
+DEFAULT_MODELS = {"proposal": ("GEMINI_MODEL", "gemini-3.8-flash"),
                   "fast": ("GEMINI_FAST_MODEL", "gemini-3.8-flash"),
-                  "escalation": ("GEMINI_ESCALATION_MODEL", "gemini-4-argon"),
+                  "escalation": ("GEMINI_ESCALATION_MODEL", "gemini-3.8-flash"),
                   "image": ("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image"),
                   "voice": ("GEMINI_FAST_MODEL", "gemini-3.8-flash")}
 DEFAULT_THINKING = {"proposal": ("GEMINI_THINKING_LEVEL", "low"),
@@ -139,6 +143,14 @@ def configured() -> bool:
     """Whether a model can be called at all: a Vertex AI project, or a Gemini API key."""
     load_env()
     return bool(os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GEMINI_API_KEY"))
+
+
+def can_call(model: Any) -> bool:
+    """Whether this model can be asked anything: any stand-in that is not a `GeminiModel` (a saved set's replay, a
+    scripted or test model), a `GeminiModel` given its client, or one with credentials to make one (`configured`)."""
+    if not isinstance(model, GeminiModel):
+        return True
+    return model._client is not None or configured()
 
 
 class Usage:

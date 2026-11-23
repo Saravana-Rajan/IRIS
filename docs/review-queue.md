@@ -42,7 +42,9 @@ together), at most `plans.MAX_ITEMS` per run, and no item is told about the othe
 
 Refusals before the stream: 404 scene, report or an unknown clash id; 422 "Nothing to prepare."; 429 the proposal cap
 (`propose_limit.take_many(who, n_live)`: one per pair prepared live, all or none; a pair replayed from a saved file is
-free; the owner has no caps).
+free; the owner has no caps). With no model that can be called (`model_client.can_call` false: no credentials), the
+live pairs are not charged: each fails with `prepare.NO_MODEL` ("No AI model is configured on this server, so this
+clash was not prepared live: only saved proposals replay."), with no model call, while the saved pairs replay.
 
 Events (NDJSON through `app._ndjson`, `Content-Encoding: identity`), in this order: `prepare_start`; then, saved pairs
 first and live pairs after, each pair's `item` events, its last `item` (`status` done) immediately followed by its
@@ -52,16 +54,16 @@ first and live pairs after, each pair's `item` events, its last `item` (`status`
 |---|---|---|
 | `prepare_start` | `total`, `items` (`[{key, clash_ids, element_a, element_b, label, distance_m, saved}]`), `skipped` (why some clashes cannot be prepared, as words), `saved` (`{label, model, made, title}` of the saved file in use, or null) | first |
 | `item` | as Fix together's `item`: `key`, `status` thinking / checking (`attempt`, `passed`, `seconds`?, `checked`?, `reason`?) / done (`ok`, `title`: the best option's title, or why not) | while an item is worked on |
-| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready` or `failed`), `source` (`live` or `saved`), `options` (every one verified by geometry in this run, best first, each an `agent.Option` with `pair`, `others`, `before`, `preview`, `placements`, `min_clearance_m`, `checked_against`, `model`), `understanding`, `why` (failed only), `tried`, `model` (who proposed: "Gemini Pro", or the saved file's model), `recommended`, `done` (how many have finished, this one included), `total` | each item as it finishes |
+| `prepared` | `key`, `clash_ids`, `element_a`, `element_b`, `label`, `distance_m`, `status` (`ready` or `failed`), `source` (`live` or `saved`), `options` (every one verified by geometry in this run, best first, each an `agent.Option` with `pair`, `others`, `before`, `preview`, `placements`, `min_clearance_m`, `checked_against`, `model`), `understanding`, `why` (failed only), `tried`, `model` (who proposed: the live model's name, "Gemini Flash" by default, or the saved file's model), `recommended`, `done` (how many have finished, this one included), `total` | each item as it finishes |
 | `done` | `ready`, `failed`, `total`, `seconds` | last |
 | `error` | `detail` | the run failed |
 
 `ready` means at least one option passed the geometry check of its kind in this run; `failed` carries the honest why
 (`plans.failure_summary`, a recommendation when the requirements allow no edit, or, for a saved pair whose question
 the file does not hold, `prepare.MISS`: "The saved AI proposals do not cover this clash as Iris asks about it now, so no
-fix was prepared: request another to ask the model live.").
+fix was prepared: request another to ask the model live."; for a live pair with no model, `prepare.NO_MODEL`).
 
-`saved.title` is the sentence to show: "Saved AI proposals for this sample (Gemini Pro, 2026-11-22)".
+`saved.title` is the sentence to show: "Saved AI proposals for this sample (Gemini Flash, 2026-11-22)".
 
 ## Saved results for the unedited sample
 
@@ -70,8 +72,11 @@ A saved file replays the AI's replies, never the geometry's results: every saved
 ranked on the server exactly as live ones are before anyone sees it.
 
 - **Where:** `samples/prepared/*.json` (`IRIS_PREPARED_DIR` overrides); the first whose `key` equals the scene's.
-  None is in the repo yet. `.gitignore` un-ignores `samples/prepared/` and `.dockerignore` ships `samples/**/*.json`,
-  so a set, once made and committed, deploys with the samples.
+  `samples/prepared/Northbank.json` is in the repo (made on `gemini-3.8-flash` at thinking `low`). `.gitignore`
+  un-ignores `samples/prepared/` and `.dockerignore` ships `samples/**/*.json`, so a set, once made and committed,
+  deploys with the samples. The code's defaults (`model_client.DEFAULT_MODELS`, `DEFAULT_THINKING`: proposals on
+  `gemini-3.8-flash` at `low`, as `deploy/deploy.sh` sets them) equal its key, so a fresh clone matches it out of the
+  box, and with no credentials at all it still replays (a replay needs no model and no client).
 - **The file:** `{"format": 1, "key": {...}, "label": "Saved AI proposals for this sample", "model": id,
   "model_label": label, "made": ISO date, "calls": {sha256(system + "\0" + question): reply}, "items": {"a|b":
   {"clash_key", "clash_ids", "label", "options": n verified when made}}}`. `items` says which pairs are replayed
