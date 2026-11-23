@@ -5,8 +5,8 @@ import { clashKey } from "./coordination";
 import { editText, optionKey, rejectionNotes, type Rejection } from "./fixKinds";
 import { describe, STATE_LABEL, stateOf, toDecision, type ClashRef, type Decision } from "./proposalState";
 import {
-  anotherStage, distanceText, emptyPrep, failedWhy, firstOpen, keyAction, nextIndex, pickForReview, pillOf, prepareStore,
-  prepareText, reviewText, savedLabel, scopeOf, type KeyAction, type PrepItem, type PrepState,
+  anotherStage, distanceText, emptyPrep, failedWhy, firstOpen, keyAction, nextIndex, pickForReview, pillOf, plainError,
+  prepareStore, prepareText, reviewText, savedLabel, scopeOf, type KeyAction, type PrepItem, type PrepState,
 } from "./reviewQueueModel";
 import "./review-queue.css";
 
@@ -77,7 +77,7 @@ export function ReviewFixesEntry({ sceneId, reportId, clashes, triage, ticked, f
     <section className="rq-entry" aria-label="Review fixes">
       <button type="button" className="rq-btn rq-primary" disabled={empty && !pick.count} onClick={open}>{prepareText(state, pick.count)}</button>
       <p className={`rq-entry-line${state.running ? " rq-shimmer" : ""}`} role="status">{line}</p>
-      {state.error && <p className="rq-entry-error" role="alert">{state.error}</p>}
+      {state.error && plain({ className: "rq-entry-error", role: "alert", text: state.error })}
       {!state.running && !empty && pick.count > 0 &&
         <button type="button" className="rq-link rq-entry-again" onClick={start}>{`Prepare again (${pick.count})`}</button>}
     </section>
@@ -102,6 +102,13 @@ export interface ReviewQueueProps {
 
 const message = (e: unknown) => (e as Error)?.message || String(e);
 const noLongerPasses = (detail: string) => (/^no longer passes/i.test(detail) ? detail : `No longer passes: ${detail}`);
+
+/** A server's or the browser's error in plain words (`plainError`); its raw words only in the tooltip. */
+function plain({ text, model, className, role }: { text: string; model?: string | null; className?: string; role?: "alert" | "status" }) {
+  const p = plainError(text, model);
+  return <p className={className} role={role} title={p.detail ? `Details: ${p.detail}` : undefined}>{p.text}
+    {p.detail && <Info size={12} className="rq-detail-icon" aria-label={`Details: ${p.detail}`} />}</p>;
+}
 
 export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, reviewer, onReviewer, onKept, onDecisions, onClose }: ReviewQueueProps) {
   const state = usePrepare(sceneId, reportId);
@@ -368,19 +375,24 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
       <RotateCcw size={14} aria-hidden /> Request another</button>);
 
   let left: ReactNode;
+  /** The decision bar: kept in view at the foot of the left pane, however long the card above it. */
+  let foot: ReactNode = null;
   if (!item) {
     left = state.running
       ? <div className="rq-waiting" role="status"><p className="rq-shimmer">Iris is choosing the clashes to prepare…</p></div>
-      : state.error ? <div className="rq-error" role="alert">{state.error}</div>
+      : state.error ? plain({ className: "rq-error", role: "alert", text: state.error })
         : <div className="rq-empty">Nothing prepared yet. Use Prepare fixes on the clash list.</div>;
   } else {
     const dist = distanceText(item.distance_m ?? clash?.distance_m);
-    const title = clash?.title || item.label || clash?.name || "";
+    // One title: the clash's own (model-written) title over its pair by name, else the pair by name; never the raw
+    // "IfcClass 'name' x IfcClass 'name'" label as well.
+    const pair = a && b ? `${names[a] ?? clash?.a.name ?? a} ↔ ${names[b] ?? clash?.b.name ?? b}` : "";
+    const title = clash?.title || pair || clash?.name || item.label || "";
     const header = (
       <header className="rq-clash">
         <h2 className="rq-clash-title"><span className="rq-num">{label}</span> {title}
           {dist && <span className="rq-dist" title="How far the two overlap">{dist}</span>}</h2>
-        {a && b && <p className="rq-pair">{`${names[a] ?? clash?.a.name ?? a} ↔ ${names[b] ?? clash?.b.name ?? b}`}</p>}
+        {clash?.title && pair && <p className="rq-pair">{pair}</p>}
         {item.clash_ids.length > 1 && <p className="rq-more">{`One fix for ${item.clash_ids.length} clashes on this pair`}</p>}
       </header>);
     let body: ReactNode;
@@ -397,9 +409,10 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
       body = (
         <div className="rq-failed">
           <h3>No verified fix found</h3>
-          {(item.why ?? "").split("\n").filter(Boolean).map((line, k) => <p key={k}>{line}</p>)}
+          {plainError(item.why, item.model).detail ? plain({ text: item.why, model: item.model })
+            : (item.why ?? "").split("\n").filter(Boolean).map((line, k) => <p key={k}>{line}</p>)}
           {item.understanding && <p className="rq-source">{`Iris read it as: ${item.understanding}`}</p>}
-          {item.note && <p className="rq-error" role="alert">{item.note}</p>}
+          {item.note && plain({ className: "rq-error", role: "alert", text: item.note, model: item.model })}
           <div className="rq-actions">{anotherButton(item)}</div>
         </div>);
     } else if (option) {
@@ -412,36 +425,38 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
           </div>)}
         {card(option, item)}
         {decided(item)}
-        {item.decision === "pending" && item.note && <p className="rq-error" role="alert">{item.note}</p>}
-        {item.decision === "pending" ? <>
-          <div className="rq-reviewer">{naming
-            ? <form className="rq-reviewer-form" onSubmit={(e) => { e.preventDefault(); saveName(); }}>
-              <input className="rq-input" value={name} maxLength={120} autoFocus autoComplete="name" aria-label="Your name" placeholder="Your name"
-                onChange={(e) => setName(e.target.value)} onBlur={saveName}
-                onKeyDown={(e) => { if (e.key === "Escape") { setName(reviewer); setNaming(false); } }} />
-            </form>
-            : <>Reviewing as <b>{reviewer.trim() || "no name yet"}</b> · <button type="button" className="rq-link"
-              onClick={() => { setName(reviewer); setNaming(true); }}>{reviewer.trim() ? "change" : "add your name"}</button></>}</div>
-          {rejecting
-            ? <form className="rq-reject" onSubmit={(e) => { e.preventDefault(); void reject(why); }}>
-              <input className="rq-input" value={why} maxLength={200} autoFocus aria-label="Why reject it" placeholder="Why reject it? (required)"
-                onChange={(e) => setWhy(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") cancelReject(); }} />
-              <button type="submit" className="rq-btn rq-secondary rq-small" disabled={!why.trim() || !!busy}><X size={14} aria-hidden /> Reject</button>
-              <button type="button" className="rq-btn rq-text rq-small" onClick={cancelReject}>Cancel</button>
-            </form>
-            : <div className="rq-actions">
-              <button type="button" className="rq-btn rq-primary" disabled={!canAccept || !!busy} onClick={() => void accept()}
-                title={canAccept ? "Geometry checks it again before it is kept" : "Only a geometry-validated fix can be accepted"}>
-                <Check size={15} aria-hidden /> {busy === "accept" ? "Accepting…" : "Accept"}</button>
-              <button type="button" className="rq-btn rq-secondary" disabled={!canReject || !!busy} onClick={() => setRejecting(true)}>
-                <X size={15} aria-hidden /> Reject</button>
-              {anotherButton(item)}
-            </div>}
-          <p className="rq-keys"><span><kbd>A</kbd> accept</span><span><kbd>R</kbd> reject</span><span><kbd>←</kbd> <kbd>→</kbd> move</span></p>
-        </> : <div className="rq-actions">{anotherButton(item)}</div>}
+        {item.decision === "pending" && item.note && plain({ className: "rq-error", role: "alert", text: item.note, model: item.model })}
       </>;
+      foot = item.decision === "pending" ? <>
+        <div className="rq-reviewer">{naming
+          ? <form className="rq-reviewer-form" onSubmit={(e) => { e.preventDefault(); saveName(); }}>
+            <input className="rq-input" value={name} maxLength={120} autoFocus autoComplete="name" aria-label="Your name" placeholder="Your name"
+              onChange={(e) => setName(e.target.value)} onBlur={saveName}
+              onKeyDown={(e) => { if (e.key === "Escape") { setName(reviewer); setNaming(false); } }} />
+          </form>
+          : <>Reviewing as <b>{reviewer.trim() || "no name yet"}</b> · <button type="button" className="rq-link"
+            onClick={() => { setName(reviewer); setNaming(true); }}>{reviewer.trim() ? "change" : "add your name"}</button></>}</div>
+        {rejecting
+          ? <form className="rq-reject" onSubmit={(e) => { e.preventDefault(); void reject(why); }}>
+            <input className="rq-input" value={why} maxLength={200} autoFocus aria-label="Why reject it" placeholder="Why reject it? (required)"
+              onChange={(e) => setWhy(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") cancelReject(); }} />
+            <button type="submit" className="rq-btn rq-secondary rq-small" disabled={!why.trim() || !!busy}><X size={14} aria-hidden /> Reject</button>
+            <button type="button" className="rq-btn rq-text rq-small" onClick={cancelReject}>Cancel</button>
+          </form>
+          : <div className="rq-actions">
+            <button type="button" className="rq-btn rq-primary" disabled={!canAccept || !!busy} onClick={() => void accept()}
+              title={canAccept ? "Geometry checks it again before it is kept" : "Only a geometry-validated fix can be accepted"}>
+              <Check size={15} aria-hidden /> {busy === "accept" ? "Accepting…" : "Accept"}</button>
+            <button type="button" className="rq-btn rq-secondary" disabled={!canReject || !!busy} onClick={() => setRejecting(true)}>
+              <X size={15} aria-hidden /> Reject</button>
+            {anotherButton(item)}
+          </div>}
+        <p className="rq-keys"><span><kbd>A</kbd> accept</span><span><kbd>R</kbd> reject</span><span><kbd>←</kbd> <kbd>→</kbd> move</span></p>
+      </> : item.decision !== "accepted" ? <div className="rq-actions">{anotherButton(item)}</div> : null;
     }
-    left = <>{header}{body}{error && <p className="rq-error" role="alert">{error}</p>}</>;
+    const failure = error && plain({ className: "rq-error", role: "alert", text: error, model: item.model });
+    left = <>{header}{body}{!foot && failure}</>;
+    if (foot) foot = <>{failure}{foot}</>;
   }
 
   return (
@@ -470,7 +485,10 @@ export function ReviewQueue({ sceneId, reportId, reportTitle, clashes, viewer, r
         <p className="rq-hint"><Info size={14} aria-hidden /> AI-proposed: check before accepting</p>
       </div>
       <div className="rq-body">
-        <section className="rq-left" aria-label="The proposed fix">{left}</section>
+        <section className="rq-left" aria-label="The proposed fix">
+          <div className="rq-left-scroll">{left}</div>
+          {foot && <div className="rq-decide" role="group" aria-label="Your decision">{foot}</div>}
+        </section>
         <section className="rq-right" aria-label="3D view">
           <div className="rq-view">
             {!viewer?.mountIn && <p className="rq-view-empty">The 3D view is not available here.</p>}

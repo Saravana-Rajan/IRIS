@@ -3921,7 +3921,7 @@ export function App() {
     clashes={report.clashes} triage={listTriage} ticked={checked} fixed={[...Object.keys(fixes), ...Object.keys(reviewed)]}
     onOpen={() => setReviewOpen(true)} />;
   /** Review fixes leads on Clash review (and on a session outside a project); Export is its secondary there. */
-  const reviewLeads = !!sceneId && !!report && !compact && (!pid || projStep === "clash");
+  const reviewLeads = !!sceneId && !!report && (!pid || projStep === "clash");
   const workActions = (
     <div className="work-actions" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
       {reqLabel && !landing && !compact && <button className="btn small req-pill" onClick={() => setReqOpen(true)} data-tip-side="bottom"
@@ -3966,7 +3966,7 @@ export function App() {
       : clash && shownClash ? { text: <><b>#{shownClash.number}</b> {shownClash.title ?? shownClash.name}</>,
         action: hideFix ? { label: "Not a clash", run: () => { showClashTab(); raise(); } }
           : { label: "Propose fixes", run: () => { showClashTab(); void propose(); }, disabled: !a || !b || !sceneId || !!busy, tour: "propose" } }
-      : a && b ? { text: "A and B picked", action: { label: "Propose fixes", run: () => { showClashTab(); void propose(); }, disabled: !sceneId || !!busy } }
+      : a && b ? { text: "A and B picked", action: { label: "Propose fixes", run: () => { showClashTab(); void propose(); }, disabled: !sceneId || !!busy, tour: "propose" } }
       : a ? { text: "A set: now tap element B, then Set as B" }
       : report ? { text: `${report.clashes.length} clash${report.clashes.length === 1 ? "" : "es"} · pick one to fix it`,
         action: listOpen ? undefined : { label: "Clashes", run: () => { setListOpen(true); raise(); } } }
@@ -4971,13 +4971,18 @@ export function App() {
             {reviewOpen && sceneId && report && <ReviewQueue sceneId={sceneId} reportId={report.id} reportTitle={report.title} clashes={report.clashes}
               viewer={viewer.current} reviewer={reviewer} onReviewer={setReviewer} onDecisions={(d) => noteDecisions(d, true)}
               onClose={() => setReviewOpen(false)}
-              onKept={async (kept, { option: o, pair }) => {
+              onKept={async (kept, { option: o, pair, clashIds }) => {
                 // As accept() after its keep: the queue made the keep request (the server tried the fix again first).
                 const sid = sceneId, epoch = sceneEpoch.current;
                 const live = () => sceneEpoch.current === epoch;
                 const groups = kept.groups ?? (kept.pieces?.length ? [kept.pieces] : []);
                 if (kept.decisions?.length) noteDecisions(kept.decisions);
                 staleContext();
+                // The report's evidence, as accept() records it: its clashes' pages and the "applied" count read it.
+                const ids = [...new Set([...clashIds, ...clashIdsOf([[pair[0] ?? null, pair[1] ?? null]])[0]])];
+                const pics = captureFix([o], o.moved.includes(pair[0] ?? "") ? "#d0342c" : "#1f9d3a");
+                setEvidence((ev) => ({ ...ev, ...Object.fromEntries(ids.map((id) => [id, kept.cut === false
+                  ? { ...evidenceOf(o, "recommended", pics), blocked_by: kept.blocked_by ?? "" } : evidenceOf(o, "accepted", pics)])) }));
                 viewer.current?.preview([]);
                 await applyToViewer(sid, kept, groups, live);
                 if (!live()) return;

@@ -283,8 +283,9 @@ the workspace and the pages in it.
   project's models and goes to Clash review; **Import models** when it has none; `data-shell="open-workspace"`), and on
   the workspace `div.work-actions`: the requirements pill, the agent pill, the tablet's **Clashes**, the project's busy
   line, **Save** (`SaveButton`, in a project) and **Report** (with a report), neither on a phone, **Review fixes**
-  (`ReviewFixesEntry`) as the primary action when `reviewLeads` (Clash review or a session outside a project, not on
-  phones and tablets; [docs/review-queue.md](../review-queue.md)), and **Export** with the kept-fix count, primary
+  (`ReviewFixesEntry`) as the primary action when `reviewLeads` (Clash review or a session outside a project, on every
+  layout: on phones and tablets a smaller button in the compact top bar, the logo's name stepping aside;
+  [docs/review-queue.md](../review-queue.md)), and **Export** with the kept-fix count, primary
   where Review fixes does not lead (`export-n`; an icon and the count where the window is 1200 px or narrower). There is no ☰ Menu button: its contents are in Settings.
 - **Search** (`searchHits`, given to `SearchBox`): projects by name (up to 4), the open clash list by number (`#42` or
   `42`), title or element names (up to 10 hits in all), the open models' elements by name or GlobalId (2 characters or
@@ -685,7 +686,9 @@ with a getter for the viewer, a framing function (`frameFix` on the trial's piec
   happenings and applies them only on phone and tablet; with a result it also scrolls the right pane to the first
   option card, no-fix card or recommendation.
 - `SheetBar` (phone only) is the sheet's bar: the handle (tap steps `nextSnap`: peek, half, full, peek; arrow keys
-  step too), the peek line and the Clashes · Fix · Plan · Chat tabs (rendered by `App`). Dragging sets
+  step too), the peek line and the Clashes · Fix · Plan · Chat tabs (rendered by `App`). While the peek line offers
+  Propose fixes (`data-tour="propose"`), the Fix tab's own copy is hidden (`review-queue.css`), so a phone shows it once,
+  on screen at every height of the sheet. Dragging sets
   `--sheet-drag`; release settles with `nearestSnap` (a flick over 0.5 px/ms goes one step its way). Heights: peek is
   the bar's own height (published as `--peek-h`), half is 55% of the window, full is up to the shell's top bar
   (`--shell-top-h`, `frame.css`). The panes under it are `App`'s own left and right panes, placed by CSS.
