@@ -1046,12 +1046,15 @@ a.src:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; bor
 .badge.resize { background: var(--wonder-soft); color: var(--wonder-ink); }
 .badge.penetration { background: #fbebe4; color: #9a3b18; }
 
-/* When nothing passed (App.tsx NoFix) */
-.nofix { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: var(--warn-soft); border: 1px solid #ecd9b4; font-size: 12.5px; line-height: 1.5; }
-.nofix h3 { color: var(--warn); }
-.nofix p { margin: 0; }
-.nofix-blockers { margin: 2px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
-.nofix-actions { justify-content: flex-start; flex-wrap: wrap; }
+/* When nothing passed (App.tsx NoFix): one calm outcome card on white. A designed joint the model read wears the holo
+   edge (holo.css) and a pink wash; Mark as intentional leads, the rest are small. */
+.nofix { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); font-size: 12.5px; line-height: 1.5; }
+.nofix.designed { border-color: var(--accent-line); background: linear-gradient(180deg, var(--surface), var(--accent-soft)); }
+.nofix h3 { color: var(--ink); }
+.nofix p { margin: 0; color: var(--ink-2); }
+.nofix .nofix-detail { padding-left: 9px; border-left: 2px solid var(--accent-line); color: var(--muted); }
+.nofix-primary { margin-top: 2px; }
+.nofix-actions { justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
 /* A second try on Gemini Pro (deep think) (docs/escalation.md): the offer in the no-fix card, the quieter link under options, and
    which model found each option or idea. */
 .escalate-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: var(--radius);
@@ -2264,6 +2267,8 @@ a.pop-item { color: inherit; }
 .reviewer-field input { color: var(--ink); background: var(--surface); }
 details.tried { border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; display: flex; flex-direction: column; gap: 8px; }
 details.tried > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+details.tried > summary .tried-show, details.tried > summary .tried-hide { color: var(--accent-ink); }
+details.tried[open] > summary .tried-show, details.tried:not([open]) > summary .tried-hide { display: none; }
 details.tried[open] > summary { margin-bottom: 8px; }
 details.tried > .pcard + .pcard { margin-top: 8px; }
 .lp-nav-projects { flex: none; }

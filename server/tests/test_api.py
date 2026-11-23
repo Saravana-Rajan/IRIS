@@ -157,6 +157,123 @@ def test_a_scene_or_report_the_server_let_go_says_so(tmp_path, monkeypatch):
     assert r.status_code == 404 and "x-iris-gone" not in r.headers
 
 
+GONE_SID, GONE_RID = "0123456789ab", "fedcba987654"   # ids the server could have made, held by none
+STREAM = {"Accept-Encoding": "gzip, deflate, br, zstd"}   # as a browser asks (CLAUDE.md, "Streams behind a proxy")
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 16
+
+
+@pytest.mark.parametrize("method,path,send,gone", [
+    # Streams: refused before they start, never a 200 stream with an error event.
+    ("post", "/api/scenes/{s}/propose/stream", {"json": {"element_a": "a", "element_b": "b", "report_id": "{r}"}}, "scene"),
+    ("post", "/api/scenes/{s}/prepare/stream", {"json": {"report_id": "{r}", "clash_ids": ["c"]}}, "scene"),
+    ("post", "/api/scenes/{s}/plan/stream", {"json": {"report_id": "{r}", "clash_ids": ["c"]}}, "scene"),
+    ("post", "/api/scenes/{s}/context/stream", {"json": {"element_a": "a", "element_b": "b"}}, "scene"),
+    ("post", "/api/scenes/{s}/built/stream", {"json": {"look": "", "ids": "", "normals": ""}}, "scene"),
+    ("post", "/api/scenes/{s}/detect/stream", {"json": {}}, "scene"),
+    ("post", "/api/scenes/{s}/models/upload/stream", {}, "scene"),
+    ("post", "/api/reports/{r}/triage/stream", {}, "report"),
+    ("post", "/api/reports/{r}/titles/stream", {}, "report"),
+    ("post", "/api/reports/{r}/document/stream", {"json": {}}, "report"),
+    # The rest of a scene's routes, a body the page could send (checked before the body's own checks).
+    ("get", "/api/scenes/{s}", {}, "scene"),
+    ("get", "/api/scenes/{s}/edits", {}, "scene"),
+    ("get", "/api/scenes/{s}/export", {}, "scene"),
+    ("get", "/api/scenes/{s}/files/0", {}, "scene"),
+    ("get", "/api/scenes/{s}/checks", {}, "scene"),
+    ("get", "/api/scenes/{s}/detect/tests", {}, "scene"),
+    ("get", "/api/scenes/{s}/requirements/default", {}, "scene"),
+    ("post", "/api/scenes/{s}/requirements/preview", {"content": b"{}"}, "scene"),
+    ("post", "/api/scenes/{s}/propose", {"json": {"element_a": "a", "element_b": "b"}}, "scene"),
+    ("post", "/api/scenes/{s}/apply", {"json": {"moved": [], "delta_m": [0, 0, 0]}}, "scene"),
+    ("post", "/api/scenes/{s}/fix/apply", {"json": {"option": {}}}, "scene"),
+    ("post", "/api/scenes/{s}/trim/apply", {"json": {"element": "e", "end": "start", "by_m": 0.1}}, "scene"),
+    ("post", "/api/scenes/{s}/offset/check", {"json": {"element": "e", "split_m": [1, 2], "dz_m": 0.1}}, "scene"),
+    ("post", "/api/scenes/{s}/offset/apply", {"json": {"element": "e", "split_m": [1, 2], "dz_m": 0.1}}, "scene"),
+    ("post", "/api/scenes/{s}/plan/apply", {"json": {"options": []}}, "scene"),
+    ("post", "/api/scenes/{s}/edits/undo", {"json": {}}, "scene"),
+    ("post", "/api/scenes/{s}/edit/apply", {"json": {"op": {}}}, "scene"),
+    ("delete", "/api/scenes/{s}/checks/k", {}, "scene"),
+    # A report's routes: the report first where the path names it first.
+    ("get", "/api/reports/{r}/clashes/c/measure/{s}", {}, "report"),
+    ("get", "/api/reports/{r}/match/{s}", {}, "report"),
+    ("get", "/api/reports/{r}/root_causes/{s}", {}, "scene"),
+    ("get", "/api/reports/{r}/patterns/{s}", {}, "scene"),
+    ("post", "/api/reports/{r}/patterns/{s}/triage", {"json": {}}, "scene"),
+    ("get", "/api/reports/{r}/clashes/c/images/0", {}, "report"),
+    ("post", "/api/reports/{r}/clashes/c/images", {"data": {"label": "A"}, "files": {"image": ("a.png", PNG, "image/png")}}, "report"),
+    ("post", "/api/reports/{r}/clashes/c/images", {"data": {"label": "A"}, "files": {"image": ("a.txt", b"no", "text/plain")}}, "report"),
+    ("get", "/api/reports/{r}/triage", {}, "report"),
+    ("post", "/api/reports/{r}/triage/stop", {}, "report"),
+    ("get", "/api/reports/{r}/titles", {}, "report"),
+    ("get", "/api/reports/{r}/teams", {}, "report"),
+])
+def test_every_scene_and_report_route_says_what_is_gone(tmp_path, monkeypatch, method, path, send, gone):
+    """After a restart (or scale to zero) every route of a scene or report the server no longer holds answers a plain
+    404 naming it (`X-Iris-Gone`), streams included, before anything starts: the page reopens it (api.ts goneOf)."""
+    monkeypatch.setattr(app_module, "ws", Workspace(samples=tmp_path))
+    monkeypatch.setattr(app_module, "EXPORTS", tmp_path)
+    fill = lambda v: v.replace("{s}", GONE_SID).replace("{r}", GONE_RID) if isinstance(v, str) else v
+    if "json" in send:
+        send = {**send, "json": {k: fill(v) for k, v in send["json"].items()}}
+    r = getattr(TestClient(app_module.app), method)(fill(path), headers=STREAM, **send)
+    assert r.status_code == 404, r.text
+    assert r.headers["x-iris-gone"] == (f"scene:{GONE_SID}" if gone == "scene" else f"report:{GONE_RID}")
+    assert r.headers["content-type"] == "application/json" and r.json()["detail"].endswith("Open it again.")
+    assert not (tmp_path / GONE_SID).exists()   # nothing made for it (an export's folder)
+
+
+def test_a_held_report_with_a_scene_let_go_names_the_scene(tmp_path, monkeypatch):
+    """A report still held, its scene gone (let go to make room): the routes naming both say it is the scene."""
+    build_clash_fixture(tmp_path / "fixture-clash.ifc")
+    monkeypatch.setattr(app_module, "ws", Workspace(samples=tmp_path))
+    c = TestClient(app_module.app)
+    sid = c.post("/api/scenes", json={"samples": ["fixture-clash.ifc"]}).json()["id"]
+    c.post(f"/api/scenes/{sid}/detect/stream", json={}, headers=STREAM).read()
+    rid = c.get(f"/api/scenes/{sid}").json()["report_id"]
+    cid = c.get(f"/api/reports/{rid}").json()["clashes"][0]["id"]
+    assert c.get(f"/api/reports/{rid}/clashes/{cid}/measure/{sid}").status_code == 200
+    app_module.ws.scenes.pop(sid)
+    for path in (f"/api/reports/{rid}/clashes/{cid}/measure/{sid}", f"/api/reports/{rid}/match/{sid}",
+                 f"/api/reports/{rid}/patterns/{sid}", f"/api/reports/{rid}/root_causes/{sid}"):
+        r = c.get(path)
+        assert r.status_code == 404 and r.headers["x-iris-gone"] == f"scene:{sid}", path
+    for path, body in ((f"/api/scenes/{sid}/plan/stream", {"report_id": rid, "clash_ids": [cid]}),
+                       (f"/api/scenes/{sid}/prepare/stream", {"report_id": rid, "clash_ids": [cid]})):
+        r = c.post(path, json=body, headers=STREAM)
+        assert r.status_code == 404 and r.headers["x-iris-gone"] == f"scene:{sid}", path
+        assert r.headers["content-type"] == "application/json"
+
+
+def test_models_let_go_while_an_upload_came_in_say_so_before_the_stream(tmp_path, monkeypatch):
+    build_clash_fixture(tmp_path / "fixture-clash.ifc")
+    monkeypatch.setattr(app_module, "ws", Workspace(samples=tmp_path))
+    monkeypatch.setattr(app_module, "MODELS", tmp_path / "models")
+    monkeypatch.setattr(app_module, "_take", lambda limit, request: None)
+    c = TestClient(app_module.app)
+    sid = c.post("/api/scenes", json={"samples": ["fixture-clash.ifc"]}).json()["id"]
+    monkeypatch.setattr(app_module.ws, "check_adding", lambda s, paths: app_module.ws.scenes.pop(s))
+    r = c.post(f"/api/scenes/{sid}/models/upload/stream", files=[("files", ("more.ifc", b"ISO-10303-21;"))],
+               headers=STREAM)
+    assert r.status_code == 404 and r.headers["x-iris-gone"] == f"scene:{sid}"
+    assert r.headers["content-type"] == "application/json"
+    assert not any((tmp_path / "models").iterdir())   # the files that came in are deleted
+
+
+def test_a_stream_whose_report_is_gone_names_the_report(tmp_path, monkeypatch):
+    """A scene still held, the report its stream names gone: a 404 naming the report, before the stream."""
+    build_clash_fixture(tmp_path / "fixture-clash.ifc")
+    monkeypatch.setattr(app_module, "ws", Workspace(samples=tmp_path))
+    c = TestClient(app_module.app)
+    sid = c.post("/api/scenes", json={"samples": ["fixture-clash.ifc"]}).json()["id"]
+    for path, body in (("propose/stream", {"element_a": "a", "element_b": "b", "report_id": GONE_RID}),
+                       ("prepare/stream", {"report_id": GONE_RID, "clash_ids": ["c"]}),
+                       ("plan/stream", {"report_id": GONE_RID, "clash_ids": ["c"]}),
+                       ("context/stream", {"element_a": "a", "element_b": "b", "report_id": GONE_RID, "clash_id": "c"})):
+        r = c.post(f"/api/scenes/{sid}/{path}", json=body, headers=STREAM)
+        assert r.status_code == 404 and r.headers["x-iris-gone"] == f"report:{GONE_RID}", path
+        assert r.headers["content-type"] == "application/json"
+
+
 def test_eviction_spares_what_live_links_point_at(tmp_path):
     for name in ("a.ifc", "b.ifc", "c.ifc"):
         build_clash_fixture(tmp_path / name)

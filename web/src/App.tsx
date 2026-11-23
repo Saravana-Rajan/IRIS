@@ -61,7 +61,7 @@ import { ClashHeader } from "./ClashHeader";
 import { CLASS_INFO, SEVERITY_LABEL, STATUS_INFO, clashKey as coordClashKey, overview as coordOverview, passes, resolvedIdsOf, statusOf, undoableFix, type CoordinationFilter } from "./coordination";
 import { ProposalCard } from "./ProposalCard";
 import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";
-import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
+import { DESIGNED_JOINT, STATE_LABEL, decisionWords, designedJoint, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
 import { currentPath, currentProjectRoute, isAppPath, isWorkStep, legacyPath, projectPath, PROJECTS_PATH, projectView, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
@@ -70,6 +70,7 @@ import { addReport, attachScene, createProject, forgetProject, isSample, SAMPLE_
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
 import { browserStorage, DEMOS_PATH, isDemosPath, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
 import { DemosPage } from "./DemosPage";
+import { plainError } from "./reviewQueueModel";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { EmptyState } from "./Holo";
 import { CursorGlow } from "./CursorGlow";
@@ -475,6 +476,12 @@ export function App() {
   const [goneIds, setGoneIds] = useState<{ scene: string | null; report: string | null }>({ scene: null, report: null });
   const goneScene = !!sceneId && goneIds.scene === sceneId, goneReport = !!report && goneIds.report === report.id;
   const gone = goneScene || goneReport ? { scene: goneScene, report: goneReport } : null;
+  // Reconnecting by itself (docs/architecture/12-web-app.md, "Models the server let go of"): one automatic try per
+  // loss (`autoReopen`: what was lost and when), never another within a minute of the last; then the banner.
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectingNow = useRef(false);   // open() and the project's open word their busy line for it
+  const autoReopen = useRef<{ key: string; at: number } | null>(null);
+  const restoreClash = useRef<{ number: number | null; a: string | null; b: string | null; failed: string | null } | null>(null);
   const sceneUploaded = useRef(false);   // the open models are the visitor's own files: only they can pick them again
   // Adding and removing models (docs/add-and-remove-models.md). The server's layout of the open models (bumped by each
   // add or remove): a reply on another layout means another tab or an agent changed the list, so the files are loaded
@@ -1204,6 +1211,19 @@ export function App() {
     setReviewed((r) => ({ ...r, ...Object.fromEntries(ids.filter((id) => !fixes[id]).map((id) => [id, { kind, note }])) }));
     setChecked((s) => { const n = new Set(s); for (const id of ids) n.delete(id); return n; });
   }
+  // A clash marked intentional stays Reviewed wherever its decision is: a reopened project's edit log (or a re-run that
+  // renumbered the report) brings the mark back, by the clash's stable key.
+  useEffect(() => {
+    const marks = new Map<string, string>();
+    for (const d of journal?.decisions ?? []) if (d.decision === "by_design") marks.set(d.clash_key, d.reason ?? "Marked as intentional");
+    if (!report || !marks.size) return;
+    const add: Record<string, Review> = {};
+    for (const c of report.clashes) {
+      const note = reviewed[c.id] || fixes[c.id] ? undefined : marks.get(coordClashKey(c, report.title));
+      if (note !== undefined) add[c.id] = { kind: "by_design", note };
+    }
+    if (Object.keys(add).length) setReviewed((r) => ({ ...add, ...r }));
+  }, [journal, report, reviewed, fixes]);
 
   /** Take the camera to a report clash: where its elements meet, or its reported point. */
   /** Take the views to a clash (every pick does, unless Fly to clash is off; `force`: F, Go to clash). */
@@ -1490,7 +1510,7 @@ export function App() {
     pilot.current?.cancel();
     setChatAsk(undefined);
     setContext(null); setContextChosen(null); setContextNames({}); setAcknowledged([]); setViewContext(false); setViewPlan(false);
-    const title = existing ? "Reopening your session…" : upload ? `Uploading ${names.length} model${names.length > 1 ? "s" : ""}${hasStep ? " and converting the STEP" : ""}…`
+    const title = reconnectingNow.current ? RECONNECTING : existing ? "Reopening your session…" : upload ? `Uploading ${names.length} model${names.length > 1 ? "s" : ""}${hasStep ? " and converting the STEP" : ""}…`
       : hasStep ? "Opening the STEP model…" : `Loading ${names.length} model${names.length > 1 ? "s" : ""}…`;
     setBusy(title);
     let load: LoadProgress = { title: title.replace(/…$/, ""), files: shortNames(names), step: "server", fetched: 0, bytes: 0, drawn: 0, elements: 0, started: Date.now(), ends: {} };
@@ -1705,10 +1725,11 @@ export function App() {
    * with the new scene once its kept list is read and before any check (the sample drawings); when it says it failed
    * (false), no check runs, so its error stays on screen (the Clash step's setup card checks later). Resolves with the
    * scene id. */
-  async function openProjectScene(p: Project, opened?: (sid: string) => Promise<boolean>): Promise<string | null> {
+  async function openProjectScene(p: Project, opened?: (sid: string) => Promise<boolean>,
+                                  label = "Opening the project…"): Promise<string | null> {
     if (busy || projectBusy) return null;
     autoOpened.current = p.id;
-    setProjectBusy("Opening the project…"); setError(null);
+    setProjectBusy(label); setError(null);
     let id: string | null = null;
     try {
       const o = await openProject(p.id);
@@ -1925,7 +1946,9 @@ export function App() {
   }, [report, sceneId, matches, clash, a, b]);
 
   // Each clash's finished proposal, as its row says it: how many verified fixes (0: none found).
-  const readyCounts = useMemo(() => Object.fromEntries(Object.entries(doneProposals).map(([id, d]) => [id, d.proposal.options.length])),
+  // A run that stopped before a result found nothing either way: its row says nothing rather than "No fix found".
+  const readyCounts = useMemo(() => Object.fromEntries(Object.entries(doneProposals).filter(([, d]) => !d.proposal.error)
+    .map(([id, d]) => [id, d.proposal.options.length])),
     [doneProposals]);
   /** A row's View: its clash on screen with the Clash panel in front, scrolled to its options. */
   function viewProposal(c: ReportClash) {
@@ -2563,14 +2586,16 @@ export function App() {
         setQ((x) => ({ ...x, attempts: [...x.attempts, attempt] }));
       }
     };
-    const finish = (result: Proposal | null) => {
+    /** `failure`: why it stopped before a result, in plain words. A first try that never got a result tried nothing:
+     * its proposal says why, never "no edit passed" (Nov 23: a 404 after a restart read "Iris tried 0 ideas"). */
+    const finish = (result: Proposal | null, failure: string | null = null) => {
       if (superseded()) return;
       if (result) trace.add({ ...result, type: "result" });
       trace.end(result ? null : "Stopped before a result");
       const show = () => {
         if (!live()) { ended(); return; }
         // A second try that failed or was refused: the first try's fixes stand.
-        const final = result ?? first;
+        const final = result ?? first ?? (q && failure ? { ...q, error: failure } : null);
         if (final) q = final;
         if (result?.recommendation) noteRecommendation(result.recommendation, [a, b] as const);
         p = { ...p, phase: "done", checking: null }; keep();
@@ -2634,6 +2659,13 @@ export function App() {
 
   /** Propose fixes for the pair (Gemini Pro, up to three rounds). */
   function propose() { return runProposal(false); }
+  /** Why a proposal stopped before a result, in plain words: the models gone (a restart: the page reconnects), no
+   * answer, a server or model failure (`plainError`). */
+  function proposeFailure(e: unknown): string {
+    const raw = (e as Error)?.message ?? String(e);
+    if ((e as { status?: number })?.status === 404 && goneWords.current.has(raw)) return RESTARTED_BEFORE;
+    return plainError(raw, labels.proposal).text;
+  }
   /** A second, longer try on Gemini Pro (deep think), reading this try (docs/escalation.md): after no fix, or for a better one. */
   function escalate() { return runProposal(true); }
 
@@ -2657,11 +2689,15 @@ export function App() {
     // A clash Iris found: give the agent its views, as a Navisworks report would (waiting a few seconds at most).
     if (on && report?.origin === "iris" && !on.images.length && !views[on.id])
       await Promise.race([captureViews(report.id, on.id, ea, eb), new Promise((r) => setTimeout(r, 4000))]);
-    let result: Proposal | null = null;
+    let result: Proposal | null = null, failure: string | null = null;
     const notes = pick ? "" : rejectionNotes(rejected);   // what the person set aside for this pair, and why
     try { result = await api.proposeStream(sceneId, ea, eb, from, onEvent, second, notes); }
-    catch (e) { if (agentRun.current === run) { setError((e as Error).message); tracker.trace.add({ type: "error", detail: (e as Error).message }); } }
-    finally { finish(result); }
+    catch (e) {
+      // Its card says why in plain words (`ProposeFailed`); the raw words go to Workings, never the header's error line.
+      failure = proposeFailure(e);
+      if (agentRun.current === run) tracker.trace.add({ type: "error", detail: (e as Error).message });
+    }
+    finally { finish(result, failure); }
   }
 
   /** Play a recorded proposal (the tour's fallback when the live one fails or is slow) through the same viewer and
@@ -3412,13 +3448,70 @@ export function App() {
     setGoneHandler((g) => {
       if (g.detail) goneWords.current.add(g.detail);
       if (g.id !== holding.current[g.kind]) return;   // a late answer about models or a report since replaced
-      setGoneIds((was) => ({ ...was, [g.kind]: g.id }));
-      // A restart drops both: ask after the models too, so the notice says what is really gone.
+      // A restart drops both: ask after the models first (their 404 says so too), so the notice and the reconnect
+      // know what is really gone.
       const sid = holding.current.scene;
-      if (g.kind === "report" && sid) api.sceneInfo(sid).catch(() => undefined);
+      if (g.kind === "report" && sid) {
+        void api.sceneInfo(sid).catch(() => undefined).finally(() => setGoneIds((was) => ({ ...was, report: g.id })));
+        return;
+      }
+      setGoneIds((was) => ({ ...was, [g.kind]: g.id }));
     });
     return () => { setGoneHandler(null); };
   }, []);
+  /** Whether the page can open again by itself what the server let go of: the project's saved models, sample models
+   * (by name), Iris's own check or a sample report. The visitor's own files only they can pick again. */
+  const reconnectable = () => !!gone && (gone.scene ? (projectOpen && !!projectHere?.files.length) || reopenable()
+    : report?.origin === "iris" || !!(report && sampleReports.current[report.id]));
+  // Gone: reconnect by itself, once (`autoReopen`); a second loss within a minute, or a try that failed, leaves the
+  // banner (headerStatus) and its button.
+  useEffect(() => {
+    if (!gone || busy || projectBusy || detecting || reconnectingNow.current) return;
+    const key = `${goneIds.scene ?? ""}|${goneIds.report ?? ""}`, last = autoReopen.current;
+    if (last && (last.key === key || Date.now() - last.at < 60_000)) return;
+    if (!reconnectable()) return;
+    autoReopen.current = { key, at: Date.now() };
+    void reconnect();
+  }, [goneScene, goneReport, busy, projectBusy, detecting]);  // eslint-disable-line react-hooks/exhaustive-deps
+  /** Open again what the server let go of, saying so in the header ("Reconnecting your models…"): inside a project
+   * its saved models (the project's own open), else `reopenGone`. The clash on screen comes back by its pair, else
+   * its #N, once the clashes are listed again (`restoreClash`), with why its proposal stopped and Try again. */
+  async function reconnect() {
+    const g = gone;
+    if (!g || busy || projectBusy || reconnectingNow.current) return;
+    // A proposal running now asked after the models the server let go of: it stops with nothing tried.
+    const failed = proposal?.error ?? (proposing ? RESTARTED_BEFORE : null);
+    restoreClash.current = clash ? { number: clash.number ?? null, a: clash.a.global_id, b: clash.b.global_id,
+      failed: failed ? `${failed === RESTARTED_BEFORE ? RESTARTED_BEFORE : "The last try stopped before a result."} Your models are open again: try again.` : null } : null;
+    const lost = sceneId;
+    reconnectingNow.current = true; setReconnecting(true);
+    try {
+      if (g.scene && projectOpen && projectHere?.files.length) await openProjectScene(projectHere, undefined, RECONNECTING);
+      else await reopenGone();
+    } finally { reconnectingNow.current = false; setReconnecting(false); }
+    // It did not take (the same models still lost): the banner says so, with its button, not the open's own error.
+    if (g.scene && holding.current.scene === lost) setError(null);
+  }
+  // The clash that was on screen, back in the list made again: selected, with why its last proposal stopped.
+  useEffect(() => {
+    const want = restoreClash.current;
+    if (!want || !report || reconnecting || gone) return;
+    restoreClash.current = null;
+    const pair = want.a && want.b ? [want.a, want.b].sort().join("|") : null;
+    const c = (pair ? report.clashes.find((x) => [x.a.global_id, x.b.global_id].sort().join("|") === pair) : undefined)
+      ?? (want.number != null ? report.clashes.find((x) => x.number === want.number) : undefined);
+    if (!c) return;
+    if (clash?.id !== c.id) selectClash(c);
+    stoppedNote.current = want.failed ? { id: c.id, text: want.failed } : null;
+  }, [report?.id, reconnecting, goneScene, goneReport]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Why its last proposal stopped, once that clash is the one on screen (the address may select it again first).
+  const stoppedNote = useRef<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    const note = stoppedNote.current;
+    if (!note || clash?.id !== note.id || proposal) return;
+    stoppedNote.current = null;
+    setProgress(null); setProposal({ understanding: "", options: [], attempts: [], error: note.text });
+  }, [clash?.id, proposal]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {  // the fixes kept went with the models: the list and the report's evidence stop claiming them
     if (!goneScene) return;
     setFixes({});
@@ -3426,7 +3519,7 @@ export function App() {
   }, [goneScene]);
   /** The open models can be opened again by name: samples, not the visitor's own files. */
   const reopenable = () => !sceneUploaded.current && sceneFiles.length > 0 && sceneFiles.every((f) => samples.includes(f));
-  const reopenLabel = gone?.scene ? (reopenable() ? "Open them again" : "Pick your files again") : "Open it again";
+  const reopenLabel = gone?.scene ? (reconnectable() ? "Reopen them" : "Pick your files again") : "Open it again";
   // A picture cannot be drawn again on models the server let go of: Show it built offers to open them instead.
   const builtReopen = gone?.scene ? { label: reopenLabel, onClick: () => void reopenGone() } : undefined;
   /** Open again what the server let go of: the same sample models, then the same clashes (Iris's check run again, or
@@ -3435,6 +3528,7 @@ export function App() {
     const g = gone, r = report;
     if (!g || busy) return;
     let sid = sceneId;
+    if (g.scene && projectOpen && projectHere?.files.length && !reconnectingNow.current) { await reconnect(); return; }
     if (g.scene) {
       if (!reopenable()) { modelInput.current?.click(); return; }
       sid = await open(sceneFiles) ?? null;
@@ -3973,7 +4067,7 @@ export function App() {
       {layout === "tablet" && !landing && (report || sceneId) && <button className={`btn small ${listOpen ? "on" : ""}`} data-tour="drawer"
         aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
         <List size={15} aria-hidden /> Clashes{report ? <span className="badge-n">{(listReport ?? report).clashes.length}</span> : null}</button>}
-      {projectBusy && projectBusy !== "Saving…" && layout !== "phone" && <span className="hint work-busy"><i className="spinner" aria-hidden /> {projectBusy}</span>}
+      {projectBusy && projectBusy !== "Saving…" && !reconnecting && layout !== "phone" && <span className="hint work-busy"><i className="spinner" aria-hidden /> {projectBusy}</span>}
       {pid && projectHere && layout !== "phone" && <SaveButton onSave={saveProjectNow} saving={projectBusy === "Saving…"} disabled={!projectOpen || !!projectBusy || !!busy}
         tip={projectOpen ? "Save the edited models, the edit log and the decisions as the project's next saved state" : "Open the project's models first"} />}
       {report && layout !== "phone" && <button type="button" className="btn small" data-tour="report" onClick={() => { setDocOpen(true); setDocReady(false); }}>
@@ -4431,10 +4525,13 @@ export function App() {
   const headerStatus = errorShown ? (
       <span className="status-line status-error" role="alert"><TriangleAlert size={14} aria-hidden /><span className="status-text" title={errorShown}>{errorShown}</span>
         <button type="button" className="ibtn" aria-label="Dismiss" onClick={() => setError(null)}><X size={13} aria-hidden /></button></span>)
+    : reconnecting ? (
+      <span className="status-line status-work status-reconnect" role="status"><ApertureMark size={18} working />
+        <b>Reconnecting your models…</b><span className="status-text">(the server restarted)</span></span>)
     : gone && !busy && !detecting ? (
       <span className="status-line status-gone" role="alert">
-        <span className="status-text" data-tip={`It restarted, or made room for other visitors.${gone.scene ? " The fixes you kept went with them." : ""}`}>
-          The server no longer holds your {gone.scene ? "models" : "clash report"}</span>
+        <span className="status-text" data-tip={`It restarted or scaled down, or made room for other visitors.${gone.scene ? " The fixes you kept and did not save went with them." : ""}`}>
+          {gone.scene ? "The server restarted, so your open models were closed." : "The server no longer holds your clash report."}</span>
         <button type="button" className="btn small" onClick={() => void reopenGone()}><RotateCcw size={13} aria-hidden /> {reopenLabel}</button></span>)
     : pilotStatus ? (
       <span className={`status-line status-pilot ${pilotStatus.state}${pilotStatus.driving ? " ai-shimmer" : ""}`}>
@@ -4634,10 +4731,11 @@ export function App() {
                 </div>
               )}
               {compareBar}
-              {compact && gone && !busy && !detecting && (   // a reopen's check may still ask after the old report: not news
+              {compact && reconnecting && !busy && <div className="overlay live" role="status"><i className="spinner" aria-hidden />{RECONNECTING}</div>}
+              {compact && gone && !busy && !detecting && !reconnecting && (   // a reopen's check may still ask after the old report: not news
                 <div className="overlay gone" role="alert">
-                  <span><b>The server no longer holds your {gone.scene ? "models" : "clash report"}</b> (it restarted, or made
-                    room for other visitors).{gone.scene ? " The fixes you kept went with them." : ""}</span>
+                  <span><b>{gone.scene ? "The server restarted, so your open models were closed." : "The server no longer holds your clash report."}</b>
+                    {gone.scene ? " The fixes you kept and did not save went with them." : " (It restarted, or made room for other visitors.)"}</span>
                   <button className="btn small primary" onClick={() => void reopenGone()}><RotateCcw size={13} aria-hidden /> {reopenLabel}</button>
                 </div>
               )}
@@ -4794,9 +4892,13 @@ export function App() {
                   card={<ProposalCard item={proposal.recommendation} state="unverified" names={namesFor([proposal.recommendation.element])} busy={!!busy}
                     onReject={(why) => void recordDecision(proposal.recommendation!, "rejected", why)} onAnother={() => requestAnother(proposal.recommendation!)}
                     decided={lastDecision(clashRefFor(clash?.id)?.key, proposal.recommendation.title, "rejected")} />} />}
-                {proposal && !proposing && !proposal.options.length && !proposal.recommendation && <NoFix proposal={proposal} onRetry={propose}
+                {proposal && !proposing && !proposal.options.length && !proposal.recommendation && (proposal.error || !proposal.attempts.length
+                  ? <ProposeFailed proposal={proposal} onRetry={gone ? undefined : propose} />
+                  : <NoFix proposal={proposal} onRetry={propose}
                   onEscalate={canEscalate && !proposal.escalated ? () => void escalate() : undefined} wonder={wonder}
-                  onFlag={clash ? () => review([clash.id], "author", "No verified fix: needs the model's author") : undefined} />}
+                  triage={clash ? shownTriage[clash.id] : null} marked={clash ? reviewed[clash.id]?.kind ?? null : null}
+                  onMark={clash ? (why) => { review([clash.id], "by_design", why); void recordDecision(DESIGNED_JOINT, "by_design", why, clashRefFor(clash.id)); } : undefined}
+                  onFlag={clash ? () => review([clash.id], "author", "No verified fix: needs the model's author") : undefined} />)}
                 {clash && proposal && !proposing && proposal.options.length > 0 && proposal.options.every((o) => o.cleanup) && (
                   <div className="cleanup-note">
                     <b>Model cleanup, not a coordination clash</b>
@@ -4861,7 +4963,7 @@ export function App() {
                 })}
                 {proposal && !proposing && proposal.attempts.some((t) => !t.passed) && (
                   <details className="tried">
-                    <summary>What was tried · {proposal.attempts.filter((t) => !t.passed).length} refused by the geometry check</summary>
+                    <summary>{triedLine(proposal.attempts.filter((t) => !t.passed).length)} · <span className="tried-show">Show</span><span className="tried-hide">Hide</span></summary>
                     {proposal.attempts.filter((t) => !t.passed).map((t, k) => (
                       <ProposalCard key={k} item={t} state={stateOf(t)} names={namesFor(t.hit_ids ?? [])} />))}
                   </details>)}
@@ -5153,6 +5255,23 @@ function Recommended({ rec, advice, requirements, onRequirements, model, card }:
   );
 }
 
+/** The header's words while the page opens again what a restart let go of (`reconnect`). */
+const RECONNECTING = "Reconnecting your models… (the server restarted)";
+/** A proposal that never ran because the models were gone: the page reconnects, then offers Try again. */
+const RESTARTED_BEFORE = "The server restarted before Iris could propose fixes, so nothing was tried.";
+
+/** A proposal that stopped before a result (no answer, the models gone, a server or model failure): why, in plain
+ * words, and Try again. Never "no edit passed": nothing was tried on the geometry. */
+function ProposeFailed({ proposal, onRetry }: { proposal: Proposal; onRetry?: () => void }) {
+  const why = proposal.error || (proposal.advice ? `${proposal.advice}` : "Iris stopped before it tried any edit on the model.");
+  return (
+    <div className="propose-failed" role="status" data-propose="failed">
+      <p><b>No fixes yet.</b> {why}</p>
+      {onRetry && <button type="button" className="btn small" onClick={onRetry}><RotateCcw size={13} aria-hidden /> Try again</button>}
+    </div>
+  );
+}
+
 /** Scroll the panel `el` is in (its nearest scrolling box, never the page) to bring `el` near its top, unless it is
  *  near the top already. Works in a popped-out window: everything is read from the element's own window. */
 function scrollInPane(el: HTMLElement) {
@@ -5167,9 +5286,19 @@ function scrollInPane(el: HTMLElement) {
   }
 }
 
-/** When nothing passed: what Iris learned, so the clash reaches a person with a head start, not a dead end. */
-function NoFix({ proposal, onRetry, onFlag, onEscalate, wonder }: {
-  proposal: Proposal; onRetry?: () => void; onFlag?: () => void; onEscalate?: () => void; wonder: string;
+/** "What was tried" folded: how many ideas the geometry check refused. */
+function triedLine(k: number): string {
+  return `${k} idea${k === 1 ? "" : "s"} refused by the geometry check`;
+}
+
+/** When nothing passed: one calm outcome, never a wall of failures. A designed joint (the triage verdict held for the
+ * clash, else the proposing model's own plain words: proposalState.designedJoint) reads as that, with Mark as
+ * intentional (`onMark(reason)`: reviewed by design, and a `by_design` decision); otherwise "No safe move found" and
+ * what stood in the way. Then a deep think, propose again, or flag it for the model's author. `marked`: how the clash
+ * was reviewed, shown as a chip in place of its button. The refused ideas are in "What was tried", below. */
+function NoFix({ proposal, triage, marked, onMark, onRetry, onFlag, onEscalate, wonder }: {
+  proposal: Proposal; triage?: TriageVerdict | null; marked?: Review["kind"] | null; onMark?: (reason: string) => void;
+  onRetry?: () => void; onFlag?: () => void; onEscalate?: () => void; wonder: string;
 }) {
   const n = proposal.attempts.length;
   const second = proposal.escalated ? proposal.attempts.filter((t) => t.model === wonder).length : 0;
@@ -5180,28 +5309,42 @@ function NoFix({ proposal, onRetry, onFlag, onEscalate, wonder }: {
     }
   }
   const top = [...counts.entries()].sort((x, y) => y[1] - x[1]).slice(0, 2);
-  const blockers = proposal.attempts.filter((t) => !t.passed).slice(0, 3);
-  const kinds = new Set(proposal.attempts.map((t) => t.kind));
-  const lesson = kinds.has("offset") && !kinds.has("trim") ? "Whole moves and offsets are blocked along this run. A local trim, a different element, or a design change is likely needed." : kinds.has("trim") ? "Even cutting back at the joint still hits something. This needs a person to decide which element gives way." : "Every direction tried hits something else. Try the other element, or a smaller move by hand below.";
-  const next = proposal.advice ? "Follow the advice below, then propose again." : lesson;
+  const designed = designedJoint(proposal, triage);
+  const who = designed?.by === "triage" ? "Triage" : proposal.model || "The model";
+  const advice = proposal.advice?.trim() ?? "";
+  // The words that said so, unless the page already shows them whole (the Understanding above, or the advice here).
+  const detail = designed?.text && designed.text !== proposal.understanding?.trim() && !advice.includes(designed.text) ? designed.text : "";
+  const reason = `Intentional: designed joint.${designed?.text ? ` ${designed.text}` : ""}`.slice(0, 600);
   return (
-    <div className="nofix">
-      <h3>No edit passed the geometry check</h3>
-      <p>
-        Iris tried {n} idea{n === 1 ? "" : "s"} and left the model unchanged.
-        {second > 0 && <> {wonder} took a second, longer look and tried {second} of them.</>}
-        {top.length > 0 && <> What stood in the way: {top.map(([cls, k], i) => (
-          <span key={cls}>{i ? ", and " : ""}<b>{cls.replace(/^Ifc/, "")}</b> elements in {k === n ? "every attempt" : `${k} of ${n}`}</span>))}.</>}
-      </p>
-      {proposal.advice && <p><b>What decides it:</b> {proposal.advice}</p>}
-      {blockers.length > 0 && <ul className="nofix-blockers">{blockers.map((t, i) => <li key={i}><b>{t.title}</b> — {t.reason}</li>)}</ul>}
-      <p><b>What this teaches:</b> {next}</p>
-      {onEscalate && <div className="escalate-card">
-        <button className="btn primary" data-tour="escalate" onClick={onEscalate}><Sparkles size={15} aria-hidden /> Ask for a deep think</button>
-        <span className="hint">A larger model takes a second, longer look, with everything this try learned. It may move a
-          neighbouring service too. About a minute.</span>
-      </div>}
-      <div className="row nofix-actions">{onRetry && <button className="btn small" onClick={onRetry}>Propose again</button>}{onFlag && <button className="btn small" onClick={onFlag}>Flag for the model's author</button>}<span className="hint">Full detail in the activity table below.</span></div>
+    <div className={`nofix${designed ? " designed" : ""}${designed?.by === "model" ? " holo-edge" : ""}`} role="status" data-nofix={designed ? "designed" : "blocked"}>
+      {designed ? <>
+        <h3>Looks like a designed joint, not an error.</h3>
+        <p>{who} reads this as an intentional connection, and no move passed the geometry check without hitting something else.</p>
+        {detail && <p className="nofix-detail">{detail}</p>}
+      </> : <>
+        <h3>No safe move found</h3>
+        <p>
+          Every idea Iris tried would hit something else.
+          {second > 0 && <> {wonder} took a second, longer look and tried {second} of them.</>}
+          {top.length > 0 && <> What stood in the way: {top.map(([cls, k], i) => (
+            <span key={cls}>{i ? ", and " : ""}<b>{cls.replace(/^Ifc/, "")}</b> elements in {k === n ? "every attempt" : `${k} of ${n}`}</span>))}.</>}
+        </p>
+      </>}
+      {advice && <p><b>What decides it:</b> {advice}</p>}
+      {designed && (marked === "by_design"
+        ? <span className="chip ok nofix-marked"><CircleCheck size={12} aria-hidden /> Marked as intentional</span>
+        : onMark && <div className="row nofix-primary"><button type="button" className="btn primary" onClick={() => onMark(reason)}
+          data-tip="Reviewed: by design, not a conflict. Recorded with your name and the reason.">
+          <CircleCheck size={15} aria-hidden /> Mark as intentional</button></div>)}
+      <div className="row nofix-actions">
+        {onEscalate && <button type="button" className={`btn small${designed ? "" : " primary"}`} data-tour="escalate" onClick={onEscalate}
+          data-tip="A larger model takes a second, longer look, with everything this try learned. It may move a neighbouring service too. About a minute.">
+          <Sparkles size={13} aria-hidden /> Ask for a deep think</button>}
+        {onRetry && <button type="button" className="btn small" onClick={onRetry}><RotateCcw size={13} aria-hidden /> Propose again</button>}
+        {!designed && marked === "by_design" && <span className="chip ok"><CircleCheck size={12} aria-hidden /> Marked as intentional</span>}
+        {marked === "author" ? <span className="chip">Flagged for the model's author</span>
+          : onFlag && <button type="button" className="btn small ghost" onClick={onFlag}>Flag for the model's author</button>}
+      </div>
     </div>
   );
 }
@@ -5261,6 +5404,8 @@ function coordFilterLabel(f: CoordinationFilter): string {
 /** One decision as the project's activity says it: "#42: Rejected "Raise the duct" (Geometry-validated ✓), by Ana: too low". */
 function decisionLine(d: Decision): string {
   const w = decisionWords({ ...d, at: toMs(d.at) });
+  // A clash marked intentional is about the clash, not an option: "#108: Marked as intentional, by Ana: …".
+  if (d.decision === "by_design") return `${d.number ? `#${d.number}: ` : ""}${w.verb}, by ${w.who}${w.why ? `: ${w.why}` : ""}`;
   return `${d.number ? `#${d.number}: ` : ""}${w.verb} "${d.option.title}" (${STATE_LABEL[d.state] ?? d.state}), by ${w.who}${w.why ? `: ${w.why}` : ""}`;
 }
 

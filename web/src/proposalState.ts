@@ -8,7 +8,9 @@ import { editText, hostRows, kindLabel, needsText, recEditText, reviewText } fro
  * proposal's `options` (nothing reaches that list without passing `verify.check`), or an attempt the check passed.
  * Nothing the model wrote (title, rationale, advice) is ever read to decide it. */
 export type ProposalState = "ai_proposed" | "geometry_validated" | "failed_validation" | "unverified";
-export type DecisionKind = "accepted" | "rejected" | "modified" | "requested_another";
+/** `by_design`: the clash was reviewed and marked intentional (a designed joint, not an error); it is recorded against
+ * `DESIGNED_JOINT`, never against one of the model's ideas. */
+export type DecisionKind = "accepted" | "rejected" | "modified" | "requested_another" | "by_design";
 
 /** A decision on one proposal, as the journal keeps it (docs/engineer-workflow.md, "Decisions (journal)"). */
 export interface Decision {
@@ -233,6 +235,7 @@ export function toDecision(item: ProposalItem, state: ProposalState, decision: D
 
 const VERB: Record<DecisionKind, string> = {
   accepted: "Accepted", rejected: "Rejected", modified: "Modified by hand", requested_another: "Requested another",
+  by_design: "Marked as intentional",
 };
 
 /** A recorded decision in words: who, when, why. */
@@ -246,4 +249,52 @@ export function decisionWords(d: Decision): { verb: string; who: string; when: s
     iso: ok ? date.toISOString() : "",
     ...(d.reason?.trim() ? { why: d.reason.trim() } : {}),
   };
+}
+
+// ------------------------------------------------------------------------------------------------- a designed joint
+
+/** What "Mark as intentional" records its decision against: the joint kept as designed. Never tried on the geometry
+ * (`check.geometry: false`), so it is always Unverified and can never be accepted as a fix. */
+export const DESIGNED_JOINT: Checked = { title: "Designed joint, no edit", kind: "as_designed", check: { geometry: false } };
+
+/** What says a clash Iris found no fix for is a designed joint, and the words that say it. */
+export interface Designed { by: "triage" | "model"; text: string }
+
+// Only plain statements that the overlap is meant: "by design", "an intentional (bearing) joint", "the overlap is
+// intentional", "designed to interface", "not a real clash". A sentence that negates or hedges it first ("not by
+// design", "if this is by design", "confirm whether …") does not count; "unintentional" never matches.
+const DESIGNED_WORDS = [
+  /\bby design\b/i,
+  /\bintentional(?:ly)?\s+(?:[\w-]+\s+){0,2}?(?:joints?|connections?|interfaces?|bearings?|overlaps?|contacts?|junctions?|embedments?|seats?|seating|details?)\b/i,
+  /\b(?:is|are|looks|seems|appears)\s+(?:(?!not\b|never\b|hardly\b)\w+\s+)?intentional\b/i,
+  /\bintentionally\s+(?:overlap|embed|cast|bear|sit|connect|join|built|model|fram|seat)\w*/i,
+  /\bdesigned\s+to\s+(?:interface|bear|sit|rest|connect|join|meet|frame|engage|overlap|interlock|be\s+(?:cast|embedded|connected|joined|built|seated))\b/i,
+  /\b(?:designed|intended)\s+(?:joint|connection|interface|bearing|junction)\b/i,
+  /\bnot\s+an?\s+(?:real|true|genuine|actual)\s+(?:clash|conflict)\b/i,
+];
+const NEGATED = /(?:\b(?:not|no|never|nor|without|unlikely)|n't)\s+(?:\S+\s+){0,2}$/i;
+const HEDGED = /\b(?:if|unless|whether|may|might|could|perhaps|possibly|confirm|check|verify|ask)\b/i;
+
+/** One sentence says, plainly, that the overlap is meant. */
+export function saysDesigned(sentence: string): boolean {
+  return DESIGNED_WORDS.some((re) => {
+    const m = re.exec(sentence);
+    if (!m) return false;
+    const before = sentence.slice(0, m.index);
+    return !NEGATED.test(before) && !HEDGED.test(before);
+  });
+}
+
+/** A run that found no fix, read as a designed joint rather than an error. The triage verdict held for the clash comes
+ * first ("by_design", with its reading); else the proposing model's own words, its understanding then its advice, read
+ * sentence by sentence (`saysDesigned`). Nothing here asks a model: it reads only what the page already holds. */
+export function designedJoint(p: { understanding?: string | null; advice?: string | null } | null | undefined,
+  triage?: { verdict?: string | null; understanding?: string | null } | null): Designed | null {
+  if (triage?.verdict === "by_design") return { by: "triage", text: (triage.understanding ?? "").trim() };
+  for (const text of [p?.understanding, p?.advice]) {
+    for (const s of (text ?? "").split(/(?<=[.!?])\s+/)) {
+      if (saysDesigned(s)) return { by: "model", text: s.trim() };
+    }
+  }
+  return null;
 }

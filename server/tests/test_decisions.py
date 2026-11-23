@@ -49,6 +49,24 @@ def test_the_decisions_route_checks_what_it_is_given(scene):
     assert log["entries"] == [] and not log["can_undo"]   # a decision is not an edit
 
 
+def test_a_clash_marked_intentional_is_a_decision_of_its_own(scene):
+    """"Mark as intentional" (the page's no-fix card): reviewed, not a conflict. Recorded against the joint kept as
+    designed, never one of the model's ideas, so it is never geometry-validated; the report says it in words."""
+    from iris import document
+    c, ws, sid, duct, beam = scene
+    mark = _decision(option={"title": "Designed joint, no edit", "kind": "as_designed", "moved": [], "delta_m": None},
+                     state="unverified", decision="by_design", check={"verified": False},
+                     reason="Intentional: designed joint. The beam bears on the footing.", reviewer="Ana")
+    r = c.post(f"/api/scenes/{sid}/decisions", json=mark)
+    assert r.status_code == 200, r.text
+    stored = r.json()["decision"]
+    assert stored["decision"] == "by_design" and stored["reviewer"] == "Ana" and stored["clash_key"] == "hard|A|B"
+    assert document.decision_state(stored) == "unverified"
+    words = document.decision_words(stored)
+    assert words.startswith("Marked as intentional 'Designed joint, no edit'") and "The beam bears on the footing." in words
+    assert "Geometry-validated" not in words
+
+
 def test_the_journal_refuses_unknown_states():
     log = journal.Journal()
     with pytest.raises(ValueError):

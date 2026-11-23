@@ -411,7 +411,8 @@ disk; decisions live in memory with the scene, like the edit log, and reach disk
   checked_against?, reason?}}`, plus `entry` and `session` (the edit-log entry and the scene that kept it) on one a
   keep appended. `state` is one of `DECISION_STATES` (`ai_proposed`, `geometry_validated`,
   `failed_validation`, `unverified`), `decision` one of `DECISIONS` (`accepted`, `rejected`, `modified`,
-  `requested_another`); anything else is refused; `at` is stamped on arrival. A keep through `fix/apply` or
+  `requested_another`, `by_design`: a clash marked intentional, recorded against the `as_designed` option "Designed joint,
+  no edit"); anything else is refused; `at` is stamped on arrival. A keep through `fix/apply` or
   `plan/apply` appends one `accepted`, `geometry_validated` decision per kept fix; the page posts the rest. Undo never
   touches them.
 - **`Journal.earlier`:** the entry dicts of the saved state the scene was opened from: history to read, never undone.

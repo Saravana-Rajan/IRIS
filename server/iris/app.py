@@ -705,6 +705,9 @@ async def add_uploaded_models_stream(scene_id: str, request: Request):
             raise HTTPException(400, str(e))
 
     root, paths, names = await _receive_models(request, check)
+    if scene_id not in ws.scenes:   # let go while the files came in: the usual 404, before the stream
+        shutil.rmtree(root, ignore_errors=True)
+        _scene(scene_id)
     events: queue.Queue = queue.Queue()
     events.put({"type": "received", "bytes": sum(p.stat().st_size for p in paths)})
 
@@ -1496,6 +1499,7 @@ def _one(r: dict) -> dict:
 def apply(scene_id: str, body: Move):
     """Keep a move of `moved` (its whole run) by `delta_m`, tried again first against `obstacles` (the clash's other
     element first). The clearance is the requirements' (25 mm without any), not the body's."""
+    _scene(scene_id)
     if not body.moved or not body.obstacles:
         raise HTTPException(422, "Say what moves (moved) and what it must clear (obstacles): a move is checked "
                                  "against its clash again before it is kept.")
@@ -1521,6 +1525,8 @@ class ContextApply(BaseModel):
 @app.post('/api/scenes/{scene_id}/context/stream')
 def context_stream(scene_id: str, body: ContextObjective, request: Request):
     _scene(scene_id)
+    if body.report_id:
+        _report(body.report_id)
     try:
         objective = context_planner.validate_objective(ws, scene_id, body.model_dump(exclude_none=True))
     except context_planner.ContextError as exc:
@@ -1556,6 +1562,7 @@ def context_apply(scene_id: str, body: ContextApply):
 
 @app.post("/api/scenes/{scene_id}/offset/check")
 def check_offset(scene_id: str, body: Offset):
+    _scene(scene_id)
     if not body.other:
         raise HTTPException(422, "Say which element the offset goes around (other).")
     return ws.check_offset(_scene(scene_id), body.element, body.other, body.split_m, body.dz_m, body.clearance_m)
@@ -1570,6 +1577,7 @@ class TrimBody(BaseModel):
 
 @app.post("/api/scenes/{scene_id}/trim/apply")
 def apply_trim(scene_id: str, body: TrimBody):
+    _scene(scene_id)
     if not body.other:
         raise HTTPException(422, "Say which element the trim butts against (other).")
     return _one(_keep(scene_id, [{"kind": "trim", "title": "Trim", "moved": [body.element], "delta_m": [0, 0, 0],
@@ -1579,6 +1587,7 @@ def apply_trim(scene_id: str, body: TrimBody):
 
 @app.post("/api/scenes/{scene_id}/offset/apply")
 def apply_offset(scene_id: str, body: Offset):
+    _scene(scene_id)
     if not body.other:
         raise HTTPException(422, "Say which element the offset goes around (other).")
     return _one(_keep(scene_id, [{"kind": "offset", "title": "Offset", "moved": [body.element],
@@ -1603,6 +1612,7 @@ def fix_apply(scene_id: str, body: FixApply):
     names (`pair`, and `others` for a plan's merged item), with the clearance and requirements of that clash, and what
     that trial makes is kept; one that no longer passes is a 409. A kind whose keeping depends on the requirements
     decides that in its `plans.KEEP` entry, never from what the page sends."""
+    _scene(scene_id)
     o = {k: v for k, v in body.option.items() if k not in ("preview", "before")}
     # A drain tilted about its fixture with its other end free translates nothing: it names the drain it tilts.
     if not isinstance(o.get("moved"), list) or not (o["moved"] or (o.get("edit") or {}).get("tilts")):
@@ -1749,7 +1759,7 @@ class Decision(BaseModel):
     number: int | None = Field(None, ge=1)
     option: DecisionOption
     state: Literal["ai_proposed", "geometry_validated", "failed_validation", "unverified"]
-    decision: Literal["accepted", "rejected", "modified", "requested_another"]
+    decision: Literal["accepted", "rejected", "modified", "requested_another", "by_design"]
     reason: str | None = Field(None, max_length=2000)
     reviewer: str | None = Field(None, max_length=120)
     check: DecisionCheck | None = None
@@ -1775,6 +1785,7 @@ def add_decision(scene_id: str, body: Decision):
 def export(scene_id: str):
     """The edited file. With edits in several discipline files (or a STEP model's STEP and IFC), they come back as one
     zip named for the project, `<project>-iris.zip` ("Northbank-iris.zip"), else `iris-export.zip`."""
+    _scene(scene_id)   # before its folder is made
     _tidy_exports()
     out = EXPORTS / scene_id
     out.mkdir(exist_ok=True)
@@ -1872,6 +1883,7 @@ MAX_VIEW_BYTES = 4_000_000
 @app.post("/api/reports/{report_id}/clashes/{clash_id}/images")
 async def save_view(report_id: str, clash_id: str, label: str = Form(...), image: UploadFile = File(...)):
     """A view of a clash Iris detected, captured in the browser (A, B or C)."""
+    _report(report_id)   # before the picture is read
     data = await image.read(MAX_VIEW_BYTES + 1)
     if len(data) > MAX_VIEW_BYTES:
         raise HTTPException(413, "That picture is too large.")
@@ -2048,7 +2060,7 @@ async def requirements_preview(scene_id: str, request: Request):
                 _previews.pop(next(iter(_previews)))
         return _previews[key]
 
-    tests = requirements.compile_tests(doc, ws.scene(scene_id))
+    tests = requirements.compile_tests(doc, ws.scene(_scene(scene_id)))   # may have gone while the body came in
     cached = all(k in _previews for k in [(scene_id, json.dumps([asdict(t) for t in tests], sort_keys=True, default=str)),
                                           (scene_id, json.dumps(None))])
     if not cached:
