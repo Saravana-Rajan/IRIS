@@ -124,11 +124,11 @@ export function ownClick(e: { button?: number; metaKey?: boolean; ctrlKey?: bool
   return !e.button && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
 
-/** Whether a path is one of the app's own pages: "/", Home, the workspace, Settings, Help, About and its tabs, the projects
- *  (`parseProjectPath`). Any other shows "Page not found" (NotFound.tsx); "" (no location: tests) is the app's. */
+/** Whether a path is one of the app's own pages: "/", Home, the workspace, the Demos page (`/videos`), Settings, Help,
+ *  About and its tabs, the projects (`parseProjectPath`). Any other shows "Page not found" (NotFound.tsx); "" (no location: tests) is the app's. */
 export function isAppPath(path: string): boolean {
   const p = path.trim().replace(/\/+$/, "");
-  return /^(\/index\.html|\/home|\/workspace|\/settings|\/help|\/about(\/[\w-]+)?)?$/.test(p) || parseProjectPath(p) !== null;
+  return /^(\/index\.html|\/home|\/workspace|\/videos|\/settings|\/help|\/about(\/[\w-]+)?)?$/.test(p) || parseProjectPath(p) !== null;
 }
 
 /** Models, Coordination and Clash review happen in the workspace, under the step bar; the other steps are pages. */

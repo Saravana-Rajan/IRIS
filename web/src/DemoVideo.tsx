@@ -1,4 +1,4 @@
-import { Play, X } from "lucide-react";
+import { Clapperboard, Play, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import "./demoVideo.css";
@@ -35,7 +35,8 @@ export const DEMO_VIDEOS: Readonly<Record<DemoVideoId, DemoVideoInfo>> = {
     src: `/demos/iris-full-demo.mp4?v=${DEMO_VERSION}`, vtt: `/demos/iris-full-demo.vtt?v=${DEMO_VERSION}`, poster: `/demos/iris-full-demo.webp?v=${DEMO_VERSION}` },
 };
 
-/** Home's "Watch the demos" cards, in order (the full demo first, featured): each card's title and one line. */
+/** The demo cards, in order (the full demo first): each card's title and one line. Home's "See Iris in action" row and
+ *  the Demos page (`/videos`, DemosPage.tsx) show the same three. */
 export const DEMO_CARDS: readonly { id: DemoVideoId; title: string; line: string }[] = [
   { id: "full", title: "Full demo: problem to solution",
     line: "The problem, the 3D clash fixes, the drawing check and VisionBench, in one short story." },
@@ -47,6 +48,9 @@ export const DEMO_CARDS: readonly { id: DemoVideoId; title: string; line: string
 
 /** The meta line under each demo card's title. */
 export const DEMO_META = "Gemini voice · Captions on";
+
+/** The line under the demos' heading: Home's "See Iris in action" and the Demos page's header. */
+export const DEMOS_LINE = "Three short narrated videos, from the problem to the solution. Captions on.";
 
 /** What Tab reaches inside the dialog (the video's own controls are inside the video). */
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), '
@@ -201,23 +205,22 @@ export function WatchDemoButton({ id, label = "Watch the demo", className = "", 
 }
 
 /**
- * One of Home's demo cards, as on a video site: a big 16:9 thumbnail (the video's poster, its title card with the glass
- * aperture; lazy, so the page fetches it only near the viewport) with a round white play button in the middle and the
- * length in a pill at the bottom right; under it the title (bold, two lines at most), one line and "Gemini voice ·
- * Captions on". The whole card is one button that opens the video in the lightbox (nothing of the video loads before).
- * `featured`: the full demo, first and larger.
+ * One demo card, as on a video site: a big 16:9 thumbnail (the video's poster, its title card with the glass aperture;
+ * lazy, so the page fetches it only near the viewport) with a round white play button in the middle and the length in a
+ * pill at the bottom right; under it the title (bold, two lines at most), one line and "Gemini voice · Captions on".
+ * The whole card is one button that opens the video in the lightbox (nothing of the video loads before).
  */
-export function DemoCard({ id, title, line, featured = false }: { id: DemoVideoId; title: string; line: string; featured?: boolean }) {
+export function DemoCard({ id, title, line }: { id: DemoVideoId; title: string; line: string }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
   const video = DEMO_VIDEOS[id];
   return (
-    <li className={featured ? "home-demo-item featured" : "home-demo-item"}>
+    <li className="home-demo-item">
       <button ref={button} type="button" className="home-demo" data-video={id} aria-haspopup="dialog"
         aria-label={`Play ${title} (${video.duration}, captions on)`} onClick={() => setOpen(true)}>
         <span className="home-demo-poster">
           <img src={video.poster} alt="" width={1920} height={1080} loading="lazy" decoding="async" />
-          <span className="home-demo-play" aria-hidden><Play size={featured ? 26 : 20} fill="currentColor" strokeWidth={0} /></span>
+          <span className="home-demo-play" aria-hidden><Play size={22} fill="currentColor" strokeWidth={0} /></span>
           <span className="home-demo-len mono" aria-hidden>{video.duration}</span>
         </span>
         <span className="home-demo-text">
@@ -231,17 +234,28 @@ export function DemoCard({ id, title, line, featured = false }: { id: DemoVideoI
   );
 }
 
-/** Home's "Watch the demos" section: the three demo videos as cards, the full demo first (DEMO_CARDS). */
+/** The three demo cards (DEMO_CARDS, the full demo first), as a list: Home's one row (`home-demos-row`) or the Demos
+ *  page's grid (`demos-grid`). No hooks of its own. */
+export function DemoCards({ className = "home-demos-row" }: { className?: string }) {
+  return (
+    <ul className={className}>
+      {DEMO_CARDS.map((c) => <DemoCard key={c.id} {...c} />)}
+    </ul>
+  );
+}
+
+/** Home's demos, right under the hero and before the start tiles: a heading as How Iris works' (a small pink kicker
+ *  "Demos", the title "See Iris in action", one line), then the three videos in one row of equal cards (on a tablet or
+ *  a phone, a row that scrolls sideways and snaps to each card). */
 export function WatchDemos() {
   return (
     <section className="home-section home-demos" aria-labelledby="home-demos-title">
-      <div className="home-section-head">
-        <h2 className="home-h2" id="home-demos-title">Watch the demos</h2>
-        <span className="home-demos-note">Narrated, with captions</span>
-      </div>
-      <ul className="home-demos-row">
-        {DEMO_CARDS.map((c, i) => <DemoCard key={c.id} {...c} featured={i === 0} />)}
-      </ul>
+      <header className="home-demos-head">
+        <p className="home-kicker"><Clapperboard size={14} aria-hidden /> Demos</p>
+        <h2 className="home-demos-title" id="home-demos-title">See Iris in action</h2>
+        <p className="home-demos-line">{DEMOS_LINE}</p>
+      </header>
+      <DemoCards className="home-demos-row" />
     </section>
   );
 }

@@ -68,7 +68,8 @@ import { currentPath, currentProjectRoute, isAppPath, isWorkStep, legacyPath, pr
 import { NotFound } from "./NotFound";
 import { addReport, attachScene, createProject, forgetProject, isSample, SAMPLE_PROJECT, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
-import { browserStorage, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
+import { browserStorage, DEMOS_PATH, isDemosPath, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
+import { DemosPage } from "./DemosPage";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { EmptyState } from "./Holo";
 import { CursorGlow } from "./CursorGlow";
@@ -364,12 +365,16 @@ export function App() {
   /** Where the page is when it is on no project's page: the open session (`/workspace`), else the first screen. */
   const homePath = () => (sceneId || report ? "/workspace" : "/home");
   /** Go to a project page (`push`: a new history entry, so Back returns), or back to the workspace (null). */
-  const goRoute = (next: ProjectRoute | null, push = true) => { showProjectRoute(next, push, homePath()); setRoute(next); setHomeAsked(false); };
+  const goRoute = (next: ProjectRoute | null, push = true) => { showProjectRoute(next, push, homePath()); setRoute(next); setHomeAsked(false); setDemosAsked(false); };
   /** Home (`/home`), asked for: shown even while a session is open, which stays open behind it (the sidebar's Home). */
   const [homeAsked, setHomeAsked] = useState(() => /^\/(home\/?)?$/.test(currentPath()));
-  const goHome = () => { showPath("/home", true); setRoute(null); setHomeAsked(true); };
+  const goHome = () => { showPath("/home", true); setRoute(null); setHomeAsked(true); setDemosAsked(false); };
+  /** The Demos page (`/videos`, DemosPage.tsx): the sidebar's Demos, the three demo videos; a session stays open behind
+   *  it, as behind Home. */
+  const [demosAsked, setDemosAsked] = useState(() => isDemosPath(currentPath()));
+  const goDemos = () => { showPath(DEMOS_PATH, true); setRoute(null); setHomeAsked(false); setDemosAsked(true); };
   /** The open session outside any project (`/workspace`). */
-  const goWorkspace = () => { showPath(sceneId || report ? "/workspace" : "/home", true); setRoute(null); setHomeAsked(false); };
+  const goWorkspace = () => { showPath(sceneId || report ? "/workspace" : "/home", true); setRoute(null); setHomeAsked(false); setDemosAsked(false); };
   // The app shell (AppShell.tsx): the sidebar collapsed to its rail (remembered apart for the 3D workspace, where it
   // starts collapsed, and the other pages), the phone and tablet drawer, and the dialogs it opens.
   const [rails, setRails] = useState(() => ({ pages: readRail(browserStorage(), "pages"), workspace: readRail(browserStorage(), "workspace") }));
@@ -393,7 +398,7 @@ export function App() {
     // closes it, or opens it again over the page it was on.
     const sheets = () => { const sheet = sheetOfPath(currentPath()); setMenuOpen(sheet === "settings"); setHelpOpen(sheet === "help"); return sheet; };
     if (sheetOfPath(currentPath())) sheets();
-    const read = () => { if (sheets()) return; setRoute(currentProjectRoute()); setHomeAsked(currentPath() === "/home"); setDrawerOpen(false); };
+    const read = () => { if (sheets()) return; setRoute(currentProjectRoute()); setHomeAsked(currentPath() === "/home"); setDemosAsked(isDemosPath(currentPath())); setDrawerOpen(false); };
     window.addEventListener("hashchange", read);
     window.addEventListener("popstate", read);
     return () => { window.removeEventListener("hashchange", read); window.removeEventListener("popstate", read); };
@@ -4321,9 +4326,9 @@ export function App() {
   // Home (StartScreen.tsx): asked for at /home (the session, if any, stays open behind it), or the page with nothing
   // open and no project's page asked for.
   // An address the app does not know (a mistyped or old link): its own "Page not found" (NotFound.tsx), not Home.
-  const lost = !route && !homeAsked && !aboutTab && !isAppPath(currentPath());
+  const lost = !route && !homeAsked && !demosAsked && !aboutTab && !isAppPath(currentPath());
   const lostPage = lost && <div className="proj-shell" role="region" aria-label="Page not found"><NotFound onHome={goHome} /></div>;
-  const showHome = !lost && !route && (homeAsked || (!stats && !report && !blankish && !busy && !loading));
+  const showHome = !lost && !route && !demosAsked && (homeAsked || (!stats && !report && !blankish && !busy && !loading));
   const homePage = showHome && (
     <div className="proj-shell home-shell" role="region" aria-label="Home">
       {pageAlert}
@@ -4336,13 +4341,19 @@ export function App() {
           agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
           onResume: () => { setHomeAsked(false); void resumeSession(); }, onFresh: startFresh } : undefined} />
     </div>);
+  // The Demos page (`/videos`, DemosPage.tsx): the three demo videos as cards, each opening its lightbox.
+  const demosPage = !lost && !route && demosAsked && (
+    <div className="proj-shell" role="region" aria-label="Demos">
+      {pageAlert}
+      <DemosPage />
+    </div>);
   // ------------------------------------------------------------------ the app shell (AppShell.tsx)
   /** The open session (models or a clash report) outside the project shown in the sidebar. */
   const sessionOpen = !!(sceneId || report);
   const sessionName = sceneFiles.length ? projectName(sceneFiles) : report && !sceneId ? "Clash report" : "Workspace";
   /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
-  const onPage = !!homePage || !!projectPage || !!lostPage;
-  const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
+  const onPage = !!homePage || !!demosPage || !!projectPage || !!lostPage;
+  const navActive: NavId = homePage ? "home" : demosPage ? "demos" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
   const navProject = project ? { id: project.id, name: project.name || "Untitled project", sample: isSample(project), counts: {
     ...(project.files.length ? { models: project.files.length } : {}),
     ...(projectOpen && drawings.length ? { drawings: drawings.length } : {}),
@@ -4351,12 +4362,13 @@ export function App() {
   } } : null;
   const navWorkspace = (sessionOpen && !projectOpen) || (blank && !pid) ? { label: "Workspace" } : null;
   const navHref = (id: NavId): string | undefined => (id === "home" ? "/home" : id === "projects" ? PROJECTS_PATH
-    : id === "workspace" ? "/workspace" : navProject ? projectPath(navProject.id, id) : undefined);
+    : id === "workspace" ? "/workspace" : id === "demos" ? DEMOS_PATH : navProject ? projectPath(navProject.id, id) : undefined);
   const nav = (id: NavId) => {
     setDrawerOpen(false);
     if (id === "home") goHome();
     else if (id === "projects") goProjects();
     else if (id === "workspace") goWorkspace();
+    else if (id === "demos") goDemos();
     else if (navProject) goStep(id, navProject.id);
   };
   const rail = !compact && (onPage ? rails.pages : rails.workspace);
@@ -4408,7 +4420,7 @@ export function App() {
         }
       }
     }
-    for (const page of [{ id: "home", label: "Home" }, { id: "projects", label: "Projects" }] as const) {
+    for (const page of [{ id: "home", label: "Home" }, { id: "projects", label: "Projects" }, { id: "demos", label: "Demos" }] as const) {
       if (page.label.toLowerCase().startsWith(s)) hits.push({ id: `n:${page.id}`, kind: "page", label: page.label, href: navHref(page.id), run: () => nav(page.id) });
     }
     return hits;
@@ -4992,6 +5004,7 @@ export function App() {
             <Tooltips />
             {popouts.map((w, i) => <Tooltips key={i} doc={w.document} />)}
             {homePage}
+            {demosPage}
             {projectPage}
             {lostPage}
             {removing && (

@@ -42,9 +42,18 @@
 .demo-video-frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line-soft);
   border-radius: 10px; background: var(--panel); }
 .demo-video-frame video { display: block; width: 100%; height: 100%; object-fit: contain; background: var(--panel); }
-/* Captions as the downloadable copy burns them in: ink on a white card, in Plex (light only) */
-.demo-video-frame video::cue { background: rgba(255, 255, 255, .92); color: #1a1a1a; font-family: "IBM Plex Sans", sans-serif;
-  font-weight: 500; line-height: 1.32; }
+/* Captions as the downloadable copy burns them in: ink on a white box, in Plex (light only; never the browser's default
+   black box, owner, Nov 23). ::cue takes only colour, background, font and text-shadow: no radius or padding. Safari
+   draws a dark window behind the cue too (its backdrop pseudo-element, in a rule of its own so other browsers keep
+   the first). */
+.demo-video video::cue { background-color: rgba(255, 255, 255, .92); color: #1a1a1a;
+  font-family: "IBM Plex Sans", system-ui, sans-serif; font-weight: 500; font-size: 1.05em; line-height: 1.35;
+  text-shadow: none; }
+.demo-video video::-webkit-media-text-track-display-backdrop { background-color: transparent; }
+/* Chrome's and Safari's own control bar is a black gradient band under the captions: turned light (inverted, so the
+   band is a white haze and its icons and time are ink; the hue turned back so nothing changes colour). The video
+   itself is not in it. Firefox keeps its own controls. */
+.demo-video video::-webkit-media-controls-enclosure { filter: invert(1) hue-rotate(180deg); }
 .demo-video-error { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 16px;
   text-align: center; font-size: 14px; color: var(--muted); }
 /* Focus guards either side of the card: out of the layout, they only pass focus round to the other end */
@@ -76,17 +85,26 @@
 .watch-demo-poster > .watch-demo-play { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px;
   background: rgba(255, 255, 255, .94); color: var(--accent-ink, #b0269a); box-shadow: 0 2px 6px rgba(26, 26, 40, .18); }
 
-/* Home's "Watch the demos" (WatchDemos, DemoCard): video cards as on a video site. The full demo first and larger at
-   the left, the 3D and 2D demos stacked at the right; each a big 16:9 thumbnail (the poster: the title card with the
-   glass aperture, lazy) with a round white play button in the middle (it grows on hover), the length in a white pill at
-   the bottom right and a slight zoom on hover; under it the title in bold (two lines at most), one line and the meta.
-   White and pink like Home's tiles: on hover the lift, a soft shadow and the pink spotlight (cursorGlow.css); no holo
-   edge. Under 760 px of panel the full demo across the top and the other two side by side; on a phone, stacked. */
-.home-demos-note { font-size: 13px; color: var(--muted); }
+/* Home's demos (WatchDemos, DemoCard) and the Demos page (DemosPage.tsx): video cards as on a video site. Home's
+   heading is How Iris works' (a small pink kicker, a large regular title, one muted line); then the three videos in ONE
+   row of equal cards, the full demo first. Each card a big 16:9 thumbnail (the poster: the title card with the glass
+   aperture, lazy) with a round white play button in the middle (it grows on hover), the length in a white pill at the
+   bottom right and a slight zoom on hover; under it the title in bold (two lines at most), one line and the meta. White
+   and pink like Home's tiles: on hover the lift and a soft shadow; no holo edge. Under 760 px of panel (a tablet, a
+   phone) the row scrolls sideways inside itself and snaps to each card, the next one peeking (the page never scrolls
+   sideways). The Demos page lays the same cards in a grid: three across, fewer as the panel narrows. */
+.home-demos { gap: 22px; }
+.home-demos-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; max-width: 760px; }
+.home-kicker { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink, #b0269a); }
+.home-demos-title { margin: 0; font-size: clamp(28px, 3.4cqi, 38px); line-height: 1.12; font-weight: 400; letter-spacing: -.022em;
+  color: var(--ink); }
+.home-demos-line { margin: 0; font-size: 15px; line-height: 1.55; color: var(--muted); }
 .home-demos-row { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px 22px; align-items: start;
-  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); }
+  grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.demos-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px 24px; align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
 .home-demo-item { display: flex; min-width: 0; }
-.home-demo-item.featured { grid-row: span 2; }
 .home-demo { appearance: none; font: inherit; text-align: left; flex: 1 1 auto; min-width: 0; margin: 0; padding: 0 0 6px;
   display: flex; flex-direction: column; gap: 10px; border: 0; border-radius: 14px; background: transparent;
   color: var(--ink); cursor: pointer; transition: transform .18s ease; }
@@ -103,26 +121,29 @@
   box-shadow: 0 6px 20px rgba(26, 26, 40, .16), 0 1px 3px rgba(26, 26, 40, .10); transition: transform .18s ease, box-shadow .18s ease; }
 .home-demo-play svg { margin-left: 3px; }
 .home-demo:hover .home-demo-play { transform: scale(1.12); box-shadow: 0 10px 28px rgba(176, 38, 154, .22), 0 1px 3px rgba(26, 26, 40, .10); }
-.featured .home-demo-play { width: 68px; height: 68px; margin: -34px 0 0 -34px; }
 .home-demo-len { position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: 7px; font-size: 12.5px;
   font-weight: 500; line-height: 1.25; background: rgba(255, 255, 255, .94); color: var(--ink);
   box-shadow: 0 1px 3px rgba(26, 26, 40, .14); }
 .home-demo-text { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0 4px; min-width: 0; }
 .home-demo-title { font-size: 15px; font-weight: 600; line-height: 1.3; letter-spacing: -.005em; display: -webkit-box;
   -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.featured .home-demo-title { font-size: 18px; }
 .home-demo-line { font-size: 13.5px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; overflow: hidden; }
 .home-demo-meta { font-size: 12.5px; color: var(--muted); }
+/* A tablet or a phone: the one row scrolls sideways inside itself, a card and a peek of the next, each snapping into
+   place; the padding gives the hover lift and the focus ring room, the negative margin keeps the cards aligned */
 @container home (max-width: 760px) {
-  .home-demos-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .home-demo-item.featured { grid-column: 1 / -1; grid-row: auto; }
+  .home-demos-row { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(240px, 46%);
+    overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
+    scroll-padding-inline: 6px; padding: 6px 6px 12px; margin: -6px -6px -6px; scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch; }
+  .home-demos-row > .home-demo-item { scroll-snap-align: start; }
 }
 @container home (max-width: 600px) {
-  .home-demos-row { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .home-demos-note { display: none; }
-  .featured .home-demo-play { width: 60px; height: 60px; margin: -30px 0 0 -30px; }
-  .home-demo-item:not(.featured) .home-demo-play { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
+  /* the peek of the next card runs to the screen's edge (Home clips sideways, so the page never scrolls) */
+  .home-demos-row { grid-auto-columns: 82%; gap: 14px; margin-right: -16px; padding-right: 16px; }
+  .home-demos-title { font-size: 28px; }
+  .home-demo-play { width: 46px; height: 46px; margin: -23px 0 0 -23px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-demo, .home-demo-poster, .home-demo-poster > img, .home-demo-play { transition: none; }

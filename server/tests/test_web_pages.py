@@ -24,10 +24,23 @@ def _client(tmp_path) -> TestClient:
 
 def test_the_app_s_pages_are_the_app(tmp_path):
     c = _client(tmp_path)
-    for path in ["/", "/home", "/projects", "/projects/abc", "/projects/abc/clashes/3", "/workspace", "/about/fixes", "/settings"]:
+    for path in ["/", "/home", "/projects", "/projects/abc", "/projects/abc/clashes/3", "/workspace", "/about/fixes", "/settings",
+                 "/videos", "/videos/"]:
         r = c.get(path, headers=HTML)
         assert r.status_code == 200 and "<title>Iris</title>" in r.text, path
     assert c.get("/assets/app.js").text == "x"
+
+
+def test_the_demos_page_is_the_app_and_the_video_files_stay_files(tmp_path):
+    """The Demos page is /videos (web/src/shellNav.ts DEMOS_PATH), because /demos/ is the folder of the video files: a
+    page there is the app, a video file is itself, and a missing one stays a 404."""
+    (tmp_path / "demos").mkdir()
+    (tmp_path / "demos" / "iris-3d-demo.mp4").write_bytes(b"mp4")
+    c = _client(tmp_path)
+    r = c.get("/videos", headers=HTML)
+    assert r.status_code == 200 and "<title>Iris</title>" in r.text
+    assert c.get("/demos/iris-3d-demo.mp4").content == b"mp4"
+    assert c.get("/demos/missing.mp4", headers=HTML).status_code == 404
 
 
 def test_api_files_and_anything_else_stay_404(tmp_path):

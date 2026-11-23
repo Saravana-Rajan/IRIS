@@ -44,6 +44,47 @@ test("the sidebar's pages: Home over the open session, the projects, back to the
   host.unmount();
 });
 
+test("the sidebar's Demos: the Demos page at /videos, over the open session; marked active; Back and the other pages leave it", async () => {
+  const host = await appHost({ path: "/workspace" });
+  await host.settle();
+  assert.equal(sidebar(host).props.hrefOf("demos"), "/videos", "not /demos: that is the video files' folder");
+  assert.equal(host.component("DemosPage"), undefined);
+
+  sidebar(host).props.onNav("demos"); host.render();
+  assert.equal(host.location.pathname, "/videos");
+  assert.equal(sidebar(host).props.active, "demos");
+  assert.ok(host.component("DemosPage"), "the Demos page is shown");
+  assert.equal(host.component("StartScreen"), undefined, "not Home");
+  assert.equal(host.component("NotFound"), undefined, "a page of the app's own");
+  assert.equal(host.state.sceneId, "scene", "the session stays open behind it");
+
+  sidebar(host).props.onNav("home"); host.render();
+  assert.equal(host.location.pathname, "/home");
+  assert.equal(sidebar(host).props.active, "home");
+  assert.equal(host.component("DemosPage"), undefined);
+  assert.ok(host.component("StartScreen"));
+
+  sidebar(host).props.onNav("demos"); host.render();
+  sidebar(host).props.onNav("projects"); host.render();
+  assert.equal(sidebar(host).props.active, "projects");
+  assert.equal(host.component("DemosPage"), undefined);
+  sidebar(host).props.onNav("demos"); host.render();
+  sidebar(host).props.onNav("workspace"); host.render();
+  assert.equal(sidebar(host).props.active, "workspace");
+  assert.equal(host.component("DemosPage"), undefined);
+  host.unmount();
+});
+
+test("/videos opened as it is: the Demos page with nothing open, never Home or Page not found", async () => {
+  const host = await appHost({ path: "/videos", initial: { sceneId: null, stats: null, report: null, clash: null } });
+  await host.settle();
+  assert.ok(host.component("DemosPage"));
+  assert.equal(sidebar(host).props.active, "demos");
+  assert.equal(host.component("StartScreen"), undefined);
+  assert.equal(host.component("NotFound"), undefined);
+  host.unmount();
+});
+
 test("the collapse: the 3D workspace starts on the rail, the other pages expanded, each remembered on its own", async () => {
   const host = await appHost({ path: "/workspace" });
   await host.settle();

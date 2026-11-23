@@ -31,7 +31,7 @@ const heroArea = () => (typeof document === "undefined" ? null : document.queryS
 /** The tagline, in two lines beside the aperture. */
 export const TAGLINE = ["AI proposes. Geometry proves.", "The engineer decides."] as const;
 
-/** The scroll cue: down to the start tiles (instantly under reduced motion). No hooks, so tests can call StartScreen. */
+/** The scroll cue: down to the body, the demos then the start tiles (instantly under reduced motion). No hooks, so tests can call StartScreen. */
 function toTiles(e: MouseEvent<HTMLButtonElement>) {
   const body = e.currentTarget.closest(".home")?.querySelector(".home-body");
   const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -58,10 +58,10 @@ function ProjectStatus({ p }: { p: Project }) {
  * Home (`/home`, docs/ui-design.md §10.1): the first page inside the app shell, light and calm, Synthesia-like. The
  * hero: the greeting, Iris's principle in large regular type and what it does, revealed word by word, beside our logo as
  * a 3D glass aperture floating over a white pedestal, breathing and leaning toward the pointer (HeroGlass, lazy; its
- * still until it loads), and a square "↓" cue down to the rest; then the last session to resume; three ways to start
- * (a new project, the sample building, the sample drawings), all styled alike; the three demo videos as cards to watch
- * (WatchDemos: posters only until one is opened); Iris's eight steps as cards (HowIrisWorks); and the recent
- * projects. No brand header or chrome of its own: the shell has them. It scrolls inside its container. Props only;
+ * still until it loads), and a square "↓" cue down to the rest; then the last session to resume; the three demo videos
+ * in one row of cards under the heading "See Iris in action" (WatchDemos: posters only until one is opened); three ways
+ * to start (a new project, the sample building, the sample drawings), all styled alike; Iris's eight steps as cards
+ * (HowIrisWorks); and the recent projects. No brand header or chrome of its own: the shell has them. It scrolls inside its container. Props only;
  * nothing here calls the server.
  */
 export function StartScreen({
@@ -140,6 +140,9 @@ export function StartScreen({
               <button type="button" className="btn ghost small" onClick={resume.onFresh}>Start fresh</button>
             </span>
           </div>)}
+        {/* The demos first (owner, 23 Nov: "before these [the start tiles], the demo videos in one single line") */}
+        <WatchDemos />
+
         <section className="home-tiles" aria-label="Start" style={{ "--tiles": tiles } as CSSProperties}>
           <button type="button" className="home-tile home-tile-new" data-start="new-project" onClick={onNewProject}>
             <span className="home-tile-icon" aria-hidden><Plus size={20} /></span>
@@ -167,8 +170,6 @@ export function StartScreen({
               <WatchDemoButton id="2d" />
             </div>)}
         </section>
-
-        <WatchDemos />
 
         <HowIrisWorks onStep={onSampleStep} />
 

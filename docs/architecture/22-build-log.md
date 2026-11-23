@@ -1414,3 +1414,31 @@ rendered from the card page itself), the full demo large at the left, the 3D and
 beside it; the hero's Watch the full demo is a chip with a small thumbnail. A click opens the lightbox, captions on. Checked: `npm test`, `tsc`,
 `vite build`, the docs map test, screenshots of the section at 1512 x 805 and 390 x 844, and frames of the first and
 last 3 s of each video.
+
+**Nov 23 (2026-11-23), the demo videos above the start tiles, and a Demos page** ([12](12-web-app.md),
+[18](18-testing-and-evals.md)). The owner asked for the demo videos before the start tiles "in one single line", with
+a proper heading, and for one sidebar tab for the demos. Home's order is now hero, demos, start tiles, How Iris works,
+recent projects (`StartScreen.tsx`; a session to resume stays at the top of the body). The demos section has How Iris
+works' heading: a pink kicker "Demos" (lucide `Clapperboard`), the title "See Iris in action" and the line "Three
+short narrated videos, from the problem to the solution. Captions on." (`DEMOS_LINE`), `aria-labelledby` its title.
+The three cards (Full demo, 3D, 2D) are equal in one row (`DemoCards`, `.home-demos-row`, three columns; the large
+featured card is gone); under 760 px of panel the row scrolls sideways inside itself and snaps to each card, and on a
+phone the next card peeks to the screen's edge. The sidebar's **Demos** (after Home, Projects and any Workspace; the
+rail shows the icon with its tip, the phone drawer its label) opens the Demos page, `DemosPage.tsx`: a page header
+("Demos", `DEMOS_LINE`) and the same three cards in a grid (`.demos-grid`), each opening the lightbox. Its address is
+`/videos` (`shellNav.ts` `DEMOS_PATH`, `isDemosPath`), not `/demos`, the folder of the video files: `isAppPath` knows
+it, `App` shows it when `demosAsked` (the sidebar, Back and Forward, or the address opened as it is) and marks Demos
+active, and the search's Pages list it. The server already answers any page address with the app (`app._is_page`);
+`test_web_pages.py` now covers `/videos` and keeps a file under `/demos/` a file. Checked: `npm test` (new
+`demos-page.test.mjs`; `demoVideo`, `start-screen`, `sidebar`, `shell`, `project-route` updated; `DemosPage` in both
+App stub lists), `tsc`, `vite build`, `test_docs_map.py` and `test_web_pages.py`; headless Chromium (GPU) on a local
+one-origin server with no Gemini key at 1512 x 805 and 390 x 844: Home's demos above the tiles in one row of three
+(desktop) or a snapping row (phone, the page 390 px wide, no sideways scroll), `/videos` from the sidebar and the
+phone drawer and loaded as it is (three cards, Demos active, no Page not found), a card's lightbox opened and closed
+with Escape, and the rail's Demos tip. **Light captions** (owner: "why grey and black in backside, not suitable"):
+the lightbox's caption rule now targets `.demo-video video::cue` (white box at 92 %, ink text, Plex 500 at 1.05em, no
+text shadow; Safari's dark cue window cleared). The cue was already white in Chromium; the dark band behind the
+captions was the browser's own control bar (a black gradient under them whenever the controls show), now turned
+light (`::-webkit-media-controls-enclosure` inverted and hue-turned back: a white haze with ink icons; the ⋮ menu stays
+white). The `.vtt` files are unchanged. Checked: `demoVideo.test.mjs` (the rules), and headless Chromium with the 3D
+demo paused at 2.5 s, a caption showing, at 1512 x 805 and 390 x 844 (white box, dark text, light bar), and the ⋮ menu.
