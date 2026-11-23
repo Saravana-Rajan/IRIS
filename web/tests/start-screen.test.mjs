@@ -120,15 +120,23 @@ test("three start tiles, styled alike: New project, the sample building, the sam
   assert.equal(made2, 1, "the tile asks for a new project");
 });
 
-test("Watch the demos: a section of its own after the start tiles, before How Iris works; the three cards", () => {
+test("Home's order: the hero, the demos (See Iris in action, one row of three), the start tiles, How Iris works, the recent projects", () => {
   const html = markup({ onSample: noop, onSampleDrawings: noop });
   const at = (k) => html.indexOf(k);
-  assert.ok(at('class="home-tiles"') < at('class="home-section home-demos"') && at('class="home-section home-demos"') < at('class="hiw"'),
-    "after the tiles, before How Iris works");
-  const section = html.slice(at('class="home-section home-demos"'), at('class="hiw"'));
-  assert.match(section, /<h2 class="home-h2" id="home-demos-title">Watch the demos<\/h2>/);
-  assert.equal(section.match(/<button type="button" class="home-demo"/g)?.length, 3);
-  assert.doesNotMatch(section, /holo-edge/);
+  const order = ['class="home-hero"', 'class="home-section home-demos"', 'class="home-tiles"', 'class="hiw"', 'id="home-recent-title"'].map(at);
+  assert.ok(order.every((i) => i >= 0), "every part is there");
+  assert.deepEqual([...order].sort((x, y) => x - y), order, "hero, demos, tiles, How Iris works, recent projects");
+  const section = html.slice(at('class="home-section home-demos"'), at('class="home-tiles"'));
+  assert.match(section, /aria-labelledby="home-demos-title"/);
+  assert.match(section, /<p class="home-kicker">.*? Demos<\/p><h2 class="home-demos-title" id="home-demos-title">See Iris in action<\/h2>/);
+  assert.match(section, /<p class="home-demos-line">Three short narrated videos, from the problem to the solution\. Captions on\.<\/p>/);
+  assert.equal(section.match(/<ul class="home-demos-row">/g)?.length, 1, "one row");
+  assert.deepEqual(section.match(/<button type="button" class="home-demo" data-video="(\w+)"/g)?.map((b) => b.match(/data-video="(\w+)"/)[1]),
+    ["full", "3d", "2d"], "three cards: Full demo, 3D, 2D");
+  assert.doesNotMatch(section, /holo-edge|featured/);
+  const resumed = markup({ onSample: noop, resume: { files: ["a.ifc"], savedAt: 0, onResume: noop, onFresh: noop } });
+  const r = (k) => resumed.indexOf(k);
+  assert.ok(r('class="home-resume"') < r('class="home-section home-demos"'), "a session to resume stays at the top of the body");
 });
 
 test("Watch the demo: the 3D video on the sample building's tile, the 2D on the drawings', the full demo under the tagline; nothing loaded until asked", () => {

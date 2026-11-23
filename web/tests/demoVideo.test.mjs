@@ -31,7 +31,7 @@ const S = await load({ ...jsx,
     export const useState = (...a) => h().useState(...a), useRef = (...a) => h().useRef(...a), useEffect = (...a) => h().useEffect(...a),
       useId = () => "dv-title";`),
   "react-dom": url("export const createPortal = (node, into) => { globalThis.__dvPortal = into; return node; };"),
-  "lucide-react": url("export function Play(){return null;} export function X(){return null;}") });
+  "lucide-react": url("export function Play(){return null;} export function X(){return null;} export function Clapperboard(){return null;}") });
 
 const noop = () => {};
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
@@ -297,17 +297,24 @@ test("Watch the demo: a play mark, the label and the length in mono; it opens it
   }
 });
 
-test("Home's Watch the demos: three video cards, the full demo first and featured; thumbnail (lazy), play button, length, title, line, meta", () => {
+test("Home's demos: a heading as How Iris works' (kicker Demos, title See Iris in action, one line), then one row of three equal cards", () => {
   const html = renderToStaticMarkup(h(V.WatchDemos));
-  assert.match(html, /^<section class="home-section home-demos" aria-labelledby="home-demos-title">/);
-  assert.match(html, /<h2 class="home-h2" id="home-demos-title">Watch the demos<\/h2>/);
+  assert.match(html, /^<section class="home-section home-demos" aria-labelledby="home-demos-title"><header class="home-demos-head">/);
+  const head = html.slice(0, html.indexOf("</header>"));
+  assert.match(head, /<p class="home-kicker"><svg[^>]*>.*?<\/svg> Demos<\/p>/, "a small pink kicker with an icon (uppercase in CSS)");
+  assert.match(head, /<h2 class="home-demos-title" id="home-demos-title">See Iris in action<\/h2>/, "the title labels the section");
+  assert.ok(head.includes(`<p class="home-demos-line">${V.DEMOS_LINE}</p>`));
+  assert.equal(V.DEMOS_LINE, "Three short narrated videos, from the problem to the solution. Captions on.");
+  assert.equal((html.match(/id="home-demos-title"/g) ?? []).length, 1, "one element with the section's label id");
+  const rows = html.match(/<ul class="home-demos-row">/g);
+  assert.equal(rows?.length, 1, "one row");
   const cards = html.match(/<li class="home-demo-item[^"]*">.*?<\/li>/g);
   assert.equal(cards?.length, 3, "three cards");
-  assert.deepEqual(cards.map((c) => c.match(/data-video="(\w+)"/)[1]), ["full", "3d", "2d"], "the full demo first");
+  assert.ok(cards.every((c) => c.startsWith('<li class="home-demo-item">')), "all three alike: no featured card");
+  assert.doesNotMatch(html, /featured/);
+  assert.deepEqual(cards.map((c) => c.match(/data-video="(\w+)"/)[1]), ["full", "3d", "2d"], "Full demo, 3D, 2D");
   assert.deepEqual(V.DEMO_CARDS.map((c) => c.title),
     ["Full demo: problem to solution", "Fix clashes in your building models", "Check drawings against the model"]);
-  assert.match(cards[0], /^<li class="home-demo-item featured">/, "the full demo featured");
-  assert.ok(cards.slice(1).every((c) => c.startsWith('<li class="home-demo-item">')));
   V.DEMO_CARDS.forEach((c, i) => {
     const card = cards[i], v = V.DEMO_VIDEOS[c.id];
     assert.ok(card.includes(`<button type="button" class="home-demo" data-video="${c.id}" aria-haspopup="dialog" aria-label="Play ${c.title} (${v.duration}, captions on)">`));
@@ -323,6 +330,28 @@ test("Home's Watch the demos: three video cards, the full demo first and feature
   assert.equal(V.DEMO_META, "Gemini voice · Captions on");
   assert.doesNotMatch(html, /<video|\.mp4|\.vtt/, "nothing of a video until one is opened");
   assert.doesNotMatch(html, /holo-edge/, "no holo edge on Home");
+});
+
+test("the demo cards' list: Home's row by default, the Demos page's grid when asked; the same three cards", () => {
+  const row = renderToStaticMarkup(h(V.DemoCards));
+  const grid = renderToStaticMarkup(h(V.DemoCards, { className: "demos-grid" }));
+  assert.match(row, /^<ul class="home-demos-row">/);
+  assert.match(grid, /^<ul class="demos-grid">/);
+  assert.equal(row.replace("home-demos-row", "demos-grid"), grid);
+  assert.equal(grid.match(/<button type="button" class="home-demo"/g)?.length, 3);
+});
+
+test("the demo cards' styles: Home's one row of three equal columns, a sideways scroll-snap row on a tablet or phone, the page's grid", async () => {
+  const css = await readFile(new URL("../src/demoVideo.css", import.meta.url), "utf8");
+  const rule = (sel) => css.match(new RegExp(`(?:^|\\n)${escape(sel)} \\{([^}]*)\\}`))?.[1] ?? "";
+  assert.match(rule(".home-demos-row"), /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/, "three equal columns, one row");
+  assert.doesNotMatch(css, /grid-row: span|featured/, "no large featured card any more");
+  const tablet = css.slice(css.indexOf("@container home (max-width: 760px)"));
+  assert.match(tablet, /\.home-demos-row \{[^}]*grid-auto-flow: column[^}]*overflow-x: auto[^}]*scroll-snap-type: x mandatory/,
+    "a tablet: one row scrolling inside itself, snapping");
+  assert.match(tablet, /\.home-demo-item \{ scroll-snap-align: start; \}/);
+  assert.match(rule(".demos-grid"), /grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 300px\), 1fr\)\)/, "the page: a responsive grid");
+  assert.match(rule(".home-kicker"), /text-transform: uppercase/);
 });
 
 test("the hero's chip: Watch the full demo with a small thumbnail of its poster, the length; it opens the video", () => {
