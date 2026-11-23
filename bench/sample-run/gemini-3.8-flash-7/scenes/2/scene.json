@@ -1,0 +1,1286 @@
+{
+  "seed": 2,
+  "elements": [
+    {
+      "id": "e1",
+      "kind": "beam",
+      "role": "structure",
+      "shape": "box",
+      "min": [
+        0.0,
+        -0.185,
+        2.72
+      ],
+      "max": [
+        5.63,
+        0.185,
+        3.27
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [
+        {
+          "id": "o1",
+          "min": [
+            4.57,
+            -0.185,
+            2.948
+          ],
+          "max": [
+            4.818,
+            0.185,
+            3.218
+          ]
+        },
+        {
+          "id": "o2",
+          "min": [
+            2.497,
+            -0.185,
+            2.798
+          ],
+          "max": [
+            3.207,
+            0.185,
+            3.218
+          ]
+        }
+      ],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e2",
+      "kind": "slab",
+      "role": "structure",
+      "shape": "box",
+      "min": [
+        -0.5,
+        -2.185,
+        3.27
+      ],
+      "max": [
+        6.13,
+        2.185,
+        3.47
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e3",
+      "kind": "column",
+      "role": "structure",
+      "shape": "box",
+      "min": [
+        0.0,
+        -0.13,
+        0.0
+      ],
+      "max": [
+        0.26,
+        0.13,
+        2.72
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e4",
+      "kind": "pipe",
+      "role": "service",
+      "shape": "cylinder",
+      "min": null,
+      "max": null,
+      "start": [
+        4.694,
+        -1.445,
+        2.749
+      ],
+      "end": [
+        4.694,
+        1.445,
+        2.749
+      ],
+      "radius": 0.067,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e5",
+      "kind": "pipe",
+      "role": "service",
+      "shape": "cylinder",
+      "min": null,
+      "max": null,
+      "start": [
+        2.807,
+        -1.216,
+        2.663
+      ],
+      "end": [
+        2.807,
+        1.216,
+        2.663
+      ],
+      "radius": 0.049,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e6",
+      "kind": "tray",
+      "role": "service",
+      "shape": "box",
+      "min": [
+        0.345,
+        -1.166,
+        2.346
+      ],
+      "max": [
+        0.615,
+        1.166,
+        2.41
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e7",
+      "kind": "bracket",
+      "role": "support",
+      "shape": "box",
+      "min": [
+        0.295,
+        0.847,
+        2.296
+      ],
+      "max": [
+        0.665,
+        0.897,
+        2.346
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": "e6",
+      "locked": false,
+      "allowed_moves": []
+    },
+    {
+      "id": "e8",
+      "kind": "tray",
+      "role": "service",
+      "shape": "box",
+      "min": [
+        1.212,
+        -1.558,
+        2.981
+      ],
+      "max": [
+        4.535,
+        -1.032,
+        3.063
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": null,
+      "locked": true,
+      "allowed_moves": []
+    },
+    {
+      "id": "e9",
+      "kind": "duct",
+      "role": "service",
+      "shape": "box",
+      "min": [
+        1.842,
+        -1.885,
+        2.789
+      ],
+      "max": [
+        2.606,
+        -0.705,
+        3.081
+      ],
+      "start": null,
+      "end": null,
+      "radius": null,
+      "openings": [],
+      "supports": null,
+      "locked": false,
+      "allowed_moves": [
+        "down",
+        "north",
+        "south",
+        "east",
+        "west"
+      ]
+    }
+  ],
+  "planted": [
+    {
+      "a": "e4",
+      "b": "e1",
+      "kind": "real",
+      "distance_m": -0.096,
+      "mover": "e4",
+      "good_fix": {
+        "element": "e4",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.334,
+        "via_opening": "o1"
+      },
+      "fitting_openings": [
+        "o1",
+        "o2"
+      ]
+    },
+    {
+      "a": "e5",
+      "b": "e1",
+      "kind": "not_touching",
+      "distance_m": 0.008,
+      "mover": null,
+      "good_fix": null,
+      "fitting_openings": []
+    },
+    {
+      "a": "e7",
+      "b": "e6",
+      "kind": "by_design",
+      "distance_m": 0.0,
+      "mover": null,
+      "good_fix": null,
+      "fitting_openings": []
+    },
+    {
+      "a": "e9",
+      "b": "e8",
+      "kind": "real",
+      "distance_m": -0.1,
+      "mover": "e9",
+      "good_fix": {
+        "element": "e9",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": -0.183,
+        "via_opening": null
+      },
+      "fitting_openings": []
+    }
+  ],
+  "challenge": {
+    "density": 0,
+    "decoys": 0,
+    "gap_mm": 8,
+    "overlap_mm": 96,
+    "occlusion": false,
+    "beams": 1,
+    "column": true,
+    "orient": "x",
+    "target": [
+      "e4",
+      "e1"
+    ],
+    "occluder": null,
+    "decoy_ids": [],
+    "distractor_ids": [],
+    "locked_services": 1,
+    "locked_ids": [
+      "e8"
+    ],
+    "routed_ids": []
+  },
+  "clearance_m": 0.025,
+  "relations": [
+    {
+      "a": "e1",
+      "b": "e2",
+      "relation": "touches",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e1",
+      "relation": "above",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e3",
+      "relation": "touches",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e3",
+      "relation": "above",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e1",
+      "relation": "below",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e4",
+      "relation": "clashes",
+      "value_m": -0.096,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e4",
+      "relation": "crosses",
+      "value_m": -0.096,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e5",
+      "relation": "clear_of",
+      "value_m": 0.008,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e5",
+      "relation": "above",
+      "value_m": 0.008,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e1",
+      "relation": "below",
+      "value_m": 0.008,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e5",
+      "relation": "crosses",
+      "value_m": 0.008,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e6",
+      "relation": "clear_of",
+      "value_m": 0.31,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e6",
+      "relation": "above",
+      "value_m": 0.31,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e1",
+      "relation": "below",
+      "value_m": 0.31,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e6",
+      "relation": "crosses",
+      "value_m": 0.31,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e7",
+      "relation": "clear_of",
+      "value_m": 0.760342,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e7",
+      "relation": "above",
+      "value_m": 0.374,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e1",
+      "relation": "below",
+      "value_m": 0.374,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e1",
+      "relation": "north_of",
+      "value_m": 0.662,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e7",
+      "relation": "south_of",
+      "value_m": 0.662,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 0.847,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e8",
+      "relation": "north_of",
+      "value_m": 0.847,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e1",
+      "relation": "south_of",
+      "value_m": 0.847,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e8",
+      "relation": "parallel",
+      "value_m": 0.847,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e9",
+      "relation": "clear_of",
+      "value_m": 0.52,
+      "via": null
+    },
+    {
+      "a": "e1",
+      "b": "e9",
+      "relation": "north_of",
+      "value_m": 0.52,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e1",
+      "relation": "south_of",
+      "value_m": 0.52,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e3",
+      "relation": "clear_of",
+      "value_m": 0.55,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e3",
+      "relation": "above",
+      "value_m": 0.55,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.55,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e4",
+      "relation": "clear_of",
+      "value_m": 0.454,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e4",
+      "relation": "above",
+      "value_m": 0.454,
+      "via": null
+    },
+    {
+      "a": "e4",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.454,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e5",
+      "relation": "clear_of",
+      "value_m": 0.558,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e5",
+      "relation": "above",
+      "value_m": 0.558,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.558,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e6",
+      "relation": "clear_of",
+      "value_m": 0.86,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e6",
+      "relation": "above",
+      "value_m": 0.86,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.86,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e7",
+      "relation": "clear_of",
+      "value_m": 0.924,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e7",
+      "relation": "above",
+      "value_m": 0.924,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.924,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 0.207,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e8",
+      "relation": "above",
+      "value_m": 0.207,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.207,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e9",
+      "relation": "clear_of",
+      "value_m": 0.189,
+      "via": null
+    },
+    {
+      "a": "e2",
+      "b": "e9",
+      "relation": "above",
+      "value_m": 0.189,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e2",
+      "relation": "below",
+      "value_m": 0.189,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e6",
+      "relation": "clear_of",
+      "value_m": 0.085,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e3",
+      "relation": "east_of",
+      "value_m": 0.085,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e6",
+      "relation": "west_of",
+      "value_m": 0.085,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e7",
+      "relation": "clear_of",
+      "value_m": 0.717854,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e3",
+      "relation": "north_of",
+      "value_m": 0.717,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e7",
+      "relation": "south_of",
+      "value_m": 0.717,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e3",
+      "relation": "east_of",
+      "value_m": 0.035,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e7",
+      "relation": "west_of",
+      "value_m": 0.035,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 1.337172,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e3",
+      "relation": "above",
+      "value_m": 0.261,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e8",
+      "relation": "below",
+      "value_m": 0.261,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e8",
+      "relation": "north_of",
+      "value_m": 0.902,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e3",
+      "relation": "south_of",
+      "value_m": 0.902,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e3",
+      "relation": "east_of",
+      "value_m": 0.952,
+      "via": null
+    },
+    {
+      "a": "e3",
+      "b": "e8",
+      "relation": "west_of",
+      "value_m": 0.952,
+      "via": null
+    },
+    {
+      "a": "e4",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 0.214256,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e4",
+      "relation": "above",
+      "value_m": 0.165,
+      "via": null
+    },
+    {
+      "a": "e4",
+      "b": "e8",
+      "relation": "below",
+      "value_m": 0.165,
+      "via": null
+    },
+    {
+      "a": "e4",
+      "b": "e8",
+      "relation": "east_of",
+      "value_m": 0.092,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e4",
+      "relation": "west_of",
+      "value_m": 0.092,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 0.269,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e5",
+      "relation": "above",
+      "value_m": 0.269,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e8",
+      "relation": "below",
+      "value_m": 0.269,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e8",
+      "relation": "crosses",
+      "value_m": 0.269,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e9",
+      "relation": "clear_of",
+      "value_m": 0.188228,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e5",
+      "relation": "above",
+      "value_m": 0.077,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e9",
+      "relation": "below",
+      "value_m": 0.077,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e9",
+      "relation": "east_of",
+      "value_m": 0.152,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e5",
+      "relation": "west_of",
+      "value_m": 0.152,
+      "via": null
+    },
+    {
+      "a": "e5",
+      "b": "e9",
+      "relation": "parallel",
+      "value_m": 0.188228,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e6",
+      "relation": "supports",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e7",
+      "relation": "above",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e7",
+      "b": "e6",
+      "relation": "below",
+      "value_m": 0.0,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e8",
+      "relation": "clear_of",
+      "value_m": 0.826105,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e6",
+      "relation": "above",
+      "value_m": 0.571,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e8",
+      "relation": "below",
+      "value_m": 0.571,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e6",
+      "relation": "east_of",
+      "value_m": 0.597,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e8",
+      "relation": "west_of",
+      "value_m": 0.597,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e9",
+      "relation": "clear_of",
+      "value_m": 1.2842,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e6",
+      "relation": "above",
+      "value_m": 0.379,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e9",
+      "relation": "below",
+      "value_m": 0.379,
+      "via": null
+    },
+    {
+      "a": "e9",
+      "b": "e6",
+      "relation": "east_of",
+      "value_m": 1.227,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e9",
+      "relation": "west_of",
+      "value_m": 1.227,
+      "via": null
+    },
+    {
+      "a": "e6",
+      "b": "e9",
+      "relation": "parallel",
+      "value_m": 1.2842,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e9",
+      "relation": "clashes",
+      "value_m": -0.1,
+      "via": null
+    },
+    {
+      "a": "e8",
+      "b": "e9",
+      "relation": "crosses",
+      "value_m": -0.1,
+      "via": null
+    }
+  ],
+  "resolutions": [
+    {
+      "pair": 0,
+      "label": "good",
+      "fix": {
+        "element": "e4",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.334,
+        "via_opening": "o1"
+      },
+      "valid": true,
+      "resolves_original": true,
+      "new_hits": [],
+      "evidence": {
+        "passed": true,
+        "clash_gone": true,
+        "min_clear_m": 0.057,
+        "new_hits": [],
+        "via_opening": "o1",
+        "reason": "ok"
+      }
+    },
+    {
+      "pair": 0,
+      "label": "alt_below",
+      "fix": {
+        "element": "e4",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": -0.146,
+        "via_opening": null
+      },
+      "valid": true,
+      "resolves_original": true,
+      "new_hits": [],
+      "evidence": {
+        "passed": true,
+        "clash_gone": true,
+        "min_clear_m": 0.05,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "ok"
+      }
+    },
+    {
+      "pair": 0,
+      "label": "too_small",
+      "fix": {
+        "element": "e4",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.167,
+        "via_opening": "o1"
+      },
+      "valid": false,
+      "resolves_original": false,
+      "new_hits": [],
+      "evidence": {
+        "passed": false,
+        "clash_gone": false,
+        "min_clear_m": -0.099,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "clash not gone: still -99 mm into the clash partner; clearance -99 mm to e1 < required 25 mm; does not pass through opening o1"
+      }
+    },
+    {
+      "pair": 0,
+      "label": "wrong_direction",
+      "fix": {
+        "element": "e4",
+        "dx": 0.0,
+        "dy": 0.334,
+        "dz": 0.0,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": false,
+      "new_hits": [],
+      "evidence": {
+        "passed": false,
+        "clash_gone": false,
+        "min_clear_m": -0.096,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "clash not gone: still -96 mm into the clash partner; clearance -96 mm to e1 < required 25 mm"
+      }
+    },
+    {
+      "pair": 0,
+      "label": "wrong_element",
+      "fix": {
+        "element": "e1",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": -0.334,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": true,
+      "new_hits": [
+        "e6"
+      ],
+      "evidence": {
+        "passed": false,
+        "clash_gone": true,
+        "min_clear_m": -0.26,
+        "new_hits": [
+          "e6"
+        ],
+        "via_opening": null,
+        "reason": "structure stays: the mover is structure; clearance -260 mm to e3 < required 25 mm; new hits: e6"
+      }
+    },
+    {
+      "pair": 0,
+      "label": "hits_third",
+      "fix": {
+        "element": "e4",
+        "dx": -1.82,
+        "dy": 0.0,
+        "dz": -0.146,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": true,
+      "new_hits": [
+        "e5"
+      ],
+      "evidence": {
+        "passed": false,
+        "clash_gone": true,
+        "min_clear_m": -0.032277,
+        "new_hits": [
+          "e5"
+        ],
+        "via_opening": null,
+        "reason": "clearance -32 mm to e5 < required 25 mm; new hits: e5"
+      }
+    },
+    {
+      "pair": 3,
+      "label": "good",
+      "fix": {
+        "element": "e9",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": -0.183,
+        "via_opening": null
+      },
+      "valid": true,
+      "resolves_original": true,
+      "new_hits": [],
+      "evidence": {
+        "passed": true,
+        "clash_gone": true,
+        "min_clear_m": 0.083,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "ok"
+      }
+    },
+    {
+      "pair": 3,
+      "label": "too_small",
+      "fix": {
+        "element": "e9",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": -0.0915,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": false,
+      "new_hits": [],
+      "evidence": {
+        "passed": false,
+        "clash_gone": false,
+        "min_clear_m": -0.0085,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "clash not gone: still -9 mm into the clash partner; clearance -9 mm to e8 < required 25 mm"
+      }
+    },
+    {
+      "pair": 3,
+      "label": "wrong_direction",
+      "fix": {
+        "element": "e9",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.183,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": false,
+      "new_hits": [
+        "e2"
+      ],
+      "evidence": {
+        "passed": false,
+        "clash_gone": false,
+        "min_clear_m": -0.091,
+        "new_hits": [
+          "e2"
+        ],
+        "via_opening": null,
+        "reason": "not allowed: e9 may not move up; clash not gone: still -91 mm into the clash partner; clearance -91 mm to e8 < required 25 mm; new hits: e2"
+      }
+    },
+    {
+      "pair": 3,
+      "label": "wrong_element",
+      "fix": {
+        "element": "e8",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.13,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": true,
+      "new_hits": [],
+      "evidence": {
+        "passed": false,
+        "clash_gone": true,
+        "min_clear_m": 0.03,
+        "new_hits": [],
+        "via_opening": null,
+        "reason": "locked: e8 must not move"
+      }
+    },
+    {
+      "pair": 3,
+      "label": "hits_third",
+      "fix": {
+        "element": "e9",
+        "dx": 0.0,
+        "dy": 0.0,
+        "dz": 0.324,
+        "via_opening": null
+      },
+      "valid": false,
+      "resolves_original": true,
+      "new_hits": [
+        "e2"
+      ],
+      "evidence": {
+        "passed": false,
+        "clash_gone": true,
+        "min_clear_m": -0.135,
+        "new_hits": [
+          "e2"
+        ],
+        "via_opening": null,
+        "reason": "not allowed: e9 may not move up; clearance -135 mm to e2 < required 25 mm; new hits: e2"
+      }
+    }
+  ],
+  "cameras": [
+    {
+      "name": "A",
+      "azimuth_deg": 41.7,
+      "elevation_deg": 22.9,
+      "distance_factor": 1.0,
+      "projection": "perspective"
+    },
+    {
+      "name": "B",
+      "azimuth_deg": 41.7,
+      "elevation_deg": 22.9,
+      "distance_factor": 1.0,
+      "projection": "perspective"
+    },
+    {
+      "name": "C",
+      "azimuth_deg": 131.7,
+      "elevation_deg": 22.9,
+      "distance_factor": 1.0,
+      "projection": "perspective"
+    },
+    {
+      "name": "top",
+      "azimuth_deg": 0.0,
+      "elevation_deg": 90.0,
+      "distance_factor": 1.0,
+      "projection": "orthographic"
+    },
+    {
+      "name": "section",
+      "azimuth_deg": 0.0,
+      "elevation_deg": 0.0,
+      "distance_factor": 1.0,
+      "projection": "orthographic"
+    }
+  ],
+  "schema_version": 2
+}

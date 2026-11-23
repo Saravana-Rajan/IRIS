@@ -1,0 +1,225 @@
+{
+ "render": {
+  "total": {
+   "pairs": 28,
+   "camera_pairs_ok": 28,
+   "fallback_pairs": 0,
+   "failed_pairs": 0,
+   "views": 140,
+   "restarts": 0,
+   "retried_jobs": 0,
+   "recovered_jobs": 0,
+   "seeds": 7,
+   "seeds_with_fallback": 0,
+   "seeds_failed": 0
+  },
+  "per_seed": [
+   {
+    "seed": 0,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 1,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 2,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 3,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 4,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 5,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   },
+   {
+    "seed": 6,
+    "pairs": 4,
+    "cameras": [
+     "A",
+     "B",
+     "C",
+     "top",
+     "section"
+    ],
+    "camera_pairs_ok": 4,
+    "fallback_pairs": 0,
+    "failed_pairs": 0,
+    "views": 20,
+    "restarts": 0,
+    "retried_jobs": 0,
+    "recovered_jobs": 0,
+    "errors": [],
+    "failed": false
+   }
+  ]
+ },
+ "build": {
+  "total": {
+   "calls": 83,
+   "failed": 0,
+   "restarts": 0,
+   "recovered_jobs": 0
+  },
+  "per_seed": [
+   {
+    "seed": 0,
+    "calls": 11,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 1,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 2,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 3,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 4,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 5,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   },
+   {
+    "seed": 6,
+    "calls": 12,
+    "failed": 0,
+    "errors": [],
+    "restarts": 0,
+    "recovered_jobs": 0
+   }
+  ]
+ }
+}

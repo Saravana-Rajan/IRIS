@@ -126,7 +126,9 @@ uv run iris-bench score  --out runs/real && uv run iris-bench verify --out runs/
 For the final runs, prefer Vertex batch prediction (half price): `runner.write_batch_jsonl(items, path,
 model=label)` writes the same requests (no CLI flag or submit/collect step yet).
 
-Keep run folders (`runs/`) out of git.
+Keep run folders (`runs/`) out of git. The one exception is the published sample run,
+[sample-run/](sample-run/README.md): a Gemini 3.8 Flash run with its pictures as WebP, which `score` and `verify`
+re-check offline.
 
 ## What each stage writes
 

@@ -1,0 +1,1534 @@
+[
+  {
+    "name": "A",
+    "image": "render/e3-e1_A.png",
+    "id_image": "render/e3-e1_A.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e3": 21890,
+      "e1": 65257
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e3-e1_B.png",
+    "id_image": "render/e3-e1_B.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#2ca02c",
+      "e1": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 282189,
+      "e4": 1415,
+      "e5": 3906,
+      "e6": 0,
+      "e7": 5159,
+      "e8": 10635,
+      "e3": 14287,
+      "e1": 63816
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e3-e1_C.png",
+    "id_image": "render/e3-e1_C.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e3": 15674,
+      "e1": 70689
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e3-e1_top.png",
+    "id_image": "render/e3-e1_top.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e3": 27724,
+      "e1": 54120
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e3-e1_section.png",
+    "id_image": "render/e3-e1_section.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e3": 64944,
+      "e1": 23598
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e4-e1_A.png",
+    "id_image": "render/e4-e1_A.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e4": 2562,
+      "e1": 65568
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e4-e1_B.png",
+    "id_image": "render/e4-e1_B.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#2ca02c",
+      "e1": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 282190,
+      "e3": 14306,
+      "e5": 3920,
+      "e6": 0,
+      "e7": 5175,
+      "e8": 10681,
+      "e4": 1424,
+      "e1": 65568
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e4-e1_C.png",
+    "id_image": "render/e4-e1_C.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e4": 3212,
+      "e1": 70948
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e4-e1_top.png",
+    "id_image": "render/e4-e1_top.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e4": 5192,
+      "e1": 54120
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e4-e1_section.png",
+    "id_image": "render/e4-e1_section.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#2ca02c",
+      "e1": "#8e44ad"
+    },
+    "visible_px": {
+      "e4": 18942,
+      "e1": 24244
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e6-e5_A.png",
+    "id_image": "render/e6-e5_A.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#2ca02c",
+      "e5": "#8e44ad"
+    },
+    "visible_px": {
+      "e6": 2952,
+      "e5": 60542
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e6-e5_B.png",
+    "id_image": "render/e6-e5_B.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#2ca02c",
+      "e5": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 359712,
+      "e2": 1048576,
+      "e3": 247468,
+      "e4": 8394,
+      "e7": 0,
+      "e8": 4074,
+      "e6": 891,
+      "e5": 60542
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e6-e5_C.png",
+    "id_image": "render/e6-e5_C.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#2ca02c",
+      "e5": "#8e44ad"
+    },
+    "visible_px": {
+      "e6": 3415,
+      "e5": 68878
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e6-e5_top.png",
+    "id_image": "render/e6-e5_top.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#2ca02c",
+      "e5": "#8e44ad"
+    },
+    "visible_px": {
+      "e6": 3168,
+      "e5": 91102
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e6-e5_section.png",
+    "id_image": "render/e6-e5_section.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#2ca02c",
+      "e5": "#8e44ad"
+    },
+    "visible_px": {
+      "e6": 462,
+      "e5": 26158
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e8-e7_A.png",
+    "id_image": "render/e8-e7_A.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#2ca02c",
+      "e7": "#8e44ad"
+    },
+    "visible_px": {
+      "e8": 57808,
+      "e7": 33387
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e8-e7_B.png",
+    "id_image": "render/e8-e7_B.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#2ca02c",
+      "e7": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 122848,
+      "e2": 475869,
+      "e3": 0,
+      "e4": 7496,
+      "e5": 19203,
+      "e6": 0,
+      "e8": 46725,
+      "e7": 32734
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e8-e7_C.png",
+    "id_image": "render/e8-e7_C.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#2ca02c",
+      "e7": "#8e44ad"
+    },
+    "visible_px": {
+      "e8": 51747,
+      "e7": 35822
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e8-e7_top.png",
+    "id_image": "render/e8-e7_top.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#2ca02c",
+      "e7": "#8e44ad"
+    },
+    "visible_px": {
+      "e8": 86020,
+      "e7": 55924
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e8-e7_section.png",
+    "id_image": "render/e8-e7_section.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#2ca02c",
+      "e7": "#8e44ad"
+    },
+    "visible_px": {
+      "e8": 158752,
+      "e7": 11525
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e1-e3_fix6199933a_before_A.png",
+    "id_image": "render/e1-e3_fix6199933a_before_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 275579,
+      "e4": 2545,
+      "e5": 6445,
+      "e6": 346,
+      "e7": 5118,
+      "e8": 10534,
+      "e1": 65072,
+      "e3": 21688
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e1-e3_fix6199933a_after_A.png",
+    "id_image": "render/e1-e3_fix6199933a_after_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 275579,
+      "e4": 2545,
+      "e5": 6445,
+      "e6": 346,
+      "e7": 5118,
+      "e8": 10534,
+      "e1": 65072,
+      "e3": 19178
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e1-e3_fixb3f2e4c9_before_A.png",
+    "id_image": "render/e1-e3_fixb3f2e4c9_before_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 273470,
+      "e4": 2453,
+      "e5": 6282,
+      "e6": 334,
+      "e7": 4910,
+      "e8": 10209,
+      "e1": 61837,
+      "e3": 21008
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e1-e3_fixb3f2e4c9_after_A.png",
+    "id_image": "render/e1-e3_fixb3f2e4c9_after_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 273470,
+      "e4": 2453,
+      "e5": 6282,
+      "e6": 334,
+      "e7": 4910,
+      "e8": 10209,
+      "e1": 61837,
+      "e3": 20003
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e1-e3-e4_fixee4e61f9_before_A.png",
+    "id_image": "render/e1-e3-e4_fixee4e61f9_before_A.id.png",
+    "labels": {
+      "e1": "B",
+      "e3": "A",
+      "e4": "C",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#ff8c00",
+      "e4": "#00a6a6",
+      "e2": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 275319,
+      "e5": 6451,
+      "e6": 354,
+      "e7": 5122,
+      "e8": 10545,
+      "e1": 65038,
+      "e3": 21683,
+      "e4": 2545
+    },
+    "focus": [
+      "e1",
+      "e3",
+      "e4"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e1-e3-e4_fixee4e61f9_after_A.png",
+    "id_image": "render/e1-e3-e4_fixee4e61f9_after_A.id.png",
+    "labels": {
+      "e1": "B",
+      "e3": "A",
+      "e4": "C",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#ff8c00",
+      "e4": "#00a6a6",
+      "e2": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 275319,
+      "e5": 6451,
+      "e6": 354,
+      "e7": 5122,
+      "e8": 10545,
+      "e1": 63878,
+      "e3": 21683,
+      "e4": 2545
+    },
+    "focus": [
+      "e1",
+      "e3",
+      "e4"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e1-e3_fix14aef591_before_A.png",
+    "id_image": "render/e1-e3_fix14aef591_before_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 276188,
+      "e4": 2538,
+      "e5": 6454,
+      "e6": 350,
+      "e7": 5127,
+      "e8": 10555,
+      "e1": 65078,
+      "e3": 21707
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e1-e3_fix14aef591_after_A.png",
+    "id_image": "render/e1-e3_fix14aef591_after_A.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 276188,
+      "e4": 2538,
+      "e5": 6454,
+      "e6": 350,
+      "e7": 5127,
+      "e8": 10555,
+      "e1": 65078,
+      "e3": 21592
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "before",
+    "image": "render/e1-e3_cands2ce33d8e_before.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_before.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 267062,
+      "e4": 2460,
+      "e5": 6193,
+      "e6": 336,
+      "e7": 4880,
+      "e8": 10107,
+      "e1": 61645,
+      "e3": 20823
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "cand_1",
+    "image": "render/e1-e3_cands2ce33d8e_cand_1.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_cand_1.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 267062,
+      "e4": 2460,
+      "e5": 6193,
+      "e6": 336,
+      "e7": 4880,
+      "e8": 10107,
+      "e1": 61645,
+      "e3": 18474
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "cand_2",
+    "image": "render/e1-e3_cands2ce33d8e_cand_2.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_cand_2.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 267062,
+      "e4": 2460,
+      "e5": 6193,
+      "e6": 336,
+      "e7": 4880,
+      "e8": 10107,
+      "e1": 60573,
+      "e3": 20823
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "cand_3",
+    "image": "render/e1-e3_cands2ce33d8e_cand_3.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_cand_3.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 267062,
+      "e4": 2460,
+      "e5": 6193,
+      "e6": 336,
+      "e7": 4880,
+      "e8": 10107,
+      "e1": 61645,
+      "e3": 20952
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "cand_4",
+    "image": "render/e1-e3_cands2ce33d8e_cand_4.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_cand_4.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 267062,
+      "e4": 2460,
+      "e5": 6193,
+      "e6": 336,
+      "e7": 4880,
+      "e8": 10107,
+      "e1": 61645,
+      "e3": 19846
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "cand_grid",
+    "image": "render/e1-e3_cands2ce33d8e_cand_grid.png",
+    "id_image": "render/e1-e3_cands2ce33d8e_cand_grid.id.png",
+    "labels": {
+      "e1": "A",
+      "e3": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e1": "#2ca02c",
+      "e3": "#8e44ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 62910,
+      "e4": 579,
+      "e5": 1458,
+      "e6": 79,
+      "e7": 1149,
+      "e8": 2380,
+      "e1": 14268,
+      "e3": 4351
+    },
+    "focus": [
+      "e1",
+      "e3"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e7-e8_fix14fa6145_before_A.png",
+    "id_image": "render/e7-e8_fix14fa6145_before_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 122636,
+      "e2": 465623,
+      "e3": 0,
+      "e4": 8762,
+      "e5": 19005,
+      "e6": 0,
+      "e7": 33305,
+      "e8": 57364
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e7-e8_fix14fa6145_after_A.png",
+    "id_image": "render/e7-e8_fix14fa6145_after_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 122636,
+      "e2": 465623,
+      "e3": 0,
+      "e4": 8762,
+      "e5": 19005,
+      "e6": 0,
+      "e7": 33305,
+      "e8": 57199
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e7-e8_fix71bba3c8_before_A.png",
+    "id_image": "render/e7-e8_fix71bba3c8_before_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 122848,
+      "e2": 475869,
+      "e3": 0,
+      "e4": 8739,
+      "e5": 19203,
+      "e6": 0,
+      "e7": 33387,
+      "e8": 57808
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e7-e8_fix71bba3c8_after_A.png",
+    "id_image": "render/e7-e8_fix71bba3c8_after_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 122848,
+      "e2": 475869,
+      "e3": 0,
+      "e4": 8739,
+      "e5": 19203,
+      "e6": 0,
+      "e7": 33387,
+      "e8": 57957
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "before_A",
+    "image": "render/e7-e8_fixa90dc249_before_A.png",
+    "id_image": "render/e7-e8_fixa90dc249_before_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121257,
+      "e2": 493515,
+      "e3": 29,
+      "e4": 8464,
+      "e5": 19665,
+      "e6": 0,
+      "e7": 32007,
+      "e8": 56136
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "after_A",
+    "image": "render/e7-e8_fixa90dc249_after_A.png",
+    "id_image": "render/e7-e8_fixa90dc249_after_A.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121257,
+      "e2": 493515,
+      "e3": 29,
+      "e4": 8464,
+      "e5": 19665,
+      "e6": 0,
+      "e7": 32007,
+      "e8": 56701
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "before",
+    "image": "render/e7-e8_candsfd8ffbdc_before.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_before.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121055,
+      "e2": 483731,
+      "e3": 31,
+      "e4": 8470,
+      "e5": 19462,
+      "e6": 0,
+      "e7": 31889,
+      "e8": 55713
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "cand_1",
+    "image": "render/e7-e8_candsfd8ffbdc_cand_1.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_cand_1.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121055,
+      "e2": 483731,
+      "e3": 31,
+      "e4": 8470,
+      "e5": 19462,
+      "e6": 0,
+      "e7": 31889,
+      "e8": 56250
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "cand_2",
+    "image": "render/e7-e8_candsfd8ffbdc_cand_2.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_cand_2.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121055,
+      "e2": 483731,
+      "e3": 31,
+      "e4": 8470,
+      "e5": 19462,
+      "e6": 0,
+      "e7": 31889,
+      "e8": 55879
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "cand_3",
+    "image": "render/e7-e8_candsfd8ffbdc_cand_3.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_cand_3.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121055,
+      "e2": 483731,
+      "e3": 31,
+      "e4": 8470,
+      "e5": 19462,
+      "e6": 0,
+      "e7": 31889,
+      "e8": 55612
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "cand_4",
+    "image": "render/e7-e8_candsfd8ffbdc_cand_4.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_cand_4.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 121055,
+      "e2": 483731,
+      "e3": 31,
+      "e4": 8470,
+      "e5": 19462,
+      "e6": 0,
+      "e7": 31889,
+      "e8": 55524
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "cand_grid",
+    "image": "render/e7-e8_candsfd8ffbdc_cand_grid.png",
+    "id_image": "render/e7-e8_candsfd8ffbdc_cand_grid.id.png",
+    "labels": {
+      "e7": "A",
+      "e8": "B"
+    },
+    "colors": {
+      "e7": "#2ca02c",
+      "e8": "#8e44ad",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 28516,
+      "e2": 113950,
+      "e3": 7,
+      "e4": 1995,
+      "e5": 4584,
+      "e6": 0,
+      "e7": 7511,
+      "e8": 13079
+    },
+    "focus": [
+      "e7",
+      "e8"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e3-e1-e2-e4_A.png",
+    "id_image": "render/e3-e1-e2-e4_A.id.png",
+    "labels": {
+      "e3": "C",
+      "e1": "A",
+      "e2": "B",
+      "e4": "D",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#8e44ad",
+      "e2": "#00a6a6",
+      "e4": "#2ca02c"
+    },
+    "visible_px": {
+      "e3": 12794,
+      "e1": 38687,
+      "e2": 169413,
+      "e4": 1611
+    },
+    "focus": [
+      "e3",
+      "e1",
+      "e2",
+      "e4"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e3-e1-e2-e4_C.png",
+    "id_image": "render/e3-e1-e2-e4_C.id.png",
+    "labels": {
+      "e3": "C",
+      "e1": "A",
+      "e2": "B",
+      "e4": "D",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#8e44ad",
+      "e2": "#00a6a6",
+      "e4": "#2ca02c"
+    },
+    "visible_px": {
+      "e3": 10071,
+      "e1": 43930,
+      "e2": 172492,
+      "e4": 1938
+    },
+    "focus": [
+      "e3",
+      "e1",
+      "e2",
+      "e4"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e6-e5-e1-e8_A.png",
+    "id_image": "render/e6-e5-e1-e8_A.id.png",
+    "labels": {
+      "e6": "C",
+      "e5": "A",
+      "e1": "B",
+      "e8": "D",
+      "o1": "P"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#8e44ad",
+      "e1": "#00a6a6",
+      "e8": "#2ca02c"
+    },
+    "visible_px": {
+      "e6": 319,
+      "e5": 5693,
+      "e1": 59879,
+      "e8": 9319
+    },
+    "focus": [
+      "e6",
+      "e5",
+      "e1",
+      "e8"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e6-e5-e1-e8_C.png",
+    "id_image": "render/e6-e5-e1-e8_C.id.png",
+    "labels": {
+      "e6": "C",
+      "e5": "A",
+      "e1": "B",
+      "e8": "D",
+      "o1": "P"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#8e44ad",
+      "e1": "#00a6a6",
+      "e8": "#2ca02c"
+    },
+    "visible_px": {
+      "e6": 337,
+      "e5": 5421,
+      "e1": 64667,
+      "e8": 10866
+    },
+    "focus": [
+      "e6",
+      "e5",
+      "e1",
+      "e8"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e8-e7-e2-e5_A.png",
+    "id_image": "render/e8-e7-e2-e5_A.id.png",
+    "labels": {
+      "e8": "C",
+      "e7": "A",
+      "e2": "B",
+      "e5": "D"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#8e44ad",
+      "e2": "#00a6a6",
+      "e5": "#2ca02c"
+    },
+    "visible_px": {
+      "e8": 6260,
+      "e7": 3134,
+      "e2": 167384,
+      "e5": 3941
+    },
+    "focus": [
+      "e8",
+      "e7",
+      "e2",
+      "e5"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e8-e7-e2-e5_C.png",
+    "id_image": "render/e8-e7-e2-e5_C.id.png",
+    "labels": {
+      "e8": "C",
+      "e7": "A",
+      "e2": "B",
+      "e5": "D"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#8e44ad",
+      "e2": "#00a6a6",
+      "e5": "#2ca02c"
+    },
+    "visible_px": {
+      "e8": 7343,
+      "e7": 4636,
+      "e2": 170406,
+      "e5": 3878
+    },
+    "focus": [
+      "e8",
+      "e7",
+      "e2",
+      "e5"
+    ]
+  }
+]

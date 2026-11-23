@@ -11,9 +11,44 @@
 **Live app: <https://iris-techjays.web.app>** · Built by **Techjays** on **Google Cloud** · Our entry to the
 **Innodata Frontier AI Hackathon 2026, Track 2 "Visual Task Factory"**
 
-[The problem](#the-problem) · [What Iris does](#what-iris-does) · [Results](#results) ·
-[How it works](#how-it-works) · [Tech stack](#tech-stack) · [Run locally](#run-locally) · [Deploy](#deploy) ·
+[For judges](#for-judges-5-minute-tour) · [The problem](#the-problem) · [What Iris does](#what-iris-does) ·
+[Results](#results) · [How it works](#how-it-works) · [Tech stack](#tech-stack) ·
+[Built with](#built-with-open-source-components-we-reused) ·
+[Transparency](#transparency-manual-steps-and-corrections) · [Run locally](#run-locally) · [Deploy](#deploy) ·
 [Repository map](#repository-map)
+
+---
+
+## For judges: 5-minute tour
+
+**Demo video: <link>**
+
+1. **Open the live app:** <https://iris-techjays.web.app>. No sign-in, and the sample flows below cost nothing.
+2. **Try the sample building → Prepare fixes.** Iris finds 464 clashes in the synthetic Northbank building, then the
+   review queue shows a geometry-verified fix for each of 8 clashes, with a 3D Before / After view. Accept, reject or
+   ask for another. On clash #1 the fix raises the duct 400 mm through the girder's web opening, the designer's own fix.
+3. **Try the sample drawings.** Gemini's reading of the sample PDF sheets, each item checked against the PDF's text
+   layer, and the 4 planted drawing-vs-model mismatches under Mismatches.
+4. **Inspect the benchmark outputs:** [bench/sample-run/](bench/sample-run/README.md) holds a real VisionBench run on
+   Gemini 3.8 Flash: 1,183 items, 160 graded answers, the report, the integrity check and the pictures the model saw.
+5. **Run the tests** (setup in [Run locally](#run-locally); no credentials, no paid calls):
+
+   ```bash
+   uv run --directory server --locked pytest -q              # server, including VisionBench
+   uv run --directory server --locked pytest -q tests/bench  # VisionBench only
+   npm test --prefix web                                     # web
+   ```
+
+6. **Run VisionBench offline for free** with a stand-in model, from `server/`:
+
+   ```bash
+   (cd ../bench/render && npm ci && npx playwright install chromium)   # the renderer, once
+   uv run iris-bench all --seeds 0:3 --model fake:0.7 --out runs/demo
+   ```
+
+The sample flows replay saved Gemini outputs, and the samples are synthetic. Both are explained in
+[Transparency](#transparency-manual-steps-and-corrections), with the open-source parts we reused in
+[Built with](#built-with-open-source-components-we-reused).
 
 ---
 
@@ -143,6 +178,10 @@ calls, and the integrity check passed.
 This is why Iris never trusts a model's answer without a geometry check. The samples are small (n = 7–22 per
 category, with wide intervals), so read these numbers as a first measurement, not a ranking.
 
+The whole run is committed in [bench/sample-run/](bench/sample-run/README.md): the items and prompts, Gemini's replies,
+the graded results, the scores, the integrity check, the report and the pictures. `iris-bench score` and `verify`
+re-check it offline.
+
 ## How it works
 
 ```mermaid
@@ -197,6 +236,84 @@ with [01 · Product and journeys](docs/architecture/01-product-and-journeys.md) 
 | DevOps | Docker (multi-stage) · GitHub Actions CI/CD · Workload Identity Federation (keyless deploys) |
 | Testing | pytest · Node test runner · Playwright · `tsc --noEmit` |
 | Formats | IFC · STEP · BCF · PDF · Navisworks XML · NDJSON · MCP |
+
+## Built with (open-source components we reused)
+
+Iris's own code is the geometry check, detection, the fix agent and fix kinds, the review queue, the drawing reader,
+the reports, the web app and the whole VisionBench pipeline. It is built on these open-source libraries and tools,
+used as published (licences from each package's metadata):
+
+**Server and benchmark** ([server/pyproject.toml](server/pyproject.toml))
+
+| Component | What we use it for | Licence |
+|---|---|---|
+| [IfcOpenShell](https://ifcopenshell.org/) | Reading, editing and writing IFC; the clash and clearance trees; VisionBench's IFC4 export | LGPL-3.0-or-later |
+| [OpenCASCADE](https://dev.opencascade.org/) via [cadquery-ocp](https://github.com/CadQuery/OCP) | Triangulating IFC geometry, reading and writing STEP | OCCT: LGPL-2.1 with exception; bindings: Apache-2.0 |
+| [NumPy](https://numpy.org/) | Geometry and scoring arithmetic | BSD-3-Clause |
+| [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/), [Pydantic](https://docs.pydantic.dev/) | The HTTP API, NDJSON streams, request and reply models | MIT, BSD-3-Clause, MIT |
+| [python-multipart](https://github.com/Kludex/python-multipart), [HTTPX](https://www.python-httpx.org/) | File uploads; HTTP client | Apache-2.0, BSD-3-Clause |
+| [pdfplumber](https://github.com/jsvine/pdfplumber), [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) | The drawing reader: the PDF text layer and page pictures | MIT; BSD-3-Clause / Apache-2.0 |
+| [ReportLab](https://www.reportlab.com/opensource/), [WeasyPrint](https://weasyprint.org/) | PDF coordination reports | BSD, BSD-3-Clause |
+| [defusedxml](https://github.com/tiran/defusedxml) | Safe parsing of uploaded XML (Navisworks reports, BCF) | PSF-2.0 |
+| [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) | The MCP server for outside agents | MIT |
+| [google-genai](https://github.com/googleapis/python-genai) | Calling Gemini on Vertex AI | Apache-2.0 |
+| [pytest](https://pytest.org/), [uv](https://docs.astral.sh/uv/) | Tests; Python and dependency management | MIT; MIT / Apache-2.0 |
+
+**Web app and renderer** ([web/package.json](web/package.json), [bench/render/package.json](bench/render/package.json))
+
+| Component | What we use it for | Licence |
+|---|---|---|
+| [React](https://react.dev/) | The web app | MIT |
+| [TypeScript](https://www.typescriptlang.org/), [Vite](https://vite.dev/) | Language, dev server and build | Apache-2.0, MIT |
+| [three.js](https://threejs.org/) | The 3D viewer, and VisionBench's scene renderer | MIT |
+| [web-ifc](https://github.com/ThatOpen/engine_web-ifc) | Loading IFC geometry in the browser (WebAssembly) | MPL-2.0 |
+| [dockview](https://dockview.dev/) | Docking panels (the free core only) | MIT |
+| [lucide-react](https://lucide.dev/) | Icons | ISC |
+| [Playwright](https://playwright.dev/) with headless Chromium | VisionBench's deterministic renders, and browser checks | Apache-2.0 |
+| [IBM Plex Sans and Mono](https://github.com/IBM/plex) | Typefaces, from Google Fonts | OFL-1.1 |
+
+**Services and tools, not open source:** Gemini models on Vertex AI, Cloud Run, Firebase Hosting, Cloud Storage,
+Secret Manager, Artifact Registry, Docker and GitHub Actions.
+
+## Transparency: manual steps and corrections
+
+What a reviewer should know about how the outputs were made, and what was done by hand.
+
+- **A benchmark labelling bug, fixed and re-run.** In the first VisionBench runs, the J3/J4 questions could offer
+  opening letters that the item's own pictures did not show, and Gemini rightly answered that it could not see them.
+  We fixed the generator so these jobs offer only openings labelled in the pair's own pictures, added the
+  `letters_shown` integrity check (`iris-bench verify` now fails any item whose answer letters its pictures do not
+  show), rebuilt the run and discarded the earlier results. The committed run passes the check for all 298 pictures
+  items.
+- **The live demo replays saved outputs, so visitors cost $0.** Each saved file is keyed by hashes of its inputs and is
+  used only when they match exactly. The page labels it as saved.
+  - **Review-queue fixes** ([samples/prepared/](samples/prepared/)): real Gemini 3.8 Flash replies from one
+    owner-approved run (8 calls, $0.057). On replay, every proposed fix goes through the geometry check again, so a
+    saved reply that no longer passes is not shown as ready. Labelled "Saved AI proposals for this sample".
+  - **Drawing readings** ([samples/drawings/](samples/drawings/)): Gemini 3.8 Flash's readings of the two sample
+    sheets, replayed only for the same file, prompt and page size. Each item is still checked against the PDF's text
+    layer and compared with the 3D model. Labelled "Saved AI reading of this sample (Gemini 3.8 Flash)".
+  - **The sample clash check** ([samples/saved-checks/](samples/saved-checks/)): a saved geometry result (no AI) for
+    the unchanged sample models, per platform, checked against live geometry by a probe before it is used.
+
+  Your own models and PDFs are checked and read live, and AI calls on them run under per-visitor caps.
+- **The demo videos** were recorded from these saved outputs, with no live Gemini call, and narrated with Gemini
+  text-to-speech.
+- **The samples are synthetic.** The Northbank building (6 IFC files, including the designer's fix revision `Rev04`),
+  the PC-03 palletising cell (2 STEP files) and the two M-201 PDF drawings, with their planted mismatches, were made by
+  our own generator scripts (the generator is not in this repo). They contain no customer data. VisionBench's scenes
+  are generated by the code in this repo, from a seed.
+- **The error-cost weights are team judgement.** The weights in the cost-weighted score (`false_clear` and
+  `approved_bad_fix` 5 … `false_alarm` 1) are illustrative, not measured site costs
+  ([docs/visionbench.md](docs/visionbench.md), section 1). Plain accuracy never uses them.
+- **The sample run was converted for publishing.** In [bench/sample-run/](bench/sample-run/README.md), local paths
+  were made relative and the pictures stored as WebP; no result was edited
+  ([what changed](bench/sample-run/README.md#what-was-changed-from-the-raw-run-folder)).
+- **Deploy warm-up and settings.** After the Nov 2 deploy, the palletising cell was opened once by hand so its STEP
+  conversion was cached for visitors, and pictures of an accepted fix ("Show it built") were switched on in the
+  deployed settings.
+- **Every model result is measured.** No number in this README was estimated or copied between models. The dated
+  record of how each was checked is the build log, [docs/architecture/22-build-log.md](docs/architecture/22-build-log.md).
 
 ## Run locally
 
@@ -351,6 +468,7 @@ one-time setup is `deploy/github-setup.sh`, and `deploy/deploy.sh` still deploys
 | [`server/iris_bench/`](server/iris_bench/) | VisionBench: scenes, geometry truth, jobs, runner, scoring, integrity checks, report, CLI (`iris-bench`) |
 | [`server/tests/`](server/tests/) | The pytest suites (VisionBench in `tests/bench/`) |
 | [`bench/`](bench/README.md) | VisionBench quick start and the headless three.js renderer (`bench/render/`) |
+| [`bench/sample-run/`](bench/sample-run/README.md) | A real VisionBench run on Gemini 3.8 Flash: items, replies, grades, scores, integrity check, report and pictures |
 | [`web/`](web/) | The React + three.js web app (`web/src/`) and its tests |
 | [`samples/`](samples/README.md) | Synthetic demo models, sample PDF drawings with answer keys, saved checks and saved AI replies |
 | [`evals/`](evals/README.md) | Real-model evals and the scripts that make the saved sample data |

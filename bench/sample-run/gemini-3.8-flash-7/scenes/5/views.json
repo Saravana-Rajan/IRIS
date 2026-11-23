@@ -1,0 +1,478 @@
+[
+  {
+    "name": "A",
+    "image": "render/e3-e1_A.png",
+    "id_image": "render/e3-e1_A.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e3": 36104,
+      "e1": 74516
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e3-e1_B.png",
+    "id_image": "render/e3-e1_B.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#00a6a6",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 344711,
+      "e4": 14101,
+      "e5": 3826,
+      "e6": 288,
+      "e7": 3231,
+      "e8": 18663,
+      "e3": 24029,
+      "e1": 71447
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e3-e1_C.png",
+    "id_image": "render/e3-e1_C.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e3": 34571,
+      "e1": 75702
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e3-e1_top.png",
+    "id_image": "render/e3-e1_top.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e3": 50148,
+      "e1": 46904
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e3-e1_section.png",
+    "id_image": "render/e3-e1_section.id.png",
+    "labels": {
+      "e3": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e3": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e3": 90200,
+      "e1": 32760
+    },
+    "focus": [
+      "e3",
+      "e1"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e4-e1_A.png",
+    "id_image": "render/e4-e1_A.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e4": 26871,
+      "e1": 78482
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e4-e1_B.png",
+    "id_image": "render/e4-e1_B.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#ff8c00",
+      "e1": "#00a6a6",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e2": 354765,
+      "e3": 24974,
+      "e5": 3969,
+      "e6": 305,
+      "e7": 3382,
+      "e8": 19523,
+      "e4": 14746,
+      "e1": 78482
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e4-e1_C.png",
+    "id_image": "render/e4-e1_C.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e4": 26251,
+      "e1": 79290
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e4-e1_top.png",
+    "id_image": "render/e4-e1_top.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e4": 44958,
+      "e1": 46904
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e4-e1_section.png",
+    "id_image": "render/e4-e1_section.id.png",
+    "labels": {
+      "e4": "A",
+      "e1": "B",
+      "o1": "P"
+    },
+    "colors": {
+      "e4": "#ff8c00",
+      "e1": "#00a6a6"
+    },
+    "visible_px": {
+      "e4": 113652,
+      "e1": 41138
+    },
+    "focus": [
+      "e4",
+      "e1"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e6-e5_A.png",
+    "id_image": "render/e6-e5_A.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#00a6a6"
+    },
+    "visible_px": {
+      "e6": 2650,
+      "e5": 47765
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e6-e5_B.png",
+    "id_image": "render/e6-e5_B.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#00a6a6",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e7": "#9aa3ad",
+      "e8": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 216738,
+      "e2": 978425,
+      "e4": 184590,
+      "e7": 37418,
+      "e8": 147530,
+      "e6": 778,
+      "e5": 47765
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e6-e5_C.png",
+    "id_image": "render/e6-e5_C.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#00a6a6"
+    },
+    "visible_px": {
+      "e6": 1854,
+      "e5": 50788
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e6-e5_top.png",
+    "id_image": "render/e6-e5_top.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#00a6a6"
+    },
+    "visible_px": {
+      "e6": 1734,
+      "e5": 63140
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e6-e5_section.png",
+    "id_image": "render/e6-e5_section.id.png",
+    "labels": {
+      "e6": "A",
+      "e5": "B"
+    },
+    "colors": {
+      "e6": "#ff8c00",
+      "e5": "#00a6a6"
+    },
+    "visible_px": {
+      "e6": 272,
+      "e5": 14432
+    },
+    "focus": [
+      "e6",
+      "e5"
+    ]
+  },
+  {
+    "name": "A",
+    "image": "render/e8-e7_A.png",
+    "id_image": "render/e8-e7_A.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#00a6a6"
+    },
+    "visible_px": {
+      "e8": 140919,
+      "e7": 27276
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "B",
+    "image": "render/e8-e7_B.png",
+    "id_image": "render/e8-e7_B.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#00a6a6",
+      "e1": "#9aa3ad",
+      "e2": "#9aa3ad",
+      "e3": "#9aa3ad",
+      "e4": "#9aa3ad",
+      "e5": "#9aa3ad",
+      "e6": "#9aa3ad"
+    },
+    "visible_px": {
+      "e1": 196512,
+      "e2": 810078,
+      "e3": 51929,
+      "e4": 31485,
+      "e5": 22964,
+      "e6": 1309,
+      "e8": 126810,
+      "e7": 24400
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "C",
+    "image": "render/e8-e7_C.png",
+    "id_image": "render/e8-e7_C.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#00a6a6"
+    },
+    "visible_px": {
+      "e8": 142109,
+      "e7": 28560
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "top",
+    "image": "render/e8-e7_top.png",
+    "id_image": "render/e8-e7_top.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#00a6a6"
+    },
+    "visible_px": {
+      "e8": 287048,
+      "e7": 55924
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  },
+  {
+    "name": "section",
+    "image": "render/e8-e7_section.png",
+    "id_image": "render/e8-e7_section.id.png",
+    "labels": {
+      "e8": "A",
+      "e7": "B"
+    },
+    "colors": {
+      "e8": "#ff8c00",
+      "e7": "#00a6a6"
+    },
+    "visible_px": {
+      "e8": 171380,
+      "e7": 5160
+    },
+    "focus": [
+      "e8",
+      "e7"
+    ]
+  }
+]

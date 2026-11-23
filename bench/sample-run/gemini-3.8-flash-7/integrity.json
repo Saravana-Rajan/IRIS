@@ -1,0 +1,363 @@
+{
+ "ok": true,
+ "generated_at": "2026-11-22T09:28:53+00:00",
+ "out_dir": "runs/gemini-3.8-flash-7",
+ "n_items": 1183,
+ "checks": [
+  {
+   "name": "truth_frozen",
+   "title": "Truth and evidence written before any model call",
+   "ok": true,
+   "severity": "error",
+   "summary": "1183 items and 7 scenes match the build manifest of 2026-11-22T09:16:41+00:00; results written after it",
+   "details": {
+    "manifest_built_at": "2026-11-22T09:16:41+00:00",
+    "n_manifest": 1183,
+    "n_items": 1183,
+    "items_sha256_ok": true,
+    "tampered": [],
+    "added": [],
+    "missing": [],
+    "changed_scenes": [],
+    "missing_scenes": [],
+    "results_older_than_manifest": [],
+    "unknown_result_ids": [],
+    "truth_in_results": [],
+    "code_changed_since_build": []
+   }
+  },
+  {
+   "name": "truth_isolated",
+   "title": "Truth code never reads model replies",
+   "ok": true,
+   "severity": "error",
+   "summary": "5 truth modules (checker, geom, scenes, spec, truth) import no runner, model client or scorer",
+   "details": {
+    "ok": true,
+    "modules": {
+     "truth": {
+      "path": "server/iris_bench/truth.py",
+      "imports": [
+       ".checker",
+       ".geom",
+       ".spec",
+       ".spec.Camera",
+       ".spec.Element",
+       ".spec.Fix",
+       ".spec.Relation",
+       ".spec.Resolution",
+       ".spec.Scene",
+       "__future__",
+       "__future__.annotations",
+       "itertools",
+       "math",
+       "random"
+      ],
+      "bad": [],
+      "reads_results": false
+     },
+     "checker": {
+      "path": "server/iris_bench/checker.py",
+      "imports": [
+       ".geom",
+       ".spec",
+       ".spec.Element",
+       ".spec.Fix",
+       ".spec.Planted",
+       ".spec.Scene",
+       "__future__",
+       "__future__.annotations",
+       "iris",
+       "iris.detect",
+       "iris.scene",
+       "iris.scene.IfcScene",
+       "iris.verify",
+       "json",
+       "pathlib",
+       "pathlib.Path"
+      ],
+      "bad": [],
+      "reads_results": false
+     },
+     "geom": {
+      "path": "server/iris_bench/geom.py",
+      "imports": [
+       ".spec",
+       ".spec.Element",
+       ".spec.Fix",
+       ".spec.Opening",
+       ".spec.Vec",
+       "__future__",
+       "__future__.annotations",
+       "dataclasses",
+       "dataclasses.dataclass",
+       "dataclasses.replace",
+       "functools",
+       "functools.lru_cache",
+       "math"
+      ],
+      "bad": [],
+      "reads_results": false
+     },
+     "scenes": {
+      "path": "server/iris_bench/scenes.py",
+      "imports": [
+       ".checker",
+       ".spec",
+       ".spec.Element",
+       ".spec.Fix",
+       ".spec.Opening",
+       ".spec.Planted",
+       ".spec.Scene",
+       ".truth",
+       "__future__",
+       "__future__.annotations",
+       "pathlib",
+       "pathlib.Path",
+       "random"
+      ],
+      "bad": [],
+      "reads_results": false
+     },
+     "spec": {
+      "path": "server/iris_bench/spec.py",
+      "imports": [
+       "__future__",
+       "__future__.annotations",
+       "dataclasses",
+       "dataclasses.asdict",
+       "dataclasses.dataclass",
+       "dataclasses.field",
+       "json",
+       "pathlib",
+       "pathlib.Path",
+       "typing",
+       "typing.Literal"
+      ],
+      "bad": [],
+      "reads_results": false
+     }
+    },
+    "missing": []
+   }
+  },
+  {
+   "name": "prompts_clean",
+   "title": "Pictures-mode prompts leak no kinds, ids or measurements",
+   "ok": true,
+   "severity": "error",
+   "summary": "885 prompts scanned, none names a kind, id or measurement",
+   "details": {
+    "scanned": 885,
+    "offending": [],
+    "n_offending": 0
+   }
+  },
+  {
+   "name": "truth_rederived",
+   "title": "Reference answers re-derived from scene.json by geometry",
+   "ok": true,
+   "severity": "error",
+   "summary": "298/298 sampled answers re-derived from geometry match",
+   "details": {
+    "checked": 298,
+    "matched": 298,
+    "mismatched": 0,
+    "skipped": 0,
+    "per_job": {
+     "J1_sort": {
+      "match": 56
+     },
+     "J2_who_moves": {
+      "match": 14
+     },
+     "J3_fix": {
+      "match": 14
+     },
+     "J4_opening": {
+      "match": 7
+     },
+     "J5_review": {
+      "match": 28
+     },
+     "J6_new_clash": {
+      "match": 28
+     },
+     "J7_pick_valid": {
+      "match": 14
+     },
+     "J8_spatial": {
+      "match": 65
+     },
+     "J9_relation": {
+      "match": 72
+     }
+    },
+    "mismatches": [],
+    "sample": 400,
+    "seed": 0
+   }
+  },
+  {
+   "name": "letters_shown",
+   "title": "Every answer letter is labelled in the item's own pictures",
+   "ok": true,
+   "severity": "error",
+   "summary": "298 pictures items: every answer letter is labelled in their pictures",
+   "details": {
+    "checked": 298,
+    "not_found": 0,
+    "offending": [],
+    "n_offending": 0
+   }
+  },
+  {
+   "name": "answer_balance",
+   "title": "Answer balance and chance baselines",
+   "ok": false,
+   "severity": "warn",
+   "summary": "J1_sort majority 50% vs chance 42%; J2_who_moves majority 86% vs chance 50%; J3_fix majority 50% vs chance 6%; J4_opening majority 71% vs chance 38%; J5_review majority 50% vs chance 50%; J6_new_clash majority 50% vs chance 50%; J7_pick_valid majority 29%; J8_spatial majority 20% vs chance 23%; J9_relation majority 19% vs chance 18% \u2014 imbalanced: J2_who_moves, J4_opening",
+   "details": {
+    "jobs": [
+     {
+      "job": "J1_sort",
+      "n": 56,
+      "counts": {
+       "real": 28,
+       "not_touching": 14,
+       "by_design": 14
+      },
+      "majority_answer": "real",
+      "majority_share": 0.5,
+      "chance": 0.41666666666666663,
+      "imbalanced": false
+     },
+     {
+      "job": "J2_who_moves",
+      "n": 14,
+      "counts": {
+       "A": 12,
+       "B": 2
+      },
+      "majority_answer": "A",
+      "majority_share": 0.8571428571428571,
+      "chance": 0.5,
+      "imbalanced": true
+     },
+     {
+      "job": "J3_fix",
+      "n": 14,
+      "counts": {
+       "up": 7,
+       "down": 7
+      },
+      "majority_answer": "up",
+      "majority_share": 0.5,
+      "chance": 0.059027777777777776,
+      "imbalanced": false
+     },
+     {
+      "job": "J4_opening",
+      "n": 7,
+      "counts": {
+       "P": 5,
+       "V": 1,
+       "P,Q": 1
+      },
+      "majority_answer": "P",
+      "majority_share": 0.7142857142857143,
+      "chance": 0.375,
+      "imbalanced": true
+     },
+     {
+      "job": "J5_review",
+      "n": 28,
+      "counts": {
+       "true": 14,
+       "false": 14
+      },
+      "majority_answer": "true",
+      "majority_share": 0.5,
+      "chance": 0.5,
+      "imbalanced": false
+     },
+     {
+      "job": "J6_new_clash",
+      "n": 28,
+      "counts": {
+       "true": 14,
+       "false": 14
+      },
+      "majority_answer": "true",
+      "majority_share": 0.5,
+      "chance": 0.5,
+      "imbalanced": false
+     },
+     {
+      "job": "J7_pick_valid",
+      "n": 14,
+      "counts": {
+       "4": 4,
+       "1": 3,
+       "2": 2,
+       "3": 2,
+       "1,4": 1,
+       "2,3": 1,
+       "1,3": 1
+      },
+      "majority_answer": "4",
+      "majority_share": 0.2857142857142857,
+      "chance": null,
+      "imbalanced": false
+     },
+     {
+      "job": "J8_spatial",
+      "n": 65,
+      "counts": {
+       "D": 13,
+       "A": 9,
+       "B": 9,
+       "none": 8,
+       "C": 5,
+       "C,D,B,A": 3,
+       "C,B,A,D": 3,
+       "A,C,B,D": 2,
+       "B,C,A,D": 2,
+       "C,D,A,B": 2,
+       "B,C,D,A": 1,
+       "C,D,B": 1,
+       "C,B,D,A": 1,
+       "C,A,B": 1,
+       "C,A,D,B": 1,
+       "D,A,B": 1,
+       "C,A,D": 1,
+       "D,C,A,B": 1,
+       "B,A,D": 1
+      },
+      "majority_answer": "D",
+      "majority_share": 0.2,
+      "chance": 0.2326923076923077,
+      "imbalanced": false
+     },
+     {
+      "job": "J9_relation",
+      "n": 72,
+      "counts": {
+       "clashes": 14,
+       "clear_of": 14,
+       "touches": 12,
+       "parallel": 12,
+       "supports": 7,
+       "false": 7,
+       "crosses": 6
+      },
+      "majority_answer": "clashes",
+      "majority_share": 0.19444444444444445,
+      "chance": 0.17757936507936506,
+      "imbalanced": false
+     }
+    ]
+   }
+  }
+ ]
+}
