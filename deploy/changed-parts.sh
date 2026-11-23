@@ -25,7 +25,9 @@ if [ -z "$BASE" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null \
   exit 0
 fi
 
-# --no-renames: a rename lists both paths, and needs no file contents (the checkout is blobless).
+# --no-renames: a rename lists both paths, and needs no file contents (the checkout is blobless). Listed first, so a
+# failing git diff stops the script (set -e) instead of reading as "nothing changed".
+files="$(git diff --name-only --no-renames "$BASE" "$HEAD")"
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   case "$f" in
@@ -46,6 +48,6 @@ while IFS= read -r f; do
     server) server=1 ;;
     both) server=1; web=1 ;;
   esac
-done < <(git diff --name-only --no-renames "$BASE" "$HEAD")
+done <<< "$files"
 
 printf 'server=%s\nweb=%s\n' "$server" "$web"

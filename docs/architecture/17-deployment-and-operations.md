@@ -328,10 +328,10 @@ newest instead.
 **Timings.** Before (Deploy run 45120578003, a full deploy): about 8.5 min. The tests took 3:41 (the server's), and
 only then the one deploy job ran for 4:41: the image 2:40, Cloud Run 0:44, the web build 0:21, Firebase 0:23. Most of
 the image step was the `chown -R` layer (42 s compressing it, 41 s pushing it, 41 s writing it to the cache). Now the
-server tests run in parallel (the job 1:41, pytest 1:18, on the branch), the image builds beside them, and the release
-starts when the slowest of the two ends. Expected, from the measured steps: about 3 min for a web-only change (tests,
-then sign-in, web build and Firebase: about 1 min), about 4 min for a full deploy (tests or image, then Cloud Run, web
-build and Firebase: about 2 min), and a docs-only push deploys nothing.
+server tests run in parallel (the job 1:41 to 2:08, pytest 1:18 to 1:25), the image builds beside them, and the
+release starts when the slowest of the two ends. Expected, from the measured steps: about 3 min for a web-only change
+(tests, then sign-in, web build and Firebase: about 1 min), about 4 min for a full deploy (tests or image, then Cloud
+Run, web build and Firebase: about 2 min), and a docs-only push deploys nothing.
 
 The one-time setup is `deploy/github-setup.sh`: the runtime (through `deploy/setup.sh`), the deploy service account
 `iris-deploy` and its roles, the identity pool `github-actions` and its provider `iris-github`, Firebase and the

@@ -51,6 +51,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail   # a failing script must fail the job, never read as "nothing to deploy"
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             echo "Manual run: deploying both"; printf 'server=1\nweb=1\n' >> "$GITHUB_OUTPUT"; exit 0
           fi

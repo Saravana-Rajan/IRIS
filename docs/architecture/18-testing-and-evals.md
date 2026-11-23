@@ -45,7 +45,8 @@ uv run pytest -q -k penetration          # by name
 - `-n` needs nothing else: pytest-xdist is in the `dev` group too. `--dist loadfile` keeps each test file whole on one
   worker, so a module's fixtures stay together; each test has its own `tmp_path` and settings file (`conftest.py`), so
   the workers share nothing. Without `tests/bench` on a 10-core Mac: 230 s serial, 51 to 74 s with `-n 4`. CI's
-  `server` job: 3:41 before (pytest 3:08), 1:41 after (pytest 1:18).
+  `server` job: 3:41 before (pytest 3:08), 1:41 and 2:08 after
+  (pytest 1:18 and 1:25).
 - `AGENTS.md` names the Windows venv interpreter, `server/.venv/Scripts/python.exe` (on Linux and macOS it is
   `server/.venv/bin/python`), and says to run tests from `server` with `..` paths adjusted. `uv run pytest -q` is the
   supported way everywhere.
