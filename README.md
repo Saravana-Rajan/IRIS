@@ -504,4 +504,11 @@ See it live at <https://iris-techjays.web.app>.
 
 ## Team
 
-Built by **Techjays**.
+Built by **Techjays** for the Innodata AI Hackathon 2026 (Track 2, Visual Task Factory).
+
+| Member | |
+|---|---|
+| **Saravana Rajan B** | Team leader |
+| **Ishwarya KB** | |
+| **Sarmitha S** | |
+| **Kanish V** | |
