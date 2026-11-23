@@ -79,7 +79,7 @@ export interface SidebarProps {
   /** The page shown. */
   active: NavId | null;
   /** The open project: its group of steps, with live counts where known (Clash review's is the open clashes). */
-  project?: { id: string; name: string; counts?: Partial<Record<ProjectStep, number>> } | null;
+  project?: { id: string; name: string; counts?: Partial<Record<ProjectStep, number>>; sample?: boolean } | null;
   /** A session open outside a project: a "Workspace" item under Projects. */
   workspace?: { label: string } | null;
   /** Desktop: collapsed to the 64 px icon rail. */
@@ -191,7 +191,7 @@ export function Sidebar({ active, project = null, workspace = null, rail: railPr
                   data-tip={project.name.length > 22 ? project.name : undefined} data-tip-side={project.name.length > 22 ? "right" : undefined}
                   onClick={() => setGroupOpen((o) => !o)}>
                   <FolderOpen className="side-icon" size={20} strokeWidth={1.75} aria-hidden />
-                  <span className="side-group-label"><span className="side-group-kicker">Project<span className="search-sr">:</span></span> <span className="side-group-name">{project.name}</span></span>
+                  <span className="side-group-label"><span className="side-group-kicker">Project<span className="search-sr">:</span></span> <span className="side-group-name">{project.name}</span>{project.sample && <span className="sample-pill side-sample">Sample</span>}</span>
                   <ChevronDown className="side-chevron" size={16} aria-hidden />
                 </button>
               )}

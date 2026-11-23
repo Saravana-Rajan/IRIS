@@ -99,6 +99,10 @@ test("the open project's group: its name, the seven steps in order with their li
   // Two counts, two pills: the open clashes tinted, nothing invented for the rest
   assert.deepEqual([...html.matchAll(/<span class="side-badge([^"]*)">([^<]*)<\/span>/g)].map((m) => [m[1], m[2]]), [["", "4"], [" alert", "463"]]);
   assert.doesNotMatch(sidebar({ project: { id: PID, name: "Empty" } }), /side-badge/);
+  // The sample project's group head says so; another project's does not
+  assert.match(sidebar({ project: { id: PID, name: "Sample building", sample: true } }),
+    /<span class="side-group-name">Sample building<\/span><span class="sample-pill side-sample">Sample<\/span>/);
+  assert.doesNotMatch(sidebar({ project: { id: PID, name: "Empty" } }), /sample-pill/);
   // A name too long for the row carries it whole in a tip
   assert.match(sidebar({ project: { id: PID, name: "Northbank Tower, Level 02 transfer" } }),
     /class="side-group-head" aria-expanded="true" aria-controls="[^"]+" data-tip="Northbank Tower, Level 02 transfer" data-tip-side="right">/);

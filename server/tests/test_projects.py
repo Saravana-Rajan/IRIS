@@ -175,6 +175,18 @@ def test_projects_are_listed_only_by_id_except_for_the_owner(store, tmp_path, mo
     assert c.post("/api/projects", json={"name": "x" * 500}).status_code == 422
 
 
+def test_the_sample_project_is_marked_sample_and_keeps_the_mark(store, tmp_path, monkeypatch):
+    c = _client(monkeypatch, Workspace(samples=tmp_path))
+    mine = c.post("/api/projects", json={"name": "Mine"}).json()
+    sample = c.post("/api/projects", json={"name": "Sample building", "sample": True}).json()
+    assert mine["sample"] is False and sample["sample"] is True
+    renamed = c.patch(f"/api/projects/{sample['id']}", json={"name": "Renamed"}).json()
+    assert renamed["sample"] is True, "a rename keeps the mark"
+    listed = {p["id"]: p["sample"] for p in c.get(f"/api/projects?ids={mine['id']},{sample['id']}").json()}
+    assert listed == {mine["id"]: False, sample["id"]: True}
+    assert c.post("/api/projects", json={"name": "X", "sample": "maybe"}).status_code == 422
+
+
 def test_projects_are_capped(store, tmp_path, monkeypatch):
     monkeypatch.setenv("IRIS_PROJECTS_MAX", "2")
     c = _client(monkeypatch, Workspace(samples=tmp_path))

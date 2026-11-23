@@ -66,7 +66,7 @@ import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
 import { currentPath, currentProjectRoute, isAppPath, isWorkStep, legacyPath, projectPath, PROJECTS_PATH, projectView, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { NotFound } from "./NotFound";
-import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
+import { addReport, attachScene, createProject, forgetProject, isSample, SAMPLE_PROJECT, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
 import { browserStorage, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
 import { PageHeader, type Crumb } from "./PageHeader";
@@ -1738,12 +1738,18 @@ export function App() {
    * (`made`) and its id kept in this browser. */
   async function sampleProject(): Promise<{ p: Project; made: boolean }> {
     const mine = await listProjects(myProjectIds()).catch(() => [] as Project[]);
-    const found = mine.find((x) => x.name === SAMPLE_PROJECT && x.files.length > 0);
+    const found = mine.find((x) => isSample(x) && x.files.length > 0);
     if (found) return { p: found, made: false };
-    const p = await createProject(SAMPLE_PROJECT);
+    const p = await createProject(SAMPLE_PROJECT, { sample: true });
     rememberProject(p.id);
     return { p, made: true };
   }
+  /** A session of the sample building's models (all of them among the sample's files): Home says "Resume the sample
+   * building", not the models' prefix. */
+  const sampleSession = (files: string[]) => {
+    const sample = new Set(demos.find((d) => d.tour === "northbank")?.files ?? []);
+    return files.length > 0 && files.every((f) => sample.has(f));
+  };
   /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
    * again), opened on its Clash review. Opening and checking it call no model. */
   async function trySample(step: ProjectStep = "clash") {
@@ -4325,7 +4331,7 @@ export function App() {
         onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
         onSampleStep={sampleSet.length ? (st) => void trySample(st) : undefined}
         recent={projects} recentLoading={projectsLoading} onOpenProject={(id) => goStep("overview", id)} projectHref={(id) => projectPath(id)}
-        resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
+        resume={resumable ? { files: resumable.info.files, sample: sampleSession(resumable.info.files), clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
           agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
           onResume: () => { setHomeAsked(false); void resumeSession(); }, onFresh: startFresh } : undefined} />
     </div>);
@@ -4336,7 +4342,7 @@ export function App() {
   /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
   const onPage = !!homePage || !!projectPage || !!lostPage;
   const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
-  const navProject = project ? { id: project.id, name: project.name || "Untitled project", counts: {
+  const navProject = project ? { id: project.id, name: project.name || "Untitled project", sample: isSample(project), counts: {
     ...(project.files.length ? { models: project.files.length } : {}),
     ...(projectOpen && drawings.length ? { drawings: drawings.length } : {}),
     ...(((project.id === pid ? liveCounts : null) ?? project.counts)?.open ? { clash: ((project.id === pid ? liveCounts : null) ?? project.counts)!.open } : {}),
@@ -5244,5 +5250,3 @@ function decisionLine(d: Decision): string {
   return `${d.number ? `#${d.number}: ` : ""}${w.verb} "${d.option.title}" (${STATE_LABEL[d.state] ?? d.state}), by ${w.who}${w.why ? `: ${w.why}` : ""}`;
 }
 
-/** The sample building's project name (the first screen's "Try the sample building" finds it again by this name). */
-const SAMPLE_PROJECT = "Northbank sample building";

@@ -229,6 +229,20 @@ const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").rep
 const noop = () => {};
 const home = (over = {}) => renderToStaticMarkup(h(ProjectsHome, { projects: [], loading: false, onNew: noop, onOpen: noop, ...over }));
 
+test("the sample project is marked: made with sample: true, shown with a Sample pill in the list, others not", async () => {
+  const calls = serve(() => ({ id: "pid" }));
+  await p.createProject(" Sample building ", { sample: true });
+  await p.createProject("Mine");
+  assert.deepEqual(calls.map((c) => c.body), [{ name: "Sample building", sample: true }, { name: "Mine" }]);
+  assert.equal(p.isSample({ sample: true, name: "Renamed" }), true, "the server's flag");
+  assert.equal(p.isSample({ name: p.SAMPLE_PROJECT }), true, "made before the flag: its name");
+  assert.equal(p.isSample(project()), false);
+  assert.equal(p.isSample(null), false);
+  const html = home({ projects: [project({ id: "a".repeat(24), name: "Sample building", sample: true }), project()] });
+  assert.equal((html.match(/<span class="sample-pill"[^>]*>Sample<\/span>/g) ?? []).length, 1, "one pill, on the sample only");
+  assert.match(html, /Sample building<\/(a|button)><span class="sample-pill"/, "next to its name");
+});
+
 test("the workflow a project follows is still exported for Home", () => {
   assert.deepEqual(PROJECT_FLOW.map((s) => s.name), ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"]);
 });

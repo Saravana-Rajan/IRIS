@@ -394,7 +394,8 @@ disk; decisions live in memory with the scene, like the edit log, and reach disk
   itself lives in memory and goes with eviction or a restart), `saved` (`[{n, at, files, edits}]`, `edits` the kept
   entries), `reviews` (clash key → Review, at most 5,000), `reports` (`[{doc_id, name, at, kind: pdf | bcf}]`, at
   most 100, the oldest file deleted), `counts` (`{clashes, open, resolved, reviewed}` as the page last saw them, or
-  null).
+  null), `sample` (true for the project "Try the sample building" makes; the page shows it with a "Sample" pill; absent
+  on projects made before Nov 23, which the page knows by name, `projectsApi.isSample`).
 - **Review:** `{status, note?, by?, at, number?, title?}`, `status` one of `open`, `by_design`, `author`, `resolved`;
   set one clash at a time (`projects.set_review`).
 - **Clash key:** `<test kind>|<GlobalId A>|<GlobalId B>` with the two ids sorted (`projects.clash_key`), so it holds

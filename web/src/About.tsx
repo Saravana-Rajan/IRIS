@@ -556,6 +556,8 @@ function Who({ title, children }: { title: string; children: ReactNode }) {
 
 /** A session this browser had open, which the server still holds: reopen it (models, clashes, fixes, agent link). */
 export interface Resume {
+  /** The sample building's models: Home says "Resume the sample building". */
+  sample?: boolean;
   files: string[]; clashes: number | null; fixed: number; agent: boolean; agentLeft?: string | null; savedAt: number;
   onResume: () => void; onFresh: () => void;
 }

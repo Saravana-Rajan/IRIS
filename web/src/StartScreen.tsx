@@ -5,11 +5,16 @@ import { HERO_POSTER } from "./glassModel";
 import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
 import { ownClick, projectPath, type ProjectStep } from "./projectRoute";
-import { plural, whenText, type Project } from "./projectsApi";
+import { isSample, plural, whenText, type Project } from "./projectsApi";
 import "./home.css";
 
 /** How many recent projects Home shows. */
 export const RECENT_MAX = 4;
+
+/** "Sample": the sample building's project, never the visitor's own (index.css `.sample-pill`). */
+export function SamplePill() {
+  return <span className="sample-pill" data-tip="The sample building: try Iris on it; it is not your own project">Sample</span>;
+}
 
 /** "Good morning" (5:00 to 11:59), "Good afternoon" (to 17:59) or "Good evening", by the local clock at `now` (ms). */
 export function greetingFor(now: number): string {
@@ -122,7 +127,8 @@ export function StartScreen({
           <div className="home-resume" role="region" aria-label="Your last session">
             <span className="home-resume-icon" aria-hidden><History size={16} /></span>
             <p className="home-resume-text">
-              Resume <b>{projectName(resume.files)}</b>
+              Resume <b>{resume.sample ? "the sample building" : projectName(resume.files)}</b>
+              {resume.sample && <> <SamplePill /></>}
               {resume.fixed ? ` · ${plural(resume.fixed, "fix", "fixes")} kept` : ""}
               {resume.clashes != null ? ` · ${plural(resume.clashes, "clash", "clashes")}` : ""}
               {` · saved ${whenText(resume.savedAt, now)}`}</p>
@@ -169,6 +175,7 @@ export function StartScreen({
                     <span className="home-project-top">
                       <span className="home-project-icon" aria-hidden><FolderKanban size={16} /></span>
                       <span className="home-project-name">{p.name}</span>
+                      {isSample(p) && <SamplePill />}
                     </span>
                     <span className="home-project-meta">
                       <span>{p.files.length ? plural(p.files.length, "model") : "No models yet"}</span>
