@@ -25,7 +25,7 @@ test("it eases toward the cursor (the trailing glow more slowly) and never snaps
   let x = 0;
   for (let i = 0; i < 10; i++) x = glow.ease(x, 100, glow.LEAD_EASE);
   assert.ok(x > 60 && x < 70, `after ten frames: ${x}`);
-  assert.equal(glow.SPOTLIGHT, ".home-tile, .hiw-card");
+  assert.equal(glow.SPOTLIGHT, ".home-tile, .hiw-card, .home-demo");
 });
 
 test("one decorative layer that takes no clicks, off by default until mounted; still under reduced motion", async () => {

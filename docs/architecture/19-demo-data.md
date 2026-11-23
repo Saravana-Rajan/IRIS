@@ -525,14 +525,15 @@ Recapture after the Drawings step's look, the sample sheets or their saved readi
 ### Demo videos
 
 Home plays three narrated videos in a light lightbox (`DemoVideo.tsx`, [12](12-web-app.md)): **Watch the demo** on the
-Try the sample building tile (the `3d` video) and on the Try the sample drawings tile (the `2d` video), and **Watch the
-full demo** under the hero's tagline (the `full` video). `DEMO_VIDEOS` names their files in `web/public/demos/`:
+Try the sample building tile (the `3d` video) and on the Try the sample drawings tile (the `2d` video), **Watch the
+full demo** under the hero's tagline (the `full` video), and the **Watch the demos** section after the start tiles
+(all three as cards with their posters, the full demo first). `DEMO_VIDEOS` names their files in `web/public/demos/`:
 
 | Id | Files | Title | What it shows | Duration |
 |---|---|---|---|---|
-| `3d` | `iris-3d-demo.mp4`, `.vtt`, `.webp` | Fix clashes in your building models | The sample building's clash review: the check, a clash's pictures, fixes proposed by AI and verified by geometry, reviewed in 3D before and after, and kept | 2:35 |
-| `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 1:51 |
-| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 4:19 |
+| `3d` | `iris-3d-demo.mp4`, `.vtt`, `.webp` | Fix clashes in your building models | The sample building's clash review: the check, a clash's pictures, fixes proposed by AI and verified by geometry, reviewed in 3D before and after, and kept | 1:32 |
+| `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 1:00 |
+| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 2:19 |
 
 They were recorded on 2026-11-23 from this app (808329d's final UI with the lightbox) in headless Chromium on the real
 GPU, against a local one-origin server with every Gemini credential empty and the model client replaced by one that
@@ -541,8 +542,11 @@ proposals ("Saved checks", "Saved readings" and "Saved AI proposals for the samp
 happens in them. The narration is Gemini TTS (`gemini-3.8-flash-tts` on Vertex AI, voice Achird); the captions are
 WebVTT (`.vtt`, English, on by default; the downloadable copies have them burned in); the posters are `.webp` stills.
 VisionBench's charts in the full demo come from the run `gemini-3.8-flash-7` (58% with pictures, 36% with none, 14%
-with the wrong one, 90% with the measurements as text; mean confidence 96%, ECE 0.385). Neither a video nor its
-poster is fetched until its lightbox opens. `DEMO_VIDEOS`' durations are the files' lengths in whole seconds, rounded
+with the wrong one, 90% with the measurements as text; mean confidence 96%, ECE 0.385). On Nov 23 the owner asked
+for shorter videos with only the essentials: the narration was rewritten in short lines (new Gemini TTS lines, same
+voice, $0.05), the recorded clips kept (each plays at most 1.5 times faster where its line is shorter than its key
+action), and the title and end cards show the website's 3D glass aperture instead of the striped ribbon. No video is
+fetched until its lightbox opens; Home's demo cards fetch only their posters, lazily. `DEMO_VIDEOS`' durations are the files' lengths in whole seconds, rounded
 down as the video controls show them. A missing or broken file shows "The video couldn't load." in its frame.
 
 ### Landing clips

@@ -297,6 +297,49 @@ test("Watch the demo: a play mark, the label and the length in mono; it opens it
   }
 });
 
+test("Home's Watch the demos: three cards, the full demo first and featured; poster (lazy), play mark, title, line, length, captions on", () => {
+  const html = renderToStaticMarkup(h(V.WatchDemos));
+  assert.match(html, /^<section class="home-section home-demos" aria-labelledby="home-demos-title">/);
+  assert.match(html, /<h2 class="home-h2" id="home-demos-title">Watch the demos<\/h2>/);
+  const cards = html.match(/<li class="home-demo-item[^"]*">.*?<\/li>/g);
+  assert.equal(cards?.length, 3, "three cards");
+  assert.deepEqual(cards.map((c) => c.match(/data-video="(\w+)"/)[1]), ["full", "3d", "2d"], "the full demo first");
+  assert.deepEqual(V.DEMO_CARDS.map((c) => c.title),
+    ["Full demo: problem to solution", "Fix clashes in your building models", "Check drawings against the model"]);
+  assert.match(cards[0], /^<li class="home-demo-item featured">/, "the full demo featured");
+  assert.ok(cards.slice(1).every((c) => c.startsWith('<li class="home-demo-item">')));
+  V.DEMO_CARDS.forEach((c, i) => {
+    const card = cards[i], v = V.DEMO_VIDEOS[c.id];
+    assert.ok(card.includes(`<button type="button" class="home-demo" data-video="${c.id}" aria-haspopup="dialog" aria-label="Play ${c.title} (${v.duration}, captions on)">`));
+    assert.ok(card.includes(`<img src="${v.poster}" alt="" width="1280" height="720" loading="lazy" decoding="async"/>`), `${c.id}: its poster, lazy`);
+    assert.match(card, /<span class="home-demo-play" aria-hidden="true"><svg/, `${c.id}: a play mark`);
+    assert.ok(text(card).includes(c.title) && text(card).includes(c.line), `${c.id}: title and line`);
+    assert.ok(text(card).includes(`${v.duration} · Captions on`), `${c.id}: length and captions`);
+    assert.equal(card.match(/<button/g).length, 1, `${c.id}: one button`);
+  });
+  assert.doesNotMatch(html, /<video|\.mp4|\.vtt/, "nothing of a video until one is opened");
+  assert.doesNotMatch(html, /holo-edge/, "no holo edge on Home");
+});
+
+test("a demo card opens the lightbox with its own video and captions track; focus comes back to the card", () => {
+  for (const c of V.DEMO_CARDS) {
+    const host = mount(S.DemoCard, c);
+    const video = () => host.find((n) => n.type === S.DemoVideo);
+    const button = () => host.find((n) => n.type === "button");
+    assert.deepEqual([video().props.id, video().props.open], [c.id, false]);
+    button().props.onClick();
+    host.render();
+    assert.deepEqual([video().props.id, video().props.open], [c.id, true], `${c.id}: opens its own video`);
+    assert.equal(video().props.opener, button().props.ref, `${c.id}: focus goes back to the card`);
+    const box = renderToStaticMarkup(h(V.DemoVideo, { id: c.id, open: true, onClose: noop }));
+    assert.ok(box.includes(`src="/demos/iris-${c.id}-demo.mp4"`), `${c.id}: its mp4`);
+    assert.match(box, new RegExp(`<track kind="captions" src="/demos/iris-${c.id}-demo\\.vtt" srcLang="en" label="English" default=""/>`), `${c.id}: its captions`);
+    video().props.onClose();
+    host.render();
+    assert.equal(video().props.open, false);
+  }
+});
+
 test("the stylesheet is light: a frosted white scrim, a white card, the video 16:9; a 16 px gutter on a phone; no zoom under reduced motion", async () => {
   const css = (await readFile(new URL("../src/demoVideo.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");
   assert.doesNotMatch(css, /prefers-color-scheme|\bdark\b|rgba\(0, 0, 0|#000\b/i, "light only, no dark overlay");

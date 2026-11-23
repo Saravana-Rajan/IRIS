@@ -23,13 +23,23 @@ export interface DemoVideoInfo {
  * AI calls), narrated, captioned. The durations are the assembled videos' lengths (timing.json of the demo-video build).
  */
 export const DEMO_VIDEOS: Readonly<Record<DemoVideoId, DemoVideoInfo>> = {
-  "3d": { id: "3d", title: "Fix clashes in your building models", duration: "2:35",
+  "3d": { id: "3d", title: "Fix clashes in your building models", duration: "1:32",
     src: "/demos/iris-3d-demo.mp4", vtt: "/demos/iris-3d-demo.vtt", poster: "/demos/iris-3d-demo.webp" },
-  "2d": { id: "2d", title: "Check drawings against the model", duration: "1:51",
+  "2d": { id: "2d", title: "Check drawings against the model", duration: "1:00",
     src: "/demos/iris-2d-demo.mp4", vtt: "/demos/iris-2d-demo.vtt", poster: "/demos/iris-2d-demo.webp" },
-  full: { id: "full", title: "Iris: does AI truly see?", duration: "4:19",
+  full: { id: "full", title: "Iris: does AI truly see?", duration: "2:19",
     src: "/demos/iris-full-demo.mp4", vtt: "/demos/iris-full-demo.vtt", poster: "/demos/iris-full-demo.webp" },
 };
+
+/** Home's "Watch the demos" cards, in order (the full demo first, featured): each card's title and one line. */
+export const DEMO_CARDS: readonly { id: DemoVideoId; title: string; line: string }[] = [
+  { id: "full", title: "Full demo: problem to solution",
+    line: "The problem, the 3D clash fixes, the drawing check and VisionBench, in one short story." },
+  { id: "3d", title: "Fix clashes in your building models",
+    line: "464 clashes found; Gemini proposes fixes, geometry verifies them, the engineer accepts." },
+  { id: "2d", title: "Check drawings against the model",
+    line: "AI reads a PDF sheet, Iris checks it against the model and finds the 4 planted mistakes." },
+];
 
 /** What Tab reaches inside the dialog (the video's own controls are inside the video). */
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), '
@@ -172,5 +182,50 @@ export function WatchDemoButton({ id, label = "Watch the demo", className = "" }
       </button>
       <DemoVideo id={id} open={open} onClose={() => setOpen(false)} opener={button} />
     </>
+  );
+}
+
+/**
+ * One of Home's demo cards: the video's poster (lazy, so the page fetches it only near the viewport) with a play mark
+ * and its length, then the title, one line, and "m:ss · Captions on". The whole card is one button that opens the
+ * video in the lightbox (nothing of the video loads before). `featured`: the full demo, first and a little larger.
+ */
+export function DemoCard({ id, title, line, featured = false }: { id: DemoVideoId; title: string; line: string; featured?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const video = DEMO_VIDEOS[id];
+  return (
+    <li className={featured ? "home-demo-item featured" : "home-demo-item"}>
+      <button ref={button} type="button" className="home-demo" data-video={id} aria-haspopup="dialog"
+        aria-label={`Play ${title} (${video.duration}, captions on)`} onClick={() => setOpen(true)}>
+        <span className="home-demo-poster">
+          <img src={video.poster} alt="" width={1280} height={720} loading="lazy" decoding="async" />
+          <span className="home-demo-play" aria-hidden><Play size={featured ? 22 : 18} fill="currentColor" strokeWidth={0} /></span>
+          <span className="home-demo-len mono" aria-hidden>{video.duration}</span>
+        </span>
+        <span className="home-demo-text">
+          {featured && <span className="home-demo-tag">Start here</span>}
+          <span className="home-demo-title">{title}</span>
+          <span className="home-demo-line">{line}</span>
+          <span className="home-demo-meta"><span className="mono">{video.duration}</span><span aria-hidden>·</span><span>Captions on</span></span>
+        </span>
+      </button>
+      <DemoVideo id={id} open={open} onClose={() => setOpen(false)} opener={button} />
+    </li>
+  );
+}
+
+/** Home's "Watch the demos" section: the three demo videos as cards, the full demo first (DEMO_CARDS). */
+export function WatchDemos() {
+  return (
+    <section className="home-section home-demos" aria-labelledby="home-demos-title">
+      <div className="home-section-head">
+        <h2 className="home-h2" id="home-demos-title">Watch the demos</h2>
+        <span className="home-demos-note">Narrated, with captions</span>
+      </div>
+      <ul className="home-demos-row">
+        {DEMO_CARDS.map((c, i) => <DemoCard key={c.id} {...c} featured={i === 0} />)}
+      </ul>
+    </section>
   );
 }

@@ -1375,3 +1375,20 @@ reading) and the compare line (both sample sheets are compared at once, so the c
 sheet: no mismatch marks). `DEMO_VIDEOS`' durations are the files' lengths, rounded down as the video controls show
 them (2:35, 1:51, 4:19). Checked: `npm test` (591 passing), `tsc` and `vite build`, and frames of each video at every
 narrated line.
+
+Demo videos, the tight cut and Watch the demos (Nov 23, owner requests): "use our website image" in the videos, "the
+full demo video is very big, also you talked unnecessary things", and "upload those videos on the Home page". The title
+and end cards (the demo-video build's `cards/card.html`) no longer draw the striped holo ribbon: they show the hero's
+3D glass aperture on its pedestal, rendered by the site's own glass stage (`glassStill.ts`) at 1320 x 1500 with a
+transparent background, on a soft pink and lavender wash. The narration was rewritten to the essentials (problem; AI
+proposes, geometry proves, the engineer decides; 464 clashes, clash #1, Gemini proposes and geometry verifies, 8 of 8,
+the designer's own +400 / +250 / +280 mm, the engineer accepts; the sheet read and checked, compared with the model, the
+4 planted mistakes; VisionBench 58% / 36% / 14% / 90%, overconfident; the tagline, Techjays, the URL): 27 new lines,
+Gemini TTS voice Achird, $0.048 (cost-logged; $0.29 in all). The recorded clips were not re-recorded: the timeline
+plays a clip at most 1.5 times faster when its line is shorter than the clip's key action (`NEED`, from the recorder's
+"done at" times). Lengths: full 4:19 to 2:19, 3D 2:35 to 1:32, 2D 1:51 to 1:00 (`DEMO_VIDEOS`). Home gets a **Watch the
+demos** section after the start tiles (`WatchDemos`, `DemoCard` in `DemoVideo.tsx`; styles in `demoVideo.css`; the
+cards join the pink spotlight, `SPOTLIGHT`): three cards, the full demo first and featured, each a poster (lazy), a
+play mark, the title, one line, the length and "Captions on"; a click opens the lightbox. Checked: `npm test`, `tsc`,
+`vite build`, the docs map test, screenshots of the section at 1512 x 805 and 390 x 844, and frames of the first and
+last 3 s of each video.
