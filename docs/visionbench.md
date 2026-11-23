@@ -10,11 +10,14 @@ models against answers taken from geometry.
 
 Quick start and run commands: [bench/README.md](../bench/README.md). Code: `server/iris_bench/` and `bench/render/`.
 
-**Status (2026-11-22).** Schema v2 (`server/iris_bench/spec.py`) defines nine jobs (J1–J9) in eight scored
-categories. Built and tested: scene generation, IFC export, closed-form geometry, the checker and its cross-check
-against Iris's engine, views A/B/C and before/after, jobs J1–J5, the no-image and swapped controls, the runner (Gemini
-or an offline fake model), scoring and the report. Parts marked **(in progress)** are specified in `spec.py` and being
-built now; they are not in the code yet.
+**Status (2026-11-23).** Schema v2 (`server/iris_bench/spec.py`) defines nine jobs (J1–J9) in eight scored
+categories, and all nine are built. Built and tested: scene generation, IFC export, closed-form geometry, the checker
+and its cross-check against Iris's engine, relations, candidate resolutions and cameras (`truth.annotate`), locked
+elements, views A/B/C, top, section, before/after and numbered candidates, jobs J1–J9, the no-image, swapped and
+pictures-with-text controls, the runner (Gemini or an offline fake model), scoring (including categories, calibration,
+confidently wrong and plausible but wrong) and the report. A Gemini 3.8 Flash run over 7 seeds is committed with its
+report: [bench/sample-run/](../bench/sample-run/README.md). The few parts still marked **(in progress)** are specified
+but not yet part of a run.
 
 ## 1. The application: MEP coordination
 
@@ -35,7 +38,7 @@ The answers are not cosmetic. Each wrong answer has a cost on site:
 | Moves it the wrong way | The clash remains; another round of design | `wrong_direction` | 2 |
 | Moves the wrong element (e.g. the beam) | A structural change is proposed for a services problem: engineer review, delay, or an unsafe cut | `wrong_element` | 2 |
 | Picks an opening the service does not fit | The route cannot be installed, or is installed without the required clearance | J4 wrong | 1 |
-| Misreads which element is above, between or through | Wrong instructions to the trades; a fix designed for the wrong geometry | J8/J9 wrong (in progress) | 1 |
+| Misreads which element is above, between or through | Wrong instructions to the trades; a fix designed for the wrong geometry | J8/J9 wrong | 1 |
 | Flags a near miss or a bracket as a clash | Coordinator time spent on a non-issue | `false_alarm` | 1 |
 | Rejects a good fix | Another design round for nothing | `rejected_good_fix` | 1 |
 
@@ -50,24 +53,28 @@ review). Each job is scored under one of eight categories (`spec.CATEGORIES`, `s
 | Workflow step | Engineering question | Job | Category | Status |
 |---|---|---|---|---|
 | Triage | Is there an actual geometric clash between these elements? | J1 `J1_sort` | clash identification | built |
-| Choose what moves | Which element is movable under the given constraints? | J2 `J2_who_moves` | element selection | built (constraints via locked elements: in progress) |
+| Choose what moves | Which element is movable under the given constraints? | J2 `J2_who_moves` | element selection | built (constraints via locked elements) |
 | Propose | What movement would resolve this clash? | J3 `J3_fix` | movement estimation | built |
 | Propose (route) | Which opening is suitable for routing this element? | J4 `J4_opening` | opening selection | built |
 | Review | Does the proposed movement resolve the original clash? | J5 `J5_review` | resolution validity | built |
-| Verify | Does the movement introduce new clashes? | J6 `J6_new_clash` | new clash detection | in progress |
-| Choose a fix | Which of several proposed solutions is geometrically valid? | J7 `J7_pick_valid` | resolution validity | in progress |
-| Read the scene | Spatial reasoning across several elements: which is highest, which lies between two others, their order | J8 `J8_spatial` | spatial reasoning | in progress |
-| Read the scene | Relationships: passes through, crosses, parallel, supports, touches | J9 `J9_relation` | relationship understanding | in progress |
+| Verify | Does the movement introduce new clashes? | J6 `J6_new_clash` | new clash detection | built |
+| Choose a fix | Which of several proposed solutions is geometrically valid? | J7 `J7_pick_valid` | resolution validity | built |
+| Read the scene | Spatial reasoning across several elements: which is highest, which lies between two others, their order | J8 `J8_spatial` | spatial reasoning | built |
+| Read the scene | Relationships: passes through, crosses, parallel, supports, touches | J9 `J9_relation` | relationship understanding | built |
 
-What each built job asks and how its answer is graded:
+What each job asks and how its answer is graded (every reply also carries a `confidence` (0–1) and a short `reason`):
 
 | Job | Asked (pictures mode) | Reply (strict JSON Schema) | Reference answer | Graded by |
 |---|---|---|---|---|
-| J1 | Is the pair labelled X and Y (a) a real clash, (b) not touching, (c) touching by design? | `{"answer": "a"\|"b"\|"c"}` | the planted kind | exact match |
-| J2 | Which labelled element should move? | `{"mover_letter": X\|Y}` | the planted mover | exact match |
+| J1 | Is the pair labelled X and Y (a) a real clash, (b) not touching, (c) touching by design? (or, in its yes/no form, is it a real clash?) | `{"answer": "a"\|"b"\|"c"}` or `{"clash": true\|false}` | the planted kind | exact match |
+| J2 | Which labelled element should move? (a padlock marks a locked element) | `{"mover_letter": X\|Y}` | the planted mover | exact match |
 | J3 | One straight move: element, direction (up/down/north/south/east/west), distance in mm, opening letter or null | `{"element", "direction", "distance_mm", "via_opening"}` | none fixed: any move that passes | `checker.check_fix` on the proposed move |
 | J4 | Which labelled openings can the element pass through with a clear gap all round? | `{"fitting": [letters]}` | openings the mover fits (size with 25 mm each side) | set equality |
-| J5 | Before and after pictures of a proposed move: is the fix good? | `{"good": true\|false}` | `check_fix` on the shown move | verdict vs geometry |
+| J5 | Before and after pictures of a proposed move: does it resolve the original clash? | `{"resolved": true\|false}` | `Resolution.resolves_original` (from `check_fix`) | verdict vs geometry |
+| J6 | Before and after pictures of a proposed move: does it introduce a new clash? | `{"new_clash": true\|false}` | `Resolution.new_hits` (from `check_fix`) | verdict vs geometry |
+| J7 | Several numbered candidate moves of one clash: which are geometrically valid? | `{"valid": [numbers]}` | `Resolution.valid` | set equality |
+| J8 | Three or more labelled elements: which is highest, furthest north, between two others, or their order | `{"answer": letter}` or `{"order": [letters]}` | `geom.bbox` extents (items within 30 mm skipped as ambiguous) | exact match |
+| J9 | The relationship between two labelled elements (crosses, parallel, passes through, supports, touches, ...), or whether one passes through an opening | `{"relation": word}` or `{"passes": true\|false}` | `scene.relations` (geometry) | exact match |
 
 J3 has no single right answer: the reply is turned into a move (`jobs.reply_to_fix`) and the checker decides whether
 that move works. A model is never marked wrong for finding a different valid fix.
@@ -98,11 +105,11 @@ What `scene.json` stores (schema v2):
 | Openings | `elements[].openings[]`: id (`o1`…) and world box | built |
 | Supports | `elements[].supports`: the element a bracket carries | built |
 | Movement constraints | `role` (structure stays, services move) | built |
-| Locked elements | `elements[].locked` (must not move; drawn with a lock badge), `allowed_moves` (permitted directions) | in progress |
+| Locked elements | `elements[].locked` (must not move; drawn with a lock badge), `allowed_moves` (permitted directions); `--locked-services N` | built |
 | Clash states | `planted[]`: pair, kind, signed distance (negative = overlap depth, positive = gap), mover, good fix, fitting openings | built |
-| Spatial relationships | `relations[]`: `Relation(a, b, relation, value_m, via)`: above, below, north_of … west_of, crosses, parallel, passes_through, supports, touches, clashes, clear_of, each with the measured quantity behind it | in progress |
-| Valid and invalid resolutions | `resolutions[]`: `Resolution(pair, label, fix, valid, resolves_original, new_hits, evidence)`: the good fix and labelled bad ones (too small, wrong direction, hits a third element, wrong element), each with the full `check_fix` result as evidence | in progress (today J5's candidates are built from the good fix by `jobs.candidate_fixes`) |
-| Cameras | `cameras[]`: `Camera(name, azimuth_deg, elevation_deg, distance_factor, projection)` | in progress (today the renderer seeds its own camera) |
+| Spatial relationships | `relations[]`: `Relation(a, b, relation, value_m, via)`: above, below, north_of … west_of, crosses, parallel, passes_through, supports, touches, clashes, clear_of, each with the measured quantity behind it | built |
+| Valid and invalid resolutions | `resolutions[]`: `Resolution(pair, label, fix, valid, resolves_original, new_hits, evidence)`: the good fix and labelled bad ones (too small, wrong direction, hits a third element, wrong element), each with the full `check_fix` result as evidence | built (a pair without any falls back to `jobs.candidate_fixes`) |
+| Cameras | `cameras[]`: `Camera(name, azimuth_deg, elevation_deg, distance_factor, projection)`: A, B, C, top, section | built |
 | Challenge settings | `challenge`: the knobs used (section 10), target pair, occluder, decoy and distractor ids | built |
 | Required clearance | `clearance_m` = 0.025 | built |
 
@@ -117,9 +124,9 @@ What `scene.json` stores (schema v2):
 | B | The pair solid, with grey context within 2.5 m at 85% transparency, same camera | built |
 | C | As A, turned 90° around | built |
 | before / after (`before_A`, `after_A`, `_C`) | A candidate move: the same camera, letters and colours before and after the element is translated, faint context | built |
-| top | Plan view, orthographic (`Camera(projection="orthographic")`) | in progress |
-| section | A cut through the clash, orthographic | in progress |
-| candidates | Several proposed moves of one clash, each a numbered picture, for J7 | in progress |
+| top | Plan view, orthographic (`Camera(projection="orthographic")`) | built |
+| section | An orthographic elevation looking along the target beam | built |
+| candidates | Several proposed moves of one clash, each a numbered picture (`cand_1` …) plus a contact sheet (`cand_grid`), for J7 | built |
 
 Annotations on every picture:
 
@@ -127,7 +134,8 @@ Annotations on every picture:
 - **Colours.** Distinct, well separated hues from a seeded palette; context is grey.
 - **Scale bar** at the pair's depth (a round length between 50 mm and 10 m), so sizes and gaps can be judged from the
   picture alone.
-- **Lock badge** on locked elements (in progress).
+- **Compass** (N = +Y, E = +X, up = +Z as the camera sees them).
+- **Lock badge** on locked elements: hatched with dashed edges, a padlock on the letter tag, and a "fixed" legend.
 - **Object-ID pass.** A second, flat-coloured image per view gives each element's visible pixel count
   (`View.visible_px`), the evidence that the element is actually in the picture.
 - **Styles:** shaded (default), hidden-line, X-ray.
@@ -184,7 +192,7 @@ in generating scenes, labelling them or grading them.
 | Visible-pixel counts recorded per element per view | `View.visible_px`, `Item.meta` | built |
 | `iris-bench verify`: truth frozen before any model call, truth code isolated, prompts clean, a job-stratified sample of truths re-derived by geometry (`--sample`), every answer letter labelled in the item's own pictures (`letters_shown`), answer balance | `integrity.check_run` | built |
 | `iris-bench verify`: engine cross-check over a whole run, drop items whose decisive element is below a visible-pixel threshold | CLI | in progress |
-| `Item.evidence`: how each reference answer was established (the numbers and checks behind it) | jobs | in progress |
+| `Item.evidence`: how each reference answer was established (the numbers and checks behind it) | jobs | built |
 
 ## 7. Controls
 
@@ -217,7 +225,8 @@ offline stand-in (right with probability p) for testing the pipeline; its report
 
 ## 9. Scoring
 
-**Per item.** J1, J2 and J4 compare with the truth exactly. J3 and J5 go through the geometry checker. An unparseable
+**Per item.** J1, J2, J4, J8 and J9 compare with the truth exactly, J7 as a set. J3 goes through the geometry checker; J5 and J6
+are compared with the checker's verdict on the move shown. An unparseable
 or off-schema reply counts as wrong (`unparseable`); a checker failure is reported as `ungraded`, never charged.
 
 **Per run** (`score.py`, written to `scores.csv` / `scores.jsonl`):
@@ -225,14 +234,14 @@ or off-schema reply counts as wrong (`unparseable`); a checker failure is report
 | Table | What it holds | Status |
 |---|---|---|
 | accuracy | model x job x mode, with a seeded bootstrap 95% CI | built |
-| category | accuracy for each of the eight categories (`JOB_CATEGORY`) | in progress |
+| category | accuracy for each of the eight categories (`JOB_CATEGORY`), per mode | built |
 | partial | J3 partial credit: direction right; distance within ±max(25 mm, 15%) of the smallest move that passes (found by bisection on the checker); right opening | built |
 | taxonomy | error counts per job and error type (section 1) | built |
 | cost | cost-weighted score = 1 − total weight / (items x max weight) | built |
 | slice | accuracy per challenge factor bucket (section 10) | built |
 | control | paired deltas for no_image, swapped, pictures_text | built |
-| calibration | replies carry a confidence (0–1); reliability by confidence bin; share of **confidently wrong** answers (wrong at high confidence, the dangerous kind for a coordinator) | in progress |
-| plausible-but-wrong | answers a reviewer would accept at a glance (right element, right direction, a real opening, a sensible distance, or approving a fix that looks fine) that fail the geometry check | in progress (computable today from the J3 partial-credit columns and J5 `approved_bad_fix`) |
+| calibration | replies carry a confidence (0–1); reliability by confidence bin; share of **confidently wrong** answers (wrong at high confidence, the dangerous kind for a coordinator); ECE, Brier | built |
+| plausible-but-wrong | answers a reviewer would accept at a glance (right element, right direction, a real opening, a sensible distance, or approving a fix that looks fine) that fail the geometry check; in the report, wrong answers whose reason names the right elements or opening | built |
 
 The last two rows measure the gap this benchmark exists to expose: **an answer that sounds reasonable versus one that
 is geometrically correct.** Only the second survives the checker.
@@ -251,10 +260,10 @@ just how many things there are. Scoring slices accuracy by each.
 | Occlusion | `occlusion` | A large duct beside the real clash, in front from some angles | `occlusion` |
 | Evidence | (measured) | Visible pixels of the decisive element | `visible_px` |
 | Layout | `beams` 1–2, `column`, `orient` x/y | Number of beams and openings, a column, rotation in plan | |
-| Viewpoint | seeded camera; `view` | Azimuth and elevation per seed; A/B/C; top and section (in progress) | `view` |
+| Viewpoint | seeded camera; `view` | Azimuth and elevation per seed; A/B/C; top and section | `view` |
 | Render style | `style` | Shaded, hidden-line, X-ray | `style` |
-| Constraints | `locked`, `allowed_moves` | Which element may move, shown only by a badge | in progress |
-| Relationship type | J8/J9 | Above/below, between, order, crosses, parallel, passes through, supports, touches | in progress |
+| Constraints | `locked`, `allowed_moves` (`--locked-services`) | Which element may move, shown only by a badge | |
+| Relationship type | J8/J9 | Above/below, between, order, crosses, parallel, passes through, supports, touches | |
 
 ## 11. Limitations
 
@@ -264,18 +273,20 @@ just how many things there are. Scoring slices accuracy by each.
   resizes; those are not benchmarked yet.
 - **Synthetic look.** Clean renders, not exports of production models or site photos, so results say how a model reads
   coordination renders, not the field.
-- **Direction words.** North and east are given as a convention, but the pictures carry no north arrow yet; the planted
-  good fixes are vertical, so J3 rarely depends on it, but J8 order questions will.
+- **Direction words.** North and east are given as a convention and drawn as a compass in every picture; the planted
+  good fixes are vertical, so J3 rarely depends on it, but J8's north questions do.
 - **Who moves is often a prior.** With structure vs service as the only constraint, J2 can be answered from what a
-  beam looks like; locked elements (in progress) make it a question about the picture.
+  beam looks like; locked elements (`--locked-services`, a padlock in the picture) make it a question about the
+  picture.
 - **Tolerances.** The engine cross-check allows 10 mm where a cylinder or cut beam is triangulated; perpendicular round
   runs are measured conservatively.
 - **Determinism is per machine.** SwiftShader gives identical bytes for the same job on the same machine, not
   necessarily across machines; the scenes and truths are identical everywhere.
 - **Small runs, wide intervals.** Every accuracy carries a bootstrap CI; we make no claim where intervals overlap.
 - **Cost weights are judgement,** not measured site costs.
-- **No numbers yet.** No Gemini results are quoted in this document; findings come from measured runs in each run's
-  `report.html`.
+- **One small run so far.** The committed sample ([bench/sample-run/](../bench/sample-run/README.md)) is one model,
+  `gemini-3.8-flash`, on 7 seeds: 58% [47%, 67%] over 95 pictures items, with 7 to 11 items per job, so the per-job
+  intervals are wide. Larger runs and more models are future work.
 
 ## 12. How this maps to the judging criteria
 
@@ -297,8 +308,10 @@ just how many things there are. Scoring slices accuracy by each.
 | `server/iris_bench/geom.py` | Closed-form distances, penetration, moves, openings |
 | `server/iris_bench/checker.py` | `check_fix`, per-job checks, `crosscheck_engine` |
 | `server/iris_bench/render.py`, `bench/render/` | Headless three.js renderer: views, letters, scale bar, object-ID pass |
-| `server/iris_bench/jobs.py` | Items per job, prompts, JSON Schemas, J5 candidates, J1 balancing |
-| `server/iris_bench/controls.py` | no_image and swapped copies |
+| `server/iris_bench/truth.py` | Relations, candidate resolutions and cameras (`annotate`), from geometry and the checker |
+| `server/iris_bench/jobs.py` | Items per job (J1–J9), prompts, JSON Schemas, candidates, J1 balancing |
+| `server/iris_bench/controls.py` | no_image and swapped copies; counterfactual pairing |
+| `server/iris_bench/integrity.py` | `iris-bench verify`: truth frozen, truth code isolated, prompts clean, truths re-derived, answer balance |
 | `server/iris_bench/runner.py` | Gemini or fake model, reply cache, grading hook, Vertex batch lines |
 | `server/iris_bench/score.py` | Grading with the checker, all score tables |
 | `server/iris_bench/report.py` | `report.md` and `report.html` |

@@ -268,7 +268,7 @@ cp "$run"/sampled-clashes.xml "$dest"/
 ### In the deploy
 
 `deploy/deploy.sh` builds the Cloud Run image with `samples/` in it, so the public demo serves exactly what
-`samples/` held at deploy time, the STEP cache included, and a saved set in `samples/prepared/` once there is one
+`samples/` held at deploy time, the STEP cache included, and the saved set in `samples/prepared/`
 (`.dockerignore` lets `samples/**/*.json` in). Put the data in place before deploying
 ([17](17-deployment-and-operations.md)).
 
@@ -281,7 +281,7 @@ flowchart LR
   reportsDir --> samples
   samples -->|"open each STEP once, locally"| cache["samples/step-cache"]
   cache --> samples
-  samples -->|"prepare_saved.py on Gemini, owner approved"| prepared["samples/prepared (not made yet)"]
+  samples -->|"prepare_saved.py on Gemini, owner approved"| prepared["samples/prepared (Northbank.json)"]
   prepared --> samples
   samples -->|"list_samples, open, report samples"| app["Iris server and page"]
   samples -->|"deploy/deploy.sh"| image["Cloud Run image: public demo"]
@@ -404,9 +404,11 @@ checked and ranked on the server exactly as a live one is before anyone sees it.
 is charged and nothing waits on the model). The page labels it with the file's sentence, "Saved AI proposals for this
 sample (<model>, <date>)" (`Saved.info`).
 
-**Not in the repo yet.** `samples/prepared/` does not exist: the Gemini run that makes it waits for the owner's
-approval. Until then every pair is prepared live. `.gitignore` allows the folder (`!samples/prepared/`) and
-`.dockerignore` lets `samples/**/*.json` into the image, so once made it is committed and deployed with the models.
+**In the repo:** `samples/prepared/Northbank.json`, made by one owner-approved Gemini run (gemini-3.8-flash at
+thinking low, Nov 22): 8 of 8 pairs ready, each verified in the first round, and it replays 8 of 8 ready offline with
+no model call ([docs/review-queue.md](../review-queue.md#measured-so-far)). A scene whose key does not match is
+prepared live. `.gitignore` allows the folder (`!samples/prepared/`) and `.dockerignore` lets `samples/**/*.json` into
+the image, so the set is deployed with the models.
 
 - **Where:** `samples/prepared/*.json`, or the folder `IRIS_PREPARED_DIR` names
   ([15](15-requirements-settings-and-config.md)); the first file whose key equals the scene's (`prepare.saved_dir`,

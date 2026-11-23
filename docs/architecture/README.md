@@ -76,7 +76,7 @@ Validate → Review → Report, with every decision recorded and the work saved 
 | [01 · Product and user journeys](01-product-and-journeys.md) | What Iris does and for whom, every way in, the golden path, the main screen |
 | [02 · System architecture](02-system-architecture.md) | The parts, the single process, threads and locks, the request lifecycle, the stack and why |
 | [03 · End-to-end flows](03-end-to-end-flows.md) | Sequence diagrams for every user action, browser to models and back |
-| [Engineer workflow](../engineer-workflow.md) (a feature design) | The project-based round, Import → Report: projects, decisions, the four proposal states, the server and web contract, and what is not built (2D PDF drawings, accounts) |
+| [Engineer workflow](../engineer-workflow.md) (a feature design) | The project-based round, Import → Report: projects, decisions, the four proposal states, the server and web contract, and what is not built (DWG and DXF drawings, accounts) |
 
 ### Server
 
