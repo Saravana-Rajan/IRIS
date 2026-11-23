@@ -742,6 +742,7 @@ PROJECT_IDS_MAX = 200   # ids one listing may ask for
 
 class ProjectNew(BaseModel):
     name: str = Field(min_length=1, max_length=projects.NAME_MAX)
+    sample: bool = False   # the page's sample project (Try the sample building): marked "Sample" in its lists
 
 
 class ProjectPatch(BaseModel):
@@ -794,7 +795,7 @@ def list_projects(ids: str | None = None):
 
 @app.post("/api/projects")
 def create_project(body: ProjectNew):
-    return _project(lambda: projects.create(body.name))
+    return _project(lambda: projects.create(body.name, sample=body.sample))
 
 
 @app.get("/api/projects/{pid}")

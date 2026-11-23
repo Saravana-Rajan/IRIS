@@ -6,11 +6,16 @@ import { HERO_POSTER } from "./glassModel";
 import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
 import { ownClick, projectPath, type ProjectStep } from "./projectRoute";
-import { plural, whenText, type Project } from "./projectsApi";
+import { isSample, plural, whenText, type Project } from "./projectsApi";
 import "./home.css";
 
 /** How many recent projects Home shows. */
 export const RECENT_MAX = 4;
+
+/** "Sample": the sample building's project, never the visitor's own (index.css `.sample-pill`). */
+export function SamplePill() {
+  return <span className="sample-pill" data-tip="The sample building: try Iris on it; it is not your own project">Sample</span>;
+}
 
 /** "Good morning" (5:00 to 11:59), "Good afternoon" (to 17:59) or "Good evening", by the local clock at `now` (ms). */
 export function greetingFor(now: number): string {
@@ -59,12 +64,10 @@ function ProjectStatus({ p }: { p: Project }) {
  * them. It scrolls inside its container. Props only; nothing here calls the server.
  */
 export function StartScreen({
-  name = "", now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
+  now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
   onSample, sampleBusy = false, onSampleDrawings, sampleDrawingsBusy = false, onSampleStep,
   recent = [], recentLoading = false, onOpenProject, projectHref = projectPath, resume,
 }: {
-  /** The reviewer's name (localStorage `iris.reviewer`); the greeting says "there" without one. */
-  name?: string;
   /** The clock (ms) for the greeting's time of day; tests pass a fixed one. */
   now?: number;
   /** The dashed "New project" tile (and "Create one" when there are no projects yet). */
@@ -91,8 +94,9 @@ export function StartScreen({
   /** This browser's last session, still on the server. */
   resume?: Resume;
 }) {
-  const who = name.trim() || "there";
-  const hello = `${greetingFor(now)}, ${who}`;
+  // Just the time of day: the reviewer name (`iris.reviewer`) is what decisions are signed with, often a test name,
+  // never a greeting (owner, 23 Nov).
+  const hello = greetingFor(now);
   const helloMs = 90 * hello.split(/\s+/).length + 120;
   const shown = recent.slice(0, RECENT_MAX);
   const anyBusy = sampleBusy || sampleDrawingsBusy;
@@ -125,7 +129,8 @@ export function StartScreen({
           <div className="home-resume" role="region" aria-label="Your last session">
             <span className="home-resume-icon" aria-hidden><History size={16} /></span>
             <p className="home-resume-text">
-              Resume <b>{projectName(resume.files)}</b>
+              Resume <b>{resume.sample ? "the sample building" : projectName(resume.files)}</b>
+              {resume.sample && <> <SamplePill /></>}
               {resume.fixed ? ` · ${plural(resume.fixed, "fix", "fixes")} kept` : ""}
               {resume.clashes != null ? ` · ${plural(resume.clashes, "clash", "clashes")}` : ""}
               {` · saved ${whenText(resume.savedAt, now)}`}</p>
@@ -178,6 +183,7 @@ export function StartScreen({
                     <span className="home-project-top">
                       <span className="home-project-icon" aria-hidden><FolderKanban size={16} /></span>
                       <span className="home-project-name">{p.name}</span>
+                      {isSample(p) && <SamplePill />}
                     </span>
                     <span className="home-project-meta">
                       <span>{p.files.length ? plural(p.files.length, "model") : "No models yet"}</span>

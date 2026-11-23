@@ -5,7 +5,8 @@ import { aiName } from "./aiNames";
 
 export const TRIAGE: Record<TriageKind, { label: string; cls: string; tip: string; colour: string; long: string }> = {
   real_clash: { label: "real", cls: "bad", tip: "A real clash: something has to move", colour: "var(--fail)", long: "Real problem" },
-  modelling_error: { label: "model error", cls: "warn", tip: "A modelling mistake for the model's author", colour: "#d49a1c", long: "Model error" },
+  modelling_error: { label: "drawing mistake", cls: "warn", colour: "#d49a1c", long: "Drawing mistake in model",
+    tip: "The clash comes from how the model was drawn (for example a duplicate or misplaced element), not from a real design conflict." },
   by_design: { label: "by design", cls: "", tip: "How the parts are meant to go together", colour: "#7d8fa6", long: "By design" },
   non_physical: { label: "not physical", cls: "muted", tip: "A space, port or opening: not a physical clash", colour: "#c3ccd8", long: "Not physical" },
   unknown: { label: "no answer", cls: "muted", tip: "The triage model did not answer", colour: "#e3e7ec", long: "No answer" },
@@ -208,7 +209,7 @@ export function TriageCard({ run, results, now, filter, onFilter, onRun, onStop,
           {ORDER.filter((k) => counts[k]).map((k) => (
             <button key={k} className={`triage-row ${filter === k ? "on" : ""}`} aria-pressed={filter === k}
               data-tour={k === "real_clash" ? "triage-real" : undefined}
-              data-tip={filter === k ? "Show every clash again" : `Show only these in the list`} data-tip-side="right"
+              data-tip={`${k === "modelling_error" ? `${TRIAGE[k].tip} ` : ""}${filter === k ? "Show every clash again" : "Show only these in the list"}`} data-tip-side="right"
               onClick={() => onFilter(filter === k ? null : k)}>
               <i style={{ background: TRIAGE[k].colour }} />
               <span className="lbl">{TRIAGE[k].long}<small>{WHY[k]}</small></span>
@@ -223,7 +224,7 @@ export function TriageCard({ run, results, now, filter, onFilter, onRun, onStop,
               <CircleCheck size={13} aria-hidden /> Set aside {noiseOpen.length} as noise</button>
             : <span className="chip ok"><CircleCheck size={12} aria-hidden /> {noise.length} set aside</span>)}
           {errors.length > 0 && (errorsOpen.length
-            ? <button className="btn small" onClick={() => onFlag(errorsOpen)} data-tip="Flag the model errors for their author" data-tip-side="top">
+            ? <button className="btn small" onClick={() => onFlag(errorsOpen)} data-tip="Flag the drawing mistakes for the model's author" data-tip-side="top">
               <Flag size={13} aria-hidden /> Flag {errorsOpen.length} for their authors</button>
             : <span className="chip warn"><Flag size={12} aria-hidden /> {errors.length} flagged</span>)}
         </div>)}

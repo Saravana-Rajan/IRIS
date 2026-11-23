@@ -145,7 +145,7 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
         {projectId && <p className="hint">For the project <b>{projectName || "Untitled project"}</b>: its name goes on the cover, and the
           report is kept with the project once built.</p>}
         <p className="hint">A PDF for the design teams: every real clash and every fix on its own page, with {aiName("proposal")}'s explanation,
-          the original and the fix side by side, and a review block for each team involved. Model errors go in a table for the
+          the original and the fix side by side, and a review block for each team involved. Drawing mistakes in the model go in a table for the
           models' authors; noise in a summary by clash test, and clashes not triaged yet in a table of their own. BCF issues open in Revit, Navisworks, Solibri or BIMcollab.</p>
 
         <h3>What to produce</h3>
@@ -193,7 +193,7 @@ export function ReportDialog({ report, sceneId, triage, triageDone, triageRunnin
           ? <><LoaderCircle size={13} className="spin" aria-hidden /> Triage is running ({Object.keys(triage).length} of {report.clashes.length}).
             Build now and the clashes it hasn't sorted are listed as not triaged, or wait for it to end.</>
           : <>Triage is optional. Without it, the clashes with a fix or a decision get their pages and the other {untriaged} are
-            listed by clash test as not triaged. Triage sorts them into real problems, model errors and noise (a few minutes for
+            listed by clash test as not triaged. Triage sorts them into real problems, drawing mistakes in the model and noise (a few minutes for
             a few hundred clashes). <button className="btn small ghost" onClick={onRunTriage}>Triage all</button></>}</p>}
         {busy && step?.type === "progress" && (
           <p className="hint"><LoaderCircle size={13} className="spin" aria-hidden /> {STEP[step.step]?.() ?? step.step}

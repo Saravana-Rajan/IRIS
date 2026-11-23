@@ -24,7 +24,9 @@ export const CLASS_INFO: Record<ClashClass, { label: string; tip: string; tone: 
   by_design: { label: "Intentional (by design)", tone: "",
     tip: "Read as by design: by a requirements rule, by the triage model, or marked not a clash" },
   non_conflict: { label: "Non-conflict", tone: "muted", tip: "Not physical, one element, or no overlap measured in the open model" },
-  modelling_error: { label: "Modelling error", tone: "warn", tip: "For the model's author: read as a modelling error, or found by the duplicates test" },
+  // Shown as "Drawing mistake in model": "Modelling error" read like a software error to the owner (Nov 23). The id stays.
+  modelling_error: { label: "Drawing mistake in model", tone: "warn",
+    tip: "The clash comes from how the model was drawn (for example a duplicate or misplaced element), not from a real design conflict." },
   untriaged: { label: "Not triaged", tone: "muted", tip: "No triage reading yet, and the measure alone does not place it" },
 };
 export const SEVERITY_LABEL: Record<Severity, string> = { high: "High", medium: "Medium", low: "Low", none: "None" };
@@ -33,7 +35,7 @@ export const STATUS_INFO: Record<ClashStatus, { label: string; tip: string }> = 
   fix_kept_pending_recheck: { label: "Fix kept, awaiting re-check", tip: "A fix was kept; the check that lists this clash has not run again since" },
   resolved_geometry: { label: "Resolved by geometry", tip: "The check, run again, no longer finds it with both elements still checked" },
   reviewed_by_design: { label: "Reviewed: by design", tip: "Marked not a clash: no model edit needed" },
-  sent_to_author: { label: "Sent to author", tip: "Flagged for the model's author (a modelling error)" },
+  sent_to_author: { label: "Sent to author", tip: "Flagged for the model's author (a drawing mistake in the model)" },
 };
 
 /** The test a clash came from, as the server reads it: no type is a hard test (triage.py, titles.py), and Navisworks
@@ -53,7 +55,7 @@ function reading(t?: TriageVerdict | null): TriageVerdict | null {
  * - Non-conflict: verdict non_physical, or basis same_element / no_overlap.
  * - Touching: basis touch.
  * - By design: verdict by_design (basis requirement, reviewed, or the model's own).
- * - Modelling error: verdict modelling_error, or a duplicate test.
+ * - Drawing mistake in model (`modelling_error`): verdict modelling_error, or a duplicate test.
  * - Actual: distance < 0 on a hard or clearance test, verdict real_clash or not triaged.
  * - Clearance issue: a clearance test with distance >= 0.
  * - Not triaged: no reading, and nothing above places it.

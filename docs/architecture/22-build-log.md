@@ -1375,3 +1375,21 @@ reading) and the compare line (both sample sheets are compared at once, so the c
 sheet: no mismatch marks). `DEMO_VIDEOS`' durations are the files' lengths, rounded down as the video controls show
 them (2:35, 1:51, 4:19). Checked: `npm test` (591 passing), `tsc` and `vite build`, and frames of each video at every
 narrated line.
+**Nov 23 (2026-11-23), moving and zooming for anyone, plain words, a lean Settings, the sample marked**
+([13](13-3d-viewer.md), [12](12-web-app.md)). Owner requests on the live site, on `feature/viewer-ux`.
+**3D navigation** (`web/src/viewer/navigate.ts`, `Viewer.ts`): a light pad above the view cube (zoom in and out with
+press-and-hold, Fit, a Rotate / Move toggle so a plain drag or one finger pans, "?"); the wheel and pinch zoom toward the
+point under the pointer, eased in log distance (`EASE_MS` 90 ms), within limits from the scene's size (near a thousandth
+of it, 2–250 mm; far five times across), never backing the wrong way; Space + drag pans as Shift + drag and the right
+button do; + − and the arrows while the 3D view has the focus; F fits when nothing is selected and no clash is on
+screen; a double-click flies to look at the point (A / B picking unchanged); a first-use hint card, remembered in
+`iris.viewer.hint`. **Words:** the `modelling_error` class reads "Drawing mistake in model" everywhere (tip: the clash
+comes from how the model was drawn, not a real design conflict; ids unchanged; the PDF too), and `plainError` says
+"Iris couldn't reach the AI model (…)" for AI failures. **Home:** the greeting no longer uses the reviewer name.
+**Settings:** your name and Help in view, the rest in one closed Advanced section (requirements, the agent, layout
+reset, owner settings); no Panels list, Workings toggle or Classic layout switch. **Sample:** `POST /api/projects`
+takes `sample: true`; a "Sample" pill in Projects, Home's recent projects and the sidebar, and "Resume the sample
+building". Checked: `npm test` (591 before the last docs), `tsc`, `vite build`, `test_docs_map.py`,
+`test_projects.py`; headless Chromium (GPU) on a local one-origin server with no Gemini key: + / − and a hold change
+the model's size on screen, the wheel zooms, a Move-mode drag shifts it 164 px, + and ← keys work with the view
+focused, F fits, the hint shows once (not after a reload) and "?" brings it back; screenshots at 1512×805 and 390×844.

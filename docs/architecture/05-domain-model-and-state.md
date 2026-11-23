@@ -394,7 +394,8 @@ disk; decisions live in memory with the scene, like the edit log, and reach disk
   itself lives in memory and goes with eviction or a restart), `saved` (`[{n, at, files, edits}]`, `edits` the kept
   entries), `reviews` (clash key → Review, at most 5,000), `reports` (`[{doc_id, name, at, kind: pdf | bcf}]`, at
   most 100, the oldest file deleted), `counts` (`{clashes, open, resolved, reviewed}` as the page last saw them, or
-  null).
+  null), `sample` (true for the project "Try the sample building" makes; the page shows it with a "Sample" pill; absent
+  on projects made before Nov 23, which the page knows by name, `projectsApi.isSample`).
 - **Review:** `{status, note?, by?, at, number?, title?}`, `status` one of `open`, `by_design`, `author`, `resolved`;
   set one clash at a time (`projects.set_review`).
 - **Clash key:** `<test kind>|<GlobalId A>|<GlobalId B>` with the two ids sorted (`projects.clash_key`), so it holds
@@ -735,7 +736,7 @@ so a private window simply does without.
 |---|---|---|
 | `iris.session` | `App.tsx` | The session to resume: `scene_id`, `report_id`, `files`, `fixes` (clash id → fix title), `link` (the agent link, token included), `saved_at`, `check` (the kept check the list showed, null for all). Removed by Start fresh, or when the server no longer has the scene |
 | `iris.signoffs:clash:<clash id>` (a detection run) / `iris.signoffs:import:<title>:<files>` (an imported report) | `signoffs.ts` (`saveSignoffs`, called by `App.tsx`) | Reviews (team, name, decision, note, time) for the PDF's sign-off: one entry per detected clash, or one per imported report by clash id (the sign-off key, under Identifiers). A clash with no review left is dropped, and an import's key when none has any. The old title-keyed `iris.signoffs.<report title>` entries (every detection run shared "Coordination · N models") move over when a report with that title opens, for the clashes it has (`migrateTitleKeyed`); what is left waits for its own report |
-| `iris.reviewer` | `App.tsx` (`setReviewer`: the Clash tab's "Your name" above the verified options, Settings' "Your name for review decisions" and the review queue's "change"; Home's greeting reads it), `ReportDoc.tsx` | The reviewer's name, recorded with each decision |
+| `iris.reviewer` | `App.tsx` (`setReviewer`: the Clash tab's "Your name" above the verified options, Settings' "Your name for review decisions" and the review queue's "change"; Home's greeting does not read it), `ReportDoc.tsx` | The reviewer's name, recorded with each decision |
 | `iris.sidebar` | `shellNav.ts` (`readRail`, `writeRail`, called by `App.tsx`) | `{"pages": bool, "workspace": bool}`: whether the sidebar is collapsed to its icon rail on ordinary pages and on the 3D workspace; unset, pages are expanded and the workspace collapsed (`RAIL_DEFAULT`) |
 | `iris.projects` | `projectsApi.ts` (`rememberProject`, `forgetProject`, `pruneProjectIds`) | The project ids this browser created or opened, most recent first: the only list of "my projects" ([docs/engineer-workflow.md](../engineer-workflow.md)) |
 | `iris.requirements` | `reqFile.ts` | The requirements file and whether it is in use (`{doc, enabled}`); the page registers it with the server and sends its id |

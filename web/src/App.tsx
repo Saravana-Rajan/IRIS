@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, Info, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, Info, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ActivityLine, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
@@ -50,7 +50,7 @@ import { DockHost, SlotHost, inSlot, usePanelSlots, type DockHandle } from "./do
 import { FiltersPanel, blankRule } from "./FiltersPanel";
 import { ElementCard, type CardActions } from "./ElementCard";
 import { EMPTY as NO_FILTERS, applied, complete, evaluate, legend, matching, migrate, prepare, shareable, withBy, zoomTarget, type FacetIndex, type FilterState, type Rule } from "./filters";
-import { CLASSIC_KEY, PANE, PANELS, isPanel, stepTitles, type PanelId } from "./dockLayout";
+import { CLASSIC_KEY, PANE, isPanel, stepTitles, type PanelId } from "./dockLayout";
 import { runs, type Origin, type RunHandle, type RunKind } from "./runlog";
 import type { Peek } from "./workingsGraph";
 import { ImportPanel } from "./ImportPanel";
@@ -66,7 +66,7 @@ import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
 import { currentPath, currentProjectRoute, isAppPath, isWorkStep, legacyPath, projectPath, PROJECTS_PATH, projectView, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { NotFound } from "./NotFound";
-import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
+import { addReport, attachScene, createProject, forgetProject, isSample, SAMPLE_PROJECT, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
 import { browserStorage, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
 import { PageHeader, type Crumb } from "./PageHeader";
@@ -1738,12 +1738,18 @@ export function App() {
    * (`made`) and its id kept in this browser. */
   async function sampleProject(): Promise<{ p: Project; made: boolean }> {
     const mine = await listProjects(myProjectIds()).catch(() => [] as Project[]);
-    const found = mine.find((x) => x.name === SAMPLE_PROJECT && x.files.length > 0);
+    const found = mine.find((x) => isSample(x) && x.files.length > 0);
     if (found) return { p: found, made: false };
-    const p = await createProject(SAMPLE_PROJECT);
+    const p = await createProject(SAMPLE_PROJECT, { sample: true });
     rememberProject(p.id);
     return { p, made: true };
   }
+  /** A session of the sample building's models (all of them among the sample's files): Home says "Resume the sample
+   * building", not the models' prefix. */
+  const sampleSession = (files: string[]) => {
+    const sample = new Set(demos.find((d) => d.tour === "northbank")?.files ?? []);
+    return files.length > 0 && files.every((f) => sample.has(f));
+  };
   /** The first screen's "Try the sample building": the sample as a project of this browser's (made once, then found
    * again), opened on its Clash review. Opening and checking it call no model. */
   async function trySample(step: ProjectStep = "clash") {
@@ -2425,14 +2431,15 @@ export function App() {
     return { shown: shown.some((p) => p.spec.kind === "3d"), x: r.x, y: r.y, h: r.h };
   }
 
-  /** F: frame the selected element, else go to the clash. */
+  /** F: frame the selected element, else go to the clash, else fit the whole model (navigate.ts's key map). */
   function focusNow() {
     if (selected) viewer.current?.frame([selected.globalId]);
     else if (clash) goToClash(clash, undefined, true);
     else if (a || b) viewer.current?.frame([a, b].filter((g): g is string => !!g));
+    else viewer.current?.fitAll();
   }
 
-  // Keyboard: 1-4 views, H home, F selection or clash, X/C/I/V modes, G style, O projection, Q layout, [ ] back and
+  // Keyboard: 1-4 views, H home, F selection, clash or the whole model, X/C/I/V modes, G style, O projection, Q layout, [ ] back and
   // forward, S section, E edges, M measure, L links, Esc one thing at a time.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3827,6 +3834,9 @@ export function App() {
       if (row && row !== "none") { setListReveal(row); setLeftView("clashes"); }
       const view = el?.closest("[data-left-view]")?.getAttribute("data-left-view");
       if (view === "clashes" || view === "insights") setLeftView(view);
+      // Requirements sits in Settings' closed Advanced section: the tour opens it to point there.
+      const shut = el?.closest("details.menu-advanced") as HTMLDetailsElement | null | undefined;
+      if (shut && !shut.open) shut.open = true;
       // Requirements and Report are in the menu on a desktop and a phone (a tablet keeps Report in its bar).
       if (!el && /data-tour=["']?(report|export|requirements)\b/.test(sel) && (!compact || layout === "phone")) { setMenuOpen(true); return; }
       if (docked) {  // the panel it is in, open and in this window
@@ -4058,15 +4068,12 @@ export function App() {
     {!noFolders && <p className="hint">Upload the whole export folder to get each clash's images.</p>}
   </>);
   // The desktop's panels: show one (also a closed one), go back to the default layout, or to the classic one.
+  // Settings' layout items, in its closed Advanced section (owner, Nov 23: "do we need this?"). The panels open from the
+  // workspace and Workings from the Activity bar, so neither is listed here. Classic layout shows only while it is on,
+  // so a browser that chose it once can still come back to the docking panels.
   const layoutMenu = (close: () => void) => (<>
-    <p className="pop-title">Panels</p>
-    {docked ? PANELS.filter((p) => p.id !== "model").map((p) => (
-      <button key={p.id} className="pop-item" onClick={() => { close(); showPanel(p.id); }}>
-        {p.title}{dock.current && !dock.current.isOpen(p.id) ? <span className="why"> closed</span> : null}</button>))
-      : <p className="hint">The list on the left, Clash, Plan and Chat on the right, Activity below.</p>}
     {docked && <button className="pop-item" onClick={() => { close(); dock.current?.reset(); }}><RotateCcw size={14} aria-hidden /> Reset the layout</button>}
-    <label className="pop-item check"><input type="checkbox" checked={workings.on} onChange={(e) => { close(); setWorkingsOn(e.target.checked); }} /> Workings in Activity</label>
-    <label className="pop-item check"><input type="checkbox" checked={classic} onChange={(e) => { close(); setClassic(e.target.checked); }} /> Classic layout (fixed panels)</label>
+    {classic && <label className="pop-item check"><input type="checkbox" checked={classic} onChange={(e) => { close(); setClassic(e.target.checked); }} /> Classic layout (fixed panels)</label>}
   </>);
   // The workspace's own actions (Settings held them once): sample models to open or add, your own files, checking the
   // open models, a Navisworks clash report to import. A closed line under the Models step's import, and at the top of
@@ -4320,12 +4327,12 @@ export function App() {
   const homePage = showHome && (
     <div className="proj-shell home-shell" role="region" aria-label="Home">
       {pageAlert}
-      <StartScreen name={reviewer} onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
+      <StartScreen onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
         onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
         onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
         onSampleStep={sampleSet.length ? (st) => void trySample(st) : undefined}
         recent={projects} recentLoading={projectsLoading} onOpenProject={(id) => goStep("overview", id)} projectHref={(id) => projectPath(id)}
-        resume={resumable ? { files: resumable.info.files, clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
+        resume={resumable ? { files: resumable.info.files, sample: sampleSession(resumable.info.files), clashes: resumable.clashes, fixed: Object.keys(resumable.saved.fixes ?? {}).length,
           agent: !!resumable.saved.link, agentLeft: resumable.saved.link ? timeLeft(resumable.saved.link, now) : null, savedAt: resumable.saved.saved_at,
           onResume: () => { setHomeAsked(false); void resumeSession(); }, onFresh: startFresh } : undefined} />
     </div>);
@@ -4336,7 +4343,7 @@ export function App() {
   /** A page over the workspace (Home, the projects, a project's page): else the workspace itself is the page. */
   const onPage = !!homePage || !!projectPage || !!lostPage;
   const navActive: NavId = homePage ? "home" : route?.view === "projects" ? "projects" : route?.view === "project" ? route.step : "workspace";
-  const navProject = project ? { id: project.id, name: project.name || "Untitled project", counts: {
+  const navProject = project ? { id: project.id, name: project.name || "Untitled project", sample: isSample(project), counts: {
     ...(project.files.length ? { models: project.files.length } : {}),
     ...(projectOpen && drawings.length ? { drawings: drawings.length } : {}),
     ...(((project.id === pid ? liveCounts : null) ?? project.counts)?.open ? { clash: ((project.id === pid ? liveCounts : null) ?? project.counts)!.open } : {}),
@@ -4506,7 +4513,7 @@ export function App() {
                       onOpen={(id) => { const c = report.clashes.find((x) => x.id === id); if (c) selectClash(c); }}
                       total={(listReport ?? report).clashes.length} unread={unread} resolved={(id) => !!fixes[id] || !!reviewed[id]} onRun={runTriage} onStop={stopTriage}
                       onSetAside={(ids) => review(ids, "by_design", "Triage: by design or not physical")}
-                      onFlag={(ids) => review(ids, "author", "Triage: modelling error")}
+                      onFlag={(ids) => review(ids, "author", "Triage: drawing mistake in model")}
                       requirements={reqLabel} stale={triageStale} onRequirements={() => setReqOpen(true)} />)}
                     insights={<>{projStep !== "coordination" && coordCard}{(detecting || (report.origin === "iris" && shownCheck)) && <DetectSummary
                       detection={shownCheck ?? { coverage: [], diff: { new: [], resolved: [], no_longer_checked: [], first: true }, elements: 0, seconds: 0 }}
@@ -4927,33 +4934,37 @@ export function App() {
                 Help. The workspace's own actions (models, checks, a Navisworks report) are in the workspace: the Models
                 step and the left panel (docs/architecture/12-web-app.md, "The app shell"). */}
             {menuOpen && <MenuSheet title="Settings" onClose={closeSheet}>
+              {/* Lean (owner, Nov 23): your name and Help in view; the rest in one closed Advanced section. */}
               <section className="menu-section"><h3>Your name for review decisions</h3>
                 <label className="field reviewer-field">Recorded with each accept, reject or request, and in the reports
                   <input value={reviewer} maxLength={120} placeholder="Your name (no sign-in)" autoComplete="name"
                     onChange={(e) => setReviewer(e.target.value)} /></label>
               </section>
-              {!landing && <section className="menu-section"><h3>This session</h3>
-                {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { closeSheet(); setReqOpen(true); }}>
-                  <ClipboardCheck size={16} aria-hidden /> Requirements{reqLabel ? <span className="chip accent">{reqLabel}</span> : <span className="why">optional</span>}</button>}
-                {/* A phone's header has no room for Report and Export: they are here (the desktop's and tablet's are in it). */}
-                {layout === "phone" && report && <button className="pop-item" data-tour="report" onClick={() => { closeSheet(); setDocOpen(true); setDocReady(false); }}>
-                  <FileText size={16} aria-hidden /> Report: PDF and BCF</button>}
-                {layout === "phone" && sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={closeSheet}>
-                  <Download size={16} aria-hidden /> {stepFiles.length ? "Export STEP + IFC" : "Export IFC"}</a>}
-                <button className="pop-item" onClick={() => { closeSheet(); setAgentOpen(true); }}>
-                  {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
-              </section>}
-              {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(closeSheet)}</section>}
-              {/* The server owner's settings (Owner.tsx): unlocked with the owner token; nothing shows where the server has
-                  no owner (the section hides itself, appShell.css) */}
-              <section className="menu-section owner-section"><h3>Owner settings</h3>
-                <div className="owner-row">{ownerPop}<p className="hint">Reasoning effort, second tries and the demo caps, for
-                  you or for everyone. For the server's owner only.</p></div>
-              </section>
               <section className="menu-section"><h3>Help</h3>
                 <button className="pop-item" onClick={() => openSheet("help")}><Info size={16} aria-hidden /> How Iris works, and samples to try</button>
                 <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet.</p>
               </section>
+              {/* A phone's header has no room for Report and Export: they are here (the desktop's and tablet's are in it). */}
+              {layout === "phone" && !landing && (report || (sceneId && !gone?.scene)) && <section className="menu-section"><h3>This session</h3>
+                {report && <button className="pop-item" data-tour="report" onClick={() => { closeSheet(); setDocOpen(true); setDocReady(false); }}>
+                  <FileText size={16} aria-hidden /> Report: PDF and BCF</button>}
+                {sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={closeSheet}>
+                  <Download size={16} aria-hidden /> {stepFiles.length ? "Export STEP + IFC" : "Export IFC"}</a>}
+              </section>}
+              {/* Closed by default; hidden when it would hold nothing (appShell.css). The owner's settings (Owner.tsx) are
+                  unlocked with the owner token; nothing shows where the server has no owner (the section hides itself). */}
+              <details className="menu-advanced" data-settings="advanced">
+                <summary>Advanced</summary>
+                {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { closeSheet(); setReqOpen(true); }}>
+                  <ClipboardCheck size={16} aria-hidden /> Coordination requirements{reqLabel ? <span className="chip accent">{reqLabel}</span> : <span className="why">optional clearance rules</span>}</button>}
+                {!landing && <button className="pop-item" onClick={() => { closeSheet(); setAgentOpen(true); }}>
+                  {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>}
+                {!compact && !landing && layoutMenu(closeSheet)}
+                <section className="menu-section owner-section"><h3>Owner settings</h3>
+                  <div className="owner-row">{ownerPop}<p className="hint">Reasoning effort, second tries and the demo caps, for
+                    you or for everyone. For the server's owner only.</p></div>
+                </section>
+              </details>
             </MenuSheet>}
             {helpOpen && <MenuSheet title="Help" onClose={closeSheet}>
               <section className="menu-section"><h3>How Iris works</h3>
@@ -5240,5 +5251,3 @@ function decisionLine(d: Decision): string {
   return `${d.number ? `#${d.number}: ` : ""}${w.verb} "${d.option.title}" (${STATE_LABEL[d.state] ?? d.state}), by ${w.who}${w.why ? `: ${w.why}` : ""}`;
 }
 
-/** The sample building's project name (the first screen's "Try the sample building" finds it again by this name). */
-const SAMPLE_PROJECT = "Northbank sample building";

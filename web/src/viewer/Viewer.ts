@@ -7,6 +7,8 @@ import { creased, CREASE_DEGREES } from "./normals";
 import { origin, pointToIfc, pointToThree, serverVerts, setOrigin } from "./origin";
 import { coplanar, pushMatrix, signedMm, toIfcAxes, toThree } from "./edit";
 import { ViewCube } from "./cube";
+import { EASE_MS, NavHint, NavPad, PAN_STEP, distanceLimits, easeDistance, hintSeen, holdGoal, markHintSeen, mouseFor, navKey,
+  stepGoal, touchesFor, towards, wheelScale, type Limits, type NavMode } from "./navigate";
 import { CAP_LAYER, CUT, DrawingStyle, DrawingView, farBehind, PAPER, targets, toIfc } from "./drawing";
 import { annotate, type Handle } from "./annotate";
 import type { RuleView } from "../filters";
@@ -244,6 +246,21 @@ export class Viewer {
   private marks = new Map<HTMLElement, Comment>();
   /** Elements that already redraw on a pointer, wheel or touch (`redrawOnPointer`, once each). */
   private pointerWoken = new WeakSet<HTMLElement>();
+  /** What a plain left drag (and one finger) does: turn the view or move it (the nav pad's Rotate / Move). */
+  navMode: NavMode = "rotate";
+  private navPad!: NavPad;
+  private navHint!: NavHint;
+  /** A zoom under way: the distance it eases to, the point it zooms about (null: what the view looks at), and a held
+   * + (1) or − (−1) that keeps moving the goal. */
+  private zoom: { goal: number; anchor: THREE.Vector3 | null; hold: 1 | -1 | 0 } | null = null;
+  /** The wheel's point under the pointer, kept for one gesture (a pick each wheel event would cost ~8 ms on Northbank). */
+  private wheelAnchor: { x: number; y: number; t: number; point: THREE.Vector3 } | null = null;
+  /** What the arrow keys still have to move the view by (world metres), eased like a zoom. */
+  private panLeft = new THREE.Vector3();
+  private lastTick = 0;
+  private spaceHeld = false;
+  private overPane = false;
+  private hintChecked = false;
 
   constructor(private host: HTMLElement) {
     this.homeHost = host;
@@ -279,6 +296,27 @@ export class Viewer {
     this.controls.autoRotateSpeed = 0.6;
     this.cube = new ViewCube((dir) => this.lookFrom(dir), (dx, dy) => this.turn(dx, dy), () => this.home());
     this.pane3d.appendChild(this.cube.el);
+    // Navigating for anyone (navigate.ts; docs/architecture/13-3d-viewer.md, "Moving and zooming"): the pad beside the
+    // cube, the wheel eased toward what is under the pointer, + − and the arrows while the 3D view has the focus, Space
+    // or Move mode for a plain drag that moves, a double-click to focus, and a hint the first time.
+    this.controls.mouseButtons = mouseFor("rotate");
+    this.controls.touches = touchesFor("rotate");
+    this.navPad = new NavPad({ zoomStep: (d) => this.zoomStep(d), zoomHold: (d) => this.zoomHold(d), fit: () => this.fitAll(),
+      setMode: (m) => this.setNavMode(m), showHint: () => this.showHint(!this.navHint.shown) });
+    this.pane3d.appendChild(this.navPad.el);
+    this.navHint = new NavHint(() => this.showHint(false));
+    this.pane3d.appendChild(this.navHint.el);
+    this.pane3d.tabIndex = 0;
+    this.pane3d.setAttribute("aria-label", "3D view: drag to rotate, right-drag or Shift-drag to move, scroll to zoom. Keys: + and − zoom, arrows move, F fit, H home");
+    // Before the controls' own wheel (same element, capture first): eased, toward the point under the pointer.
+    this.pane3d.addEventListener("wheel", (e) => this.wheel(e), { capture: true, passive: false });
+    this.pane3d.addEventListener("keydown", (e) => this.navKeyDown(e));
+    this.pane3d.addEventListener("dblclick", (e) => this.focusAt(e));
+    this.pane3d.addEventListener("pointerenter", () => { this.overPane = true; });
+    this.pane3d.addEventListener("pointerleave", () => { this.overPane = false; });
+    window.addEventListener("keydown", this.spaceKey, true);
+    window.addEventListener("keyup", this.spaceKey, true);
+    window.addEventListener("blur", this.spaceOff);
     this.panes = [{ spec: { kind: "3d" }, el: this.pane3d, rect: { x: 0, y: 0, w: 1, h: 1 }, pinned: false, view: null, key: 0 }];
     this.scene.background = new THREE.Color("#f3f1f8");   // near-white with a faint lavender (index.css --viewer-bg)
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.6));
@@ -359,7 +397,8 @@ export class Viewer {
    * waits, so the view stays smooth. The slow turn round a clash while Iris works is not a move: it never rests, and
    * any move of the user's ends it. */
   get moving(): boolean {
-    return !!this.flight || this.controlsHeld || (!this.controls.autoRotate && performance.now() - this.cameraMoved < 400);
+    return !!this.flight || this.controlsHeld || !!this.zoom || (this.panLeft?.lengthSq() ?? 0) > 0
+      || (!this.controls.autoRotate && performance.now() - this.cameraMoved < 400);
   }
 
   // ---------------------------------------------------------------- models
@@ -417,6 +456,7 @@ export class Viewer {
     this.applyMode();
     this.fitAll(false);
     this.history.clear();   // after the fit: Back never flies to the camera of the models before
+    this.firstHint();
     return this.stats();
   }
 
@@ -1686,7 +1726,10 @@ export class Viewer {
    * the target moves along the view to that depth, so nothing jumps. */
   private press(e: PointerEvent) {
     if (this.cube.el.contains(e.target as Node)) return;   // the view cube handles its own
+    if (this.navPad?.el.contains(e.target as Node) || this.navHint?.el.contains(e.target as Node)) return;   // and the pad
+    this.focusPane();
     this.onUserCamera?.();
+    this.zoom = null; this.panLeft?.set(0, 0, 0);   // the user takes the view: an eased zoom or pan stops here
     if (e.button !== 0 || !this.models.length) return;
     if (this.editDrag && this.startEditDrag(e)) return;
     const grip = this.gripAt(e);
@@ -1702,6 +1745,8 @@ export class Viewer {
     // The user takes the view: a flight under way stops here (the pilot frames each idea and glides to the clash before
     // its slow turn), so the drag turns round the pivot from where the camera is, not wherever the flight was going.
     this.flight = null;
+    // Move mode, or Space held: a plain left drag moves the view (the controls' PAN), no pivot to find.
+    if (this.navMode === "pan" || this.spaceHeld) { this.controls.mouseButtons = mouseFor(this.navMode ?? "rotate", this.spaceHeld); return; }
     const pivot = e.pointerType === "touch" ? null : this.pivotFor();
     if (pivot) {
       this.spin = { id: e.pointerId, x: e.clientX, y: e.clientY, pivot };
@@ -1713,7 +1758,8 @@ export class Viewer {
     if (!hit) return;
     const cam = this.camera.position, dir = this.controls.target.clone().sub(cam).normalize();
     const depth = hit.point.clone().sub(cam).dot(dir);
-    if (depth > this.camera.near * 2) this.controls.target.copy(cam).addScaledVector(dir, depth);
+    // Not nearer than the zoom's limit: the controls would put the camera back there, a jump.
+    if (depth > Math.max(this.camera.near * 2, this.limits().min)) this.controls.target.copy(cam).addScaledVector(dir, depth);
   }
 
   private release(e: PointerEvent) {
@@ -1727,12 +1773,183 @@ export class Viewer {
       return;
     }
     if (this.spin && e.pointerId === this.spin.id) { this.spin = null; this.controls.enableRotate = true; }
+    if (this.controls.mouseButtons) this.controls.mouseButtons = mouseFor(this.navMode ?? "rotate");   // Space let go of
     if (!this.grip) return;
     this.grip = null;
     this.controls.enabled = true;
     this.swallowClick = true;
     if (this.pane3d.hasPointerCapture(e.pointerId)) this.pane3d.releasePointerCapture(e.pointerId);
     this.onChange?.();
+  }
+
+  // ---------------------------------------------------------------- moving and zooming (navigate.ts)
+
+  /** How near and how far the camera may be (`navigate.distanceLimits`, from the scene's size). */
+  private limits(): Limits { return distanceLimits(this.models?.length ? this.sceneDiag() : 0); }
+
+  /** The user takes the view: a flight stops and the pilot lets go (as the controls' own start does). */
+  private takeView() { this.flight = null; this.onUserCamera?.(); }
+
+  /** What a plain left drag (and one finger) does: turn the view, or move it. */
+  setNavMode(mode: NavMode) {
+    this.navMode = mode;
+    this.controls.mouseButtons = mouseFor(mode);
+    this.controls.touches = touchesFor(mode);
+    this.navPad?.setMode(mode);
+    this.pane3d.classList.toggle("nav-pan", mode === "pan");
+    this.onChange?.();
+  }
+
+  /** One step in (1) or out (−1), eased, about what the view looks at; a few presses add up. */
+  zoomStep(dir: 1 | -1) {
+    if (!this.models.length) return;
+    this.takeView();
+    const goal = this.zoom?.goal ?? this.camera.position.distanceTo(this.controls.target);
+    this.zoom = { goal: stepGoal(goal, dir, this.limits()), anchor: null, hold: this.zoom?.hold ?? 0 };
+  }
+
+  /** + or − held: zoom on steadily from now until `null`, then ease to rest. */
+  zoomHold(dir: 1 | -1 | null) {
+    if (dir === null) { if (this.zoom) this.zoom.hold = 0; return; }
+    if (!this.models.length) return;
+    this.takeView();
+    this.zoom = { goal: this.zoom?.goal ?? this.camera.position.distanceTo(this.controls.target), anchor: null, hold: dir };
+  }
+
+  /** Move the view sideways (`x`) or up (`y`) by a share of the distance per step (an arrow key), eased. */
+  panBy(x: number, y: number, steps = 1) {
+    if (!this.models.length) return;
+    this.takeView();
+    const d = this.camera.position.distanceTo(this.controls.target) * PAN_STEP * steps;
+    this.camera.updateMatrixWorld();
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    this.panLeft.addScaledVector(right, x * d).addScaledVector(up, y * d);
+  }
+
+  /** The wheel or a trackpad's pinch: the distance eases to its goal about the point under the pointer (what is there,
+   * else the pointer's ray at the target's depth), so the view never jumps and zooms where you point. */
+  private wheel(e: WheelEvent) {
+    e.preventDefault();
+    e.stopImmediatePropagation();   // not the controls' own wheel: theirs is a step a notch
+    if (!this.models.length || this.controls.enabled === false) return;
+    this.takeView();
+    const base = this.zoom?.goal ?? this.camera.position.distanceTo(this.controls.target);
+    const goal = towards(base, base * wheelScale(e.deltaY, e.deltaMode, e.ctrlKey), this.limits());
+    this.zoom = { goal, anchor: this.projection === "orthographic" ? null : this.wheelPoint(e), hold: 0 };
+  }
+
+  private wheelPoint(e: WheelEvent): THREE.Vector3 {
+    const now = performance.now(), w = this.wheelAnchor;
+    if (w && now - w.t < 300 && Math.hypot(e.clientX - w.x, e.clientY - w.y) < 8) { w.t = now; return w.point; }
+    const cam = this.camera.position, t = this.controls.target;
+    let point = this.pickAt(e, { ghosts: true })?.point ?? null;
+    if (point && point.clone().sub(cam).dot(t.clone().sub(cam)) <= 0) point = null;   // never behind the camera
+    if (!point) {
+      const r = this.pane3d.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((e.clientX - r.left) / Math.max(r.width, 1)) * 2 - 1, -((e.clientY - r.top) / Math.max(r.height, 1)) * 2 + 1);
+      this.raycaster.setFromCamera(ndc, this.camera);
+      const dir = t.clone().sub(cam).normalize(), ray = this.raycaster.ray.direction;
+      const along = t.clone().sub(cam).dot(dir) / Math.max(ray.dot(dir), 1e-3);
+      point = cam.clone().addScaledVector(ray, along);
+    }
+    this.wheelAnchor = { x: e.clientX, y: e.clientY, t: now, point };
+    return point;
+  }
+
+  /** One frame of an eased zoom or pan (from frameTick); true when the camera moved. */
+  private navStep(): boolean {
+    const now = performance.now();
+    const dt = now - this.lastTick > 100 ? 16 : now - this.lastTick;   // the first frame after a rest: one frame's worth
+    this.lastTick = now;
+    const z = this.zoom, left = this.panLeft;
+    if (!z && !(left?.lengthSq() > 0)) return false;
+    const cam = this.camera.position, t = this.controls.target;
+    let moved = false;
+    if (z) {
+      if (z.hold) z.goal = holdGoal(z.goal, z.hold, dt, this.limits());
+      const d = cam.distanceTo(t);
+      const next = easeDistance(d, z.goal, dt);
+      const s = d > 0 ? next / d : 1;
+      if (Math.abs(s - 1) > 1e-7) {
+        const about = z.anchor ?? t.clone();
+        cam.sub(about).multiplyScalar(s).add(about);
+        if (z.anchor) t.sub(about).multiplyScalar(s).add(about);
+        moved = true;
+      }
+      if (!z.hold && Math.abs(Math.log(next / z.goal)) < 1e-3) this.zoom = null;
+    }
+    if (left.lengthSq() > 0) {
+      const k = 1 - Math.exp(-dt / EASE_MS);
+      const step = left.lengthSq() < 1e-10 ? left.clone() : left.clone().multiplyScalar(k);
+      cam.add(step); t.add(step); left.sub(step);
+      if (left.lengthSq() < 1e-12) left.set(0, 0, 0);
+      moved = true;
+    }
+    return moved;
+  }
+
+  /** + − and the arrows while the 3D view (or its pad) has the focus; F and H are the page's keys (App). */
+  private navKeyDown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey || !this.models.length) return;
+    const k = navKey(e.key);
+    if (!k) return;
+    if ("zoom" in k) this.zoomStep(k.zoom);
+    else if ("pan" in k) this.panBy(k.pan[0], k.pan[1], e.shiftKey ? 3 : 1);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  /** Space held over the 3D view (or with it in focus): a plain left drag moves the view, as in many CAD tools. */
+  private spaceKey = (e: KeyboardEvent) => {
+    if (e.key !== " " && e.code !== "Space") return;
+    if (e.type === "keyup") { this.spaceHeld = false; return; }
+    const at = e.target as HTMLElement | null;
+    if (at?.closest?.("input, textarea, select, button, a, [contenteditable]") && at !== this.pane3d) return;
+    const focused = typeof document !== "undefined" && document.activeElement === this.pane3d;
+    if (!focused && !this.overPane) return;
+    this.spaceHeld = true;
+    if (focused) e.preventDefault();   // no page scroll
+  };
+  private spaceOff = () => { this.spaceHeld = false; };
+
+  /** Keys go to the 3D view once it is pressed (a pad button keeps its own focus). */
+  private focusPane() {
+    try {
+      const active = document.activeElement;
+      if (this.pane3d.focus && active !== this.pane3d && !this.pane3d.contains(active)) this.pane3d.focus({ preventScroll: true });
+    } catch { /* no page (tests) */ }
+  }
+
+  /** A double-click: the view turns to look at that point, nearer when the element is small (never farther), with its
+   * distance kept within the limits. Not while measuring or editing (their clicks are points). */
+  private focusAt(e: MouseEvent) {
+    if (!this.models.length || this.measuring || this.editDrag) return;
+    const on = e.target as Node;
+    if (this.cube.el.contains(on) || this.navPad.el.contains(on) || this.navHint.el.contains(on)) return;
+    const hit = this.pickAt(e) ?? this.pickAt(e, { ghosts: true });
+    if (!hit) return;
+    const cam = this.camera.position, t = this.controls.target;
+    const box = this.boxOf([hit.globalId]);
+    const size = box.isEmpty() ? 0 : box.getSize(new THREE.Vector3()).length();
+    const l = this.limits(), d = cam.distanceTo(t);
+    const dist = Math.min(Math.max(Math.min(d, Math.max(size * 1.5, this.reach(2, 0.15))), l.min), l.max);
+    const dir = cam.clone().sub(t).normalize();
+    this.takeView();
+    this.flyTo(hit.point.clone().addScaledVector(dir, dist), hit.point.clone());
+  }
+
+  /** The hint card over the 3D view: shown or put away. */
+  showHint(on: boolean) { this.navHint?.show(on); }
+
+  /** The first models this page shows: the hint, once per browser. */
+  private firstHint() {
+    if (this.hintChecked || !this.navHint) return;
+    this.hintChecked = true;
+    if (hintSeen()) return;
+    this.showHint(true);
+    markHintSeen();
   }
 
   // ---------------------------------------------------------------- panes: layouts and drawing views
@@ -2889,6 +3106,7 @@ export class Viewer {
         this.controls.target.lerpVectors(this.flight.from[1], this.flight.to[1], e);
         if (k >= 1) this.flight = null;
       }
+      if (this.navStep()) { moving = true; this.cameraMoved = performance.now(); }
       if (this.controls.update()) { moving = true; this.cameraMoved = performance.now(); }
       this.adjustClipRange();
       this.drawingPending = false;
@@ -3059,6 +3277,11 @@ export class Viewer {
     this.resize.disconnect();
     this.controls.dispose();
     this.cube.dispose();
+    this.navPad.dispose();
+    this.navHint.dispose();
+    window.removeEventListener("keydown", this.spaceKey, true);
+    window.removeEventListener("keyup", this.spaceKey, true);
+    window.removeEventListener("blur", this.spaceOff);
     for (const p of this.panes) { p.view?.dispose(); p.el.remove(); }
     this.renderer.dispose();
     this.renderer.domElement.remove();

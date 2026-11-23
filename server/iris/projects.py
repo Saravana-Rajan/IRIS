@@ -191,8 +191,9 @@ def _clean(text, most: int, what: str) -> str:
 
 # ---------------------------------------------------------------------------------------------------- projects
 
-def create(name: str) -> dict:
-    """A new, empty project (Full at the cap)."""
+def create(name: str, sample: bool = False) -> dict:
+    """A new, empty project (Full at the cap). `sample`: made by "Try the sample building" (or the sample drawings), so
+    the page marks it "Sample" in the lists, never mistaken for the visitor's own work."""
     name = _clean(name, NAME_MAX, "project name")
     root = projects_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -205,7 +206,7 @@ def create(name: str) -> dict:
         folder.mkdir()
         now = time.time()
         project = {"id": pid, "name": name, "created": now, "updated": now, "files": [], "scene_id": None,
-                   "saved": [], "reviews": {}, "reports": [], "counts": None}
+                   "saved": [], "reviews": {}, "reports": [], "counts": None, "sample": bool(sample)}
         with _lock(folder):
             return _save(folder, project, touch=False)
 

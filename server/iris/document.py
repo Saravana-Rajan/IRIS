@@ -895,7 +895,7 @@ def _mm(m: float | None) -> str:
 
 
 VERDICT_LABEL = {"real_clash": "Real problem", "by_design": "By design", "non_physical": "Not physical",
-                 "modelling_error": "Model error", None: "Not triaged"}
+                 "modelling_error": "Drawing mistake in model", None: "Not triaged"}
 
 
 def _review_table(r: Row) -> str:
@@ -1184,7 +1184,7 @@ def render_html(title: str, subtitle: str, rows: list[Row], summary: dict, conte
 {''.join(_page(r, i + 1) for i, r in enumerate(pages))}
 <section class='section-break'>
   <h2>For the models' authors</h2>
-  {table(author, 'Modelling errors: duplicated or misplaced elements. Not coordination clashes; the model author cleans them up.') if author else '<p>None.</p>'}
+  {table(author, 'Drawing mistakes in the model: duplicated or misplaced elements. The clash comes from how the model was drawn, not from a real design conflict; the model author cleans them up.') if author else '<p>None.</p>'}
   <h2 style='margin-top:14pt'>Noise</h2>
   {grouped(noise, 'By design, not physical, or only touching, grouped by clash test. No action; most can be hidden with a clash rule.') if noise else '<p>None.</p>'}
   {"<h2 style='margin-top:14pt'>Not triaged</h2>" + grouped(untriaged, 'Not sorted yet: no triage verdict, fix or review decision, so nothing here is called a real problem or noise. Grouped by clash test. Triage them in Iris and build again to sort them.', why_col=False) if untriaged else ''}

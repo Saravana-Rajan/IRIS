@@ -6,7 +6,7 @@ import { EmptyState } from "./Holo";
 import { PageHeader } from "./PageHeader";
 import { ownClick } from "./projectRoute";
 import {
-  fullTime, lastSaved, modelMix, plural, reviewTally, whenText, type Project,
+  fullTime, isSample, lastSaved, modelMix, plural, reviewTally, whenText, type Project,
 } from "./projectsApi";
 import "./projects.css";
 
@@ -241,6 +241,7 @@ export function ProjectRow({ p, mode = "idle", onMode = () => {}, menuUp = false
           ) : <>
             {href ? <a className="proj-name" href={href} onClick={follow} title={name}>{name}</a>
               : <button type="button" className="proj-name" onClick={() => onOpen(p.id)} title={name}>{name}</button>}
+            {isSample(p) && <span className="sample-pill" data-tip="The sample building: try Iris on it; it is not your own project">Sample</span>}
             <span className="proj-sub" title={fullTime(p.updated)}>Updated {whenText(p.updated)}</span>
           </>}
         </td>

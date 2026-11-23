@@ -269,7 +269,7 @@ limits (`ProjectNew`, `ProjectReview`, …) is FastAPI's 422.
 | Method | Path | What it does | Body / params | Reply | Caps / auth |
 |---|---|---|---|---|---|
 | `GET` | `/api/projects` | The projects the browser knows, newest first; unknown ids skipped (`projects.list_projects`). Without `ids`, every project, for the owner only | `?ids=a,b` (at most 200, `PROJECT_IDS_MAX`) | `[Project]` | free; 403 without `ids` for a visitor |
-| `POST` | `/api/projects` | Makes a project (`projects.create`) | `{name}` | `Project` | free; 409 at `IRIS_PROJECTS_MAX`; 422 an empty or over-long name |
+| `POST` | `/api/projects` | Makes a project (`projects.create`); `sample: true` marks the page's sample project (shown "Sample") | `{name, sample?}` | `Project` | free; 409 at `IRIS_PROJECTS_MAX`; 422 an empty or over-long name |
 | `GET` | `/api/projects/{pid}` | One project (`projects.get`) | none | `Project` | free; 404 |
 | `PATCH` | `/api/projects/{pid}` | Renames it, or keeps the counts the page last saw (`projects.patch`; `counts: null` clears them) | `{name?, counts?}` | `Project` | free; 404; 400 counts that are not whole numbers |
 | `POST` | `/api/projects/{pid}/attach` | Copies the scene's original files into `models/` (`projects.attach`, `Workspace.original_paths`: an IFC as opened, a STEP model's original STEP), replacing the project's file list | `{scene_id}` | `Project` | free; 404 unknown project, or unknown scene (with `X-Iris-Gone`, as other scene routes) |

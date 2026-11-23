@@ -105,13 +105,15 @@ function Group({ title, badge, note, children }: { title: string; badge?: string
 }
 
 /** One count that filters the list: its label, its share of the list as a bar, and the number. */
-function Row({ label, n, total, tone = "", sub, onClick, what }: {
+function Row({ label, n, total, tone = "", sub, onClick, what, tip }: {
   label: string; n: number; total: number; tone?: string; sub?: React.ReactNode; onClick: () => void; what: string;
+  /** What the label means, as a tip on it (the classes': CLASS_INFO). */
+  tip?: string;
 }) {
   const share = total ? Math.round((n / total) * 1000) / 10 : 0;
   return (
     <div className="coord-row">
-      <span className="coord-label">{label}{sub && <span className="coord-sub">{sub}</span>}</span>
+      <span className="coord-label" data-tip={tip} data-tip-side={tip ? "top" : undefined}>{label}{sub && <span className="coord-sub">{sub}</span>}</span>
       <span className="coord-bar" aria-hidden><i className={tone} style={{ width: `${share}%` }} /></span>
       <button type="button" className={`coord-n ${tone}`} disabled={!n} onClick={onClick}
         aria-label={`Show ${what}: ${n.toLocaleString()}`}>{n.toLocaleString()}</button>
@@ -134,7 +136,7 @@ function ClassRows({ k, s, onFilter }: { k: ClashClass; s: CoordinationSummary; 
   const info = CLASS_INFO[k];
   const pending = k !== "untriaged" ? s.untriagedByClass[k] : 0;
   const row = <Row label={info.label} n={s.byClass[k]} total={s.total} tone={info.tone} onClick={() => onFilter({ cls: k })}
-    what={info.label} sub={pending ? `${pending.toLocaleString()} not triaged yet` : undefined} />;
+    what={info.label} tip={info.tip} sub={pending ? `${pending.toLocaleString()} not triaged yet` : undefined} />;
   if (k === "touching") return <>{row}<CountOnly label="Touching pairs set aside" n={s.touchingCount}
     tip="Pairs the detector found only touching (within the tolerance): counted, never reported" /></>;
   if (k === "by_design") return <>{row}<CountOnly label="Meant to meet (detector rules)" n={s.meantToMeetCount}

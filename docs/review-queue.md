@@ -158,8 +158,9 @@ Layout (two panes, light only):
   (`.rq-decide`), always in view at the pane's foot (sticky at the screen's foot on a phone): the reviewer's name,
   Accept (ink), Reject with a reason (outline), Request another (text). It moves to the next clash after a decision.
 - **Why, in plain words:** a server error is never printed (`reviewQueueModel.plainError`): "No AI model is configured
-  on this server", "Gemini Flash didn't answer in time", too many requests, not allowed, an unreadable answer, or
-  "Something went wrong on the server"; the raw words (a traceback's last line) only in the tooltip. Geometry's why,
+  on this server", "Iris couldn't reach the AI model (Gemini Flash) in time", too many requests, not allowed, an
+  unreadable answer, "Iris couldn't reach its server", or "Something went wrong on the server" (never a "model error",
+  which reads like the model's drawing: owner, Nov 23); the raw words (a traceback's last line) only in the tooltip. Geometry's why,
   the requirements and `prepare.MISS` are plain already and show as they are.
 - **Right:** the 3D view at the clash with a segmented "Before | After | Both" control. It is the page's one viewer,
   moved into the pane with `Viewer.mountIn` while the queue is open; the queue holds its pair in focus even after the

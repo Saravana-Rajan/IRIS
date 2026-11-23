@@ -22,6 +22,8 @@ export interface Project {
   reviews: Record<string, Review>;    // key = clash key (`${kind}|${[gidA, gidB].sort().join("|")}`)
   reports: ProjectReport[];
   counts?: CoordCounts | null;
+  /** Made by "Try the sample building" (or the sample drawings): shown with a "Sample" pill, never as the visitor's own. */
+  sample?: boolean;
 }
 
 /** `scene` is GET /api/scenes/{id}'s answer for the scene just opened. */
@@ -77,7 +79,14 @@ export async function listProjects(ids?: readonly string[]): Promise<Project[]> 
   return lists.length === 1 ? lists[0] : lists.flat().sort((a, b) => b.updated - a.updated);
 }
 
-export const createProject = (name: string) => request<Project>("/projects", json("POST", { name: name.trim() }));
+export const createProject = (name: string, opts: { sample?: boolean } = {}) =>
+  request<Project>("/projects", json("POST", opts.sample ? { name: name.trim(), sample: true } : { name: name.trim() }));
+
+/** The sample building's project name: "Try the sample building" makes it once and finds it again. */
+export const SAMPLE_PROJECT = "Northbank sample building";
+/** The sample project, marked "Sample" in the lists: the server's flag, or (made before the flag) its name. */
+export const isSample = (p: { sample?: boolean; name?: string } | null | undefined): boolean =>
+  !!p && (p.sample === true || p.name === SAMPLE_PROJECT);
 export const getProject = (pid: string) => request<Project>(at(pid));
 export const patchProject = (pid: string, patch: ProjectPatch) => request<Project>(at(pid), json("PATCH", patch));
 export const renameProject = (pid: string, name: string) => patchProject(pid, { name: name.trim() });

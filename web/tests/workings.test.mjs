@@ -186,7 +186,7 @@ test("triage counts what rules settled, the model's calls and the verdicts, and 
   assert.match(texts(step(g, "alike").body), /3 clashes in 1 group/);
   assert.equal(step(g, "pool").title, "2 calls read");
   const bars = step(g, "verdicts").body[0].rows;
-  assert.deepEqual(bars.map((r) => [r.label, r.n]), [["Real", 1], ["By design", 4], ["Not physical", 1], ["Modelling error", 0]]);
+  assert.deepEqual(bars.map((r) => [r.label, r.n]), [["Real", 1], ["By design", 4], ["Not physical", 1], ["Drawing mistake in model", 0]]);
   assert.match(texts(step(g, "done").body), /1 real clash of 6/);
   assert.equal(g.rows[2].subs, 2, "two calls overlapped");
 });

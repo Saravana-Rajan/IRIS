@@ -65,13 +65,17 @@ const plainClick = () => { const e = { button: 0, prevented: false, preventDefau
 const P = (id, name, fields = {}) => projectOf({ id, name, updated: (NOW - 12 * 60000) / 1000, ...fields });
 const kinds = (n) => Array.from({ length: n }, (_, i) => ({ name: `m${i}.ifc`, kind: "IFC", size: 1, sha256: "0" }));
 
-test("the greeting: the time of day and the reviewer's name, or 'there' without one", () => {
+test("the greeting: the time of day only, never the reviewer's name", () => {
   const at = (h) => new Date(2026, 10, 22, h, 5).getTime();
   assert.deepEqual([at(5), at(11), at(12), at(17), at(18), at(23), at(2)].map(start.greetingFor),
     ["Good morning", "Good morning", "Good afternoon", "Good afternoon", "Good evening", "Good evening", "Good evening"]);
-  assert.match(markup({ name: "Priya", now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/p>/);
-  assert.match(markup({ name: "  " }), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/);
-  assert.match(markup({}), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/, "no name at all");
+  assert.match(markup({ now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning<\/span><\/p>/);
+  assert.match(markup({}), /<p class="home-greeting"><span[^>]*>Good afternoon<\/span><\/p>/);
+  assert.match(markup({ now: at(20) }), /<p class="home-greeting"><span[^>]*>Good evening<\/span><\/p>/);
+  // A name typed for review decisions (QA once showed "Good morning, QA Engineer") never reaches the greeting.
+  const html = markup({ name: "QA Engineer" });
+  assert.ok(!html.includes("QA Engineer") && !html.includes(", there"), "no name and no 'there'");
+  assert.match(html, /<h1 class="home-tagline">/, "the tagline stays");
 });
 
 test("the hero: the principle in two lines beside the 3D glass aperture (its still until three loads), the cue down", async () => {
@@ -185,6 +189,11 @@ test("recent projects: up to four cards, newest first, each a link with its mode
   assert.match(text(cards[2]), /Depot 2 models None open/);
   assert.match(text(cards[3]), /Empty No models yet No clashes/);
   assert.match(markup({ recent: [recent[0]] }), /href="\/projects\/p1"/, "the project's own address by default");
+  assert.doesNotMatch(html, /sample-pill/, "none of these is the sample");
+  const withSample = markup({ recent: [P("s1", "Sample building", { sample: true, files: kinds(4) }), recent[1]] });
+  assert.match(withSample, /<span class="home-project-name">Sample building<\/span><span class="sample-pill"[^>]*>Sample<\/span>/,
+    "the sample project carries a Sample pill next to its name");
+  assert.equal((withSample.match(/sample-pill/g) ?? []).length, 1);
   const opened = [];
   const card = tree({ recent, onOpenProject: (pid) => opened.push(pid) }).find((e) => e.props["data-project"] === "p2");
   const click = plainClick();
@@ -255,6 +264,9 @@ test("the last session: Resume (primary) and Start fresh (ghost), with what was 
   assert.match(card, /<button type="button" class="btn primary small">Resume<\/button><button type="button" class="btn ghost small">Start fresh<\/button>/);
   assert.match(text(markup({ resume: { ...resume, fixed: 1, clashes: null } })), /Resume .* · 1 fix kept · saved 12 min ago/);
   assert.doesNotMatch(markup({}), /home-resume/, "none without a session");
+  const sample = text(markup({ resume: { ...resume, sample: true, files: ["Northbank-MEP.ifc", "Northbank-Structure.ifc"] } }));
+  assert.match(sample, /Resume the sample building Sample · 2 fixes kept/, "the sample building by name, with its pill");
+  assert.doesNotMatch(sample, /Resume Northbank/);
   const buttons = tree({ resume }).filter((e) => e.type === "button" && /btn/.test(e.props.className ?? ""));
   buttons.find((b) => b.props.children === "Resume").props.onClick();
   buttons.find((b) => b.props.children === "Start fresh").props.onClick();

@@ -453,7 +453,7 @@ function plan(run: Run, at: number): Graph {
 
 const VERDICT: Record<string, { label: string; tone: Tone }> = {
   real_clash: { label: "Real", tone: "bad" }, by_design: { label: "By design", tone: "ok" },
-  non_physical: { label: "Not physical", tone: "muted" }, modelling_error: { label: "Modelling error", tone: "warn" }, unknown: { label: "Unknown", tone: "muted" },
+  non_physical: { label: "Not physical", tone: "muted" }, modelling_error: { label: "Drawing mistake in model", tone: "warn" }, unknown: { label: "Unknown", tone: "muted" },
 };
 const BASIS: Record<string, string> = { touch: "a touch within 1 mm", non_physical: "not physical", same_element: "one element both sides",
   requirement: "a by-design rule", no_overlap: "no overlap", reviewed: "reviewed" };
