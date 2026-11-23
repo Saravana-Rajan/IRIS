@@ -1,7 +1,7 @@
 /* Home's "How Iris works" (HowIrisWorks.tsx): eight white cards in four phases, joined by a thin dashed line, on
    index.css's tokens. Light only. The layout follows the section's own width (a container): four columns, two on a
-   tablet-wide panel, one on a phone. The cards fade up one after another when the section is armed (a browser with
-   motion); still under reduced motion. */
+   tablet-wide panel, and on a phone one compact row that scrolls sideways. The cards fade up one after another when
+   the section is armed (a browser with motion); still under reduced motion. */
 
 .hiw { container: hiw / inline-size; position: relative; isolation: isolate; display: flex; flex-direction: column;
   gap: 28px; min-width: 0; --gap-x: 24px; --gap-y: 28px; --phase-h: 22px; }
@@ -78,16 +78,25 @@
   .hiw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); --gap-x: 20px; }
   .hiw-item:nth-child(2n)::after { display: none; }
 }
-/* One column: phases only where they start, the line runs down between the cards */
+/* A phone: one compact row that scrolls sideways (snapping card by card) instead of eight stacked cards; it bleeds to
+   the panel's edges, never scrolling the page sideways */
 @container hiw (max-width: 560px) {
-  .hiw { gap: 22px; --gap-y: 22px; }
-  .hiw-grid { grid-template-columns: minmax(0, 1fr); }
-  .hiw-phase-none { display: none; }
+  .hiw { gap: 18px; --gap-x: 12px; }
+  .hiw-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(74%, 240px);
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin: 0 -16px; padding: 2px 16px 14px; scroll-padding-inline: 16px; }
+  .hiw-grid::-webkit-scrollbar { display: none; }
+  .hiw-item { scroll-snap-align: start; }
   .hiw-item:nth-child(2n)::after { display: block; }
-  .hiw-item::after { left: 43px; top: 100%; width: 0; height: var(--gap-y); border-top: 0;
-    border-left: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent); }
   .hiw-item:last-child::after { display: none; }
-  .hiw-card { padding: 18px 18px 16px; }
+  .hiw-item::after { top: calc(var(--phase-h) + 10px + 1px + 14px + 18px); }
+  .hiw-card { padding: 14px 14px 12px; gap: 4px; border-radius: 14px; }
+  .hiw-top { margin-bottom: 6px; }
+  .hiw-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .hiw-icon > svg { width: 18px; height: 18px; }
+  .hiw-name { font-size: 15.5px; }
+  .hiw-text { font-size: 13px; }
+  .hiw-chip { margin-top: 8px; }
   .hiw-line { font-size: 14.5px; }
 }
 

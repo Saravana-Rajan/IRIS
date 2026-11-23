@@ -31,6 +31,33 @@ export const clashLabel = (c: ReportClash) => `#${c.number} ${c.title ?? c.name}
 /** A row's distance badge: as `mm`, with a true minus ("−300 mm"). */
 export const badgeMm = (m: number | null | undefined) => mm(m).replace(/^-/, "−");
 
+/** Model files as people read them, as names.ts's `shortNames` does (kept here so the list's tests need no more modules):
+ * no extension, and no prefix the whole set shares ("Northbank-Site.ifc" → "Site"). */
+function shortModelNames(files: string[]): string[] {
+  const stems = files.map((f) => f.replace(/\.(ifc|step|stp)$/i, ""));
+  let prefix = stems.length > 1 ? stems[0] : "";
+  for (const s of stems) while (!s.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  const cut = prefix.match(/^(.*[A-Za-z0-9])[\s_.-]/);
+  const n = cut && cut[1].length >= 3 ? cut[0].length : 0;
+  return stems.map((s) => (s.length > n ? s.slice(n) : s));
+}
+
+/** The list's heading. A detection run's "Coordination · 3 models" counts the models it checked, not the open ones (a
+ * site model is open for context, not checked), so beside the open models' count it read as a mismatch: it says
+ * "3 models checked · Site is context" instead. The context models are the open ones no clash is in, when they number
+ * just the ones left over; otherwise "3 of 4 models checked". Any other title as it is. */
+export function listTitle(report: Pick<Report, "title" | "sources" | "clashes">): string {
+  const m = /^Coordination · (\d+) models?(.*)$/.exec(report.title);
+  if (!m) return report.title;
+  const n = Number(m[1]), rest = m[2], sources = report.sources ?? [];
+  const checked = `${n} model${n === 1 ? "" : "s"} checked${rest}`;
+  if (sources.length <= n) return checked;
+  const hit = new Set(report.clashes.flatMap((c) => [c.a.file, c.b.file]));
+  const names = shortModelNames(sources).filter((_, i) => !hit.has(sources[i]));
+  if (names.length !== sources.length - n) return `${n} of ${sources.length} models checked${rest}`;
+  return `${checked} · ${names.join(", ")} ${names.length === 1 ? "is" : "are"} context`;
+}
+
 /** Which clashes the list shows by where they stand (the tabs over the list). */
 export type StatusTab = "all" | "open" | "fixed" | "reviewed";
 
@@ -253,6 +280,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
   }, [reveal]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const related = useMemo(() => sameElements(report.clashes, matches), [report, matches]);
+  const heading = useMemo(() => listTitle(report), [report]);
   const anyImages = useMemo(() => report.clashes.some((x) => x.images.length), [report]);
 
   const shown = groups.reduce((n, [, cs]) => n + cs.length, 0);
@@ -275,7 +303,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 
       <div className="left-view" data-left-view="insights" hidden={view !== "insights"}>
         <div className="report-head">
-          <div className="row"><h2>{report.title}</h2></div>
+          <div className="row"><h2>{heading}</h2></div>
           <ImpactBar total={report.clashes.length} triage={triage} fixes={fixes} reviewed={reviewed} />
         </div>
         {insights}
@@ -283,7 +311,7 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 
       <div className="left-view" data-left-view="clashes" hidden={view !== "clashes"}>
       <div className="report-head" data-tour="detected">
-        <div className="row"><h2>{report.title}</h2></div>
+        <div className="row"><h2>{heading}</h2></div>
         <p className="hint report-meta"><span>{new Set(report.clashes.map((c) => c.test)).size} tests
           {linked != null ? ` · ${linked} in the model` : " · open the models to link them"}</span>
           {/* A short pill while the titles land (it wraps under a narrow panel's line, never clipped); the tip names the model */}
@@ -346,7 +374,10 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
                 const tv = triage[c.id];
                 const nc = !fixes[c.id] && !rv ? noClash(c, matches?.[c.id], null, tv) : null;
                 return (
-                  <div key={c.id} className={`clash-row ${selected === c.id ? "pick" : ""} ${fixes[c.id] ? "fixed" : ""} ${rv ? "reviewed" : ""} ${nc ? "noclash" : ""}`} data-clash={c.id}>
+                  // The whole row opens the clash (its edges and gaps too), except through its own controls: the
+                  // checkbox, the thumbnail, View and the actions, which do what they say and nothing more.
+                  <div key={c.id} className={`clash-row ${selected === c.id ? "pick" : ""} ${fixes[c.id] ? "fixed" : ""} ${rv ? "reviewed" : ""} ${nc ? "noclash" : ""}`} data-clash={c.id}
+                    onClick={(e) => { if (!(e.target as Element).closest?.("button, input, a, label")) onSelect(c); }}>
                     {matches && <input type="checkbox" aria-label={`Select ${clashLabel(c)}`} checked={checked.has(c.id)} disabled={!fixable(c)}
                       onChange={(e) => onCheck([c.id], e.target.checked)} />}
                     {c.images.length > 0
@@ -415,9 +446,10 @@ export function ReportList({ report, matches, selected, onSelect, onImage, fixes
 
 const shortName = (e: ReportClash["a"]) => (e.name || e.ifc_class || "an element").split(/\s+-\s+/)[0];
 
-/** A row's quick actions (docs/architecture/12-web-app.md, ReportList): icons at the row's end on hover and keyboard
- * focus; on a touch screen (no hover) a ⋮ button that is always there opens them as a small labelled menu. Each is left
- * out when it cannot apply. */
+/** A row's quick actions (docs/architecture/12-web-app.md, ReportList): small icon buttons (named by their label and
+ * tip) in the row's own last column, two to a column, on hover and keyboard focus; never over the title, and a press on
+ * them never also opens the clash. On a touch screen (no hover) a ⋮ button that is always there opens them as a small
+ * labelled menu. Each is left out when it cannot apply. */
 function RowActions({ clash, label, related, canFix, canSetAside, note, onPropose, onSetAside, onSame, onView, onIsolate, isolated = false }: {
   clash: ReportClash; label: string; related: string[]; canFix: boolean; canSetAside: boolean; note: string;
   onPropose?: (c: ReportClash) => void; onSetAside?: (c: ReportClash, note: string) => void; onSame?: (ids: string[]) => void;
@@ -440,7 +472,8 @@ function RowActions({ clash, label, related, canFix, canSetAside, note, onPropos
   /** An action, then the menu closes. */
   const run = (fn: () => void) => () => { setOpen(false); fn(); };
   return (
-    <span ref={box} className={`row-actions ${open ? "open" : ""}`} role="group" aria-label={`Actions for ${label}`}>
+    <span ref={box} className={`row-actions ${open ? "open" : ""}`} role="group" aria-label={`Actions for ${label}`}
+      onClick={(e) => e.stopPropagation()}>
       <button type="button" className="ibtn row-more" aria-label={`More actions for ${label}`} aria-haspopup="menu" aria-expanded={open}
         onClick={() => setOpen(!open)}><EllipsisVertical size={15} aria-hidden /></button>
       <span className="row-acts">
@@ -449,7 +482,7 @@ function RowActions({ clash, label, related, canFix, canSetAside, note, onPropos
           data-tip={isolated ? "Show everything again" : "Isolate the clashing elements (each clash you open after, too)"}
           data-tip-side="left" onClick={run(() => onIsolate(clash))}><Focus size={14} aria-hidden />
           <span className="ra-label">{isolated ? "Show everything" : "Isolate"}</span></button>}
-        {/* The row's View stays where it was when the actions cover the row's end */}
+        {/* View in the ⋮ menu; on hover the row's own View (outside the actions) is the one shown */}
         {onView ? <button type="button" className="row-view" aria-label={`View the fixes for ${label}`} onClick={run(() => onView(clash))}>View</button>
           : onPropose && canFix && <button type="button" className="ibtn" aria-label={`Propose fixes for ${label}`} data-tip="Propose fixes"
             data-tip-side="left" onClick={run(() => onPropose(clash))}><Sparkles size={14} aria-hidden /><span className="ra-label">Propose fixes</span></button>}

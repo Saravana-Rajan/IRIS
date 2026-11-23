@@ -236,7 +236,7 @@ test("a check from the Filters panel is kept with the others and its clashes joi
   picker.props.onAll();
   await host.settle();
   assert.deepEqual(sent[3], { tests: null, again: { all: true } }, "Run all again");
-  find(host.menu(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
+  find(host.workActions(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
   await host.settle();
   assert.deepEqual(sent[4], { tests: null, again: {} }, "the open models: the server's tests");
 });

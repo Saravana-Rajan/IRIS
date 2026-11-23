@@ -1262,3 +1262,53 @@ polygon offset and draws after the solid (`Viewer.ts`, `viewer-links.test.mjs`).
 the two known pango PDF tests), web `npm test`, `tsc`, `vite build`, and headless Chromium (real GPU) at 1512×805 and
 390×844 against a local one-origin server with no credentials (`GEMINI_MODEL=gemini-3.8-flash`): 8 of 8 ready with
 #1 opened first, Accept and Reject in view, Both on #17 clean, and the report "2 applied, 0 proposed" after two accepts.
+**Nov 22 (2026-11-22), Home's hero: the Aperture in 3D glass** ([12](12-web-app.md)). The owner asked for a hero like a
+glass reference site's; we did not reuse that site's video or any of its assets, and the striped CSS ribbon (and a
+first glass ribbon) were dropped at the owner's word. Home's hero (`StartScreen.tsx`, `home.css`) now has the greeting,
+the tagline in two lines of large regular type ("AI proposes. Geometry proves." / "The engineer decides.") and what
+Iris does at the left, and at the right **our Aperture logo as thick iridescent 3D glass** (`HeroGlass.tsx`,
+`heroGlass.css`, `glass.ts`, `glassModel.ts`): the mark's six blades parsed from `Brand.tsx`'s paths and extruded with a
+rounded bevel round an ink hexagonal pupil, floating over a white pedestal with a contact shadow, turning slowly,
+breathing open and closed (8 s; the blades slide out and turn a little, the pupil grows) and leaning toward the mouse
+(about ±12°, eased in the render loop; it opens a little more while the pointer is over the hero; off on touch and
+under reduced motion). Rendered live with three.js (`MeshPhysicalMaterial` with transmission, thickness, iridescence,
+clearcoat and dispersion; a generated studio environment in the holo colours with PMREM; a backdrop only the
+transmission pass sees, so the page stays white while the glass bends colour; ACES, sRGB), lazy-loaded with
+`React.lazy`, drawn only while visible and the tab is showing, at most 2x pixels, one still frame under reduced
+motion, freed on unmount; a square "↓" cue scrolls to the start tiles. Stills from the same code
+(`web/scripts/render-glass.mjs`, `render-glass.html`, `glassStill.ts`, headless Chromium on the GPU):
+`web/public/hero/aperture.webp` (the poster and the no-WebGL picture, 27 KB) and transparent `web/public/glass/`
+`aperture.webp`, `ring.webp`, `pill.webp` (2x, 15–38 KB) for empty states and cards; Home's no-projects line uses the
+aperture. Checked: `npm test` (new `tests/hero-glass.test.mjs`; `start-screen.test.mjs` updated), `tsc`, `vite build`,
+`test_docs_map.py`, and headless Chromium screenshots of `/home` at 1512×805 and 390×844 on the GPU against a local
+one-origin server (no Gemini call).
+
+**Nov 22 (2026-11-22), no WebGL no longer blanks the page** ([13](13-3d-viewer.md)). With WebGL turned off,
+`new THREE.WebGLRenderer()` threw in App's mount effect and the whole app rendered blank. `web/src/webgl.ts` adds
+`webglAvailable()` (a probe canvas, WebGL 2 else 1, its context given back at once) and `NoWebGL`; `Viewer`'s constructor
+throws `NoWebGL` before it makes anything when there is none, and wraps three's own failure the same way. `App` catches
+it, keeps `viewer` null (every call on it was already `?.` except the four loads, now `?.` with `UNDRAWN` stats), hides
+the 3D toolbar and shows "3D needs WebGL" in the stage (`.no-webgl`, workspace.css); models still open, without being
+fetched or drawn, for the clash list, drawings and reports. Checked: new `tests/webgl-guard.test.mjs` (the probe, and the
+real `Viewer` throwing `NoWebGL` on a stub page), `viewer-mount.test.mjs`, the full `npm test`, `tsc`, `test_docs_map.py`.
+
+**Nov 23 (2026-11-23), the QA layout pass finished** ([12](12-web-app.md)). After the 3D glass hero's merge
+(`feature/hero-ribbon`), the second QA round's layout and copy fixes. Clash rows: a compact group of 24 px icons at the
+row's right end (two to a column, never over the title, a press never also opening the clash); a click anywhere else on
+the row opens it (index.css `.row-actions`, ReportList). Any step of an unknown project (`/projects/doesnotexist/clashes/5`
+too) is a calm "No project with this address" page with the glass ring and All projects, never the workspace's import
+(`projectRoute.projectView`). The Models step has a gutter and its dock tab says "Models" (`dockLayout.stepTitles`); the
+Coordination overview follows its card's width (`@container coord`), labels wrap, nothing overlaps. Activity's Decisions
+card moved into `ProjectOverview` (fixed column widths, one line in the short columns, `shortWhen` "Nov 22, 14:05").
+Settings is a real sheet at `/settings` (your name for review decisions, This session, Panels, Owner settings when the
+server has an owner, a Help link); the workspace's own actions (samples, upload, checks, a Navisworks report) moved
+to the workspace (`workMore`). The list heading reads "3 models checked · Site is context" (`listTitle`). Home keeps the
+merged shell's decisions (just "Iris" at the top, "Built by Techjays" at the bottom, no user block, no See it work, no
+striped ribbon) with the glass aperture hero; less space above the greeting; the three start tiles alike, highlighted on
+hover only; How cards a scroll-snap row on a phone; the Understand chip "4 models · 1,997 elements" as the Models step
+shows it. Glass stills at most one per view: Projects' empty state, Reports' empty state, the not-found page and the
+loading card. No WebGL: "3D needs WebGL" in the stage, the rest works. A test-host fix: `appHost`'s `workActions()` no
+longer shadows its viewer-call log. Checked: `npm test` (566), `tsc`, `vite build`, `test_docs_map.py` and
+`test_web_pages.py`, and headless Chromium (GPU) screenshots of Home, the clash row hover, Models, Coordination,
+Activity, Settings, the unknown project and no-WebGL at 1512×805 and 390×844 on a local one-origin server with no
+Gemini key.

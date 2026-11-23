@@ -35,6 +35,12 @@
   max-width: 440px; }
 .empty-state.compact { padding: 20px 12px; gap: 8px; }
 .empty-state-art { margin-bottom: 4px; }
+/* A 3D glass still in place of the mark (transparent WebP at 2x) */
+.empty-state-glass { display: block; object-fit: contain; margin-bottom: 0; user-select: none; pointer-events: none; }
+/* The loading / waking card's glass ring, turning slowly (still under reduced motion) */
+.load-glass { flex: none; display: block; width: 48px; height: 48px; object-fit: contain; animation: load-glass-turn 9s linear infinite; }
+@keyframes load-glass-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .load-glass { animation: none; } }
 .empty-state-title { margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: var(--ink); display: block; }
 .empty-state.compact .empty-state-title { font-size: 15px; }
 .empty-state-line { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }

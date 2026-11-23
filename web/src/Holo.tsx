@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { glassStill, type GlassShape } from "./glassModel";
 import "./holo.css";
 
 /**
@@ -97,14 +98,18 @@ export function CountUp({ value, ms = 900, className = "" }: { value: number; ms
 
 /**
  * An empty page or panel (Synthesia-like): the mark in a soft pink circle, a title, one line and one primary action,
- * centred. `compact` is the smaller one for a card or a side panel.
+ * centred. `compact` is the smaller one for a card or a side panel. `glass`: one of the pre-rendered 3D glass stills
+ * (`glassStill`, web/public/glass/) in place of the mark; at most one per view, so the main empty states only.
  */
-export function EmptyState({ title, line, action, compact = false, className = "" }: {
-  title: string; line?: ReactNode; action?: ReactNode; compact?: boolean; className?: string;
+export function EmptyState({ title, line, action, compact = false, className = "", glass }: {
+  title: string; line?: ReactNode; action?: ReactNode; compact?: boolean; className?: string; glass?: GlassShape;
 }) {
+  const size = compact ? 72 : 104;
   return (
     <div className={`empty-state${compact ? " compact" : ""} ${className}`}>
-      <MarkBadge size={compact ? 56 : 72} className="empty-state-art" />
+      {glass
+        ? <img className="empty-state-art empty-state-glass" src={glassStill(glass)} width={size} height={size} alt="" aria-hidden />
+        : <MarkBadge size={compact ? 56 : 72} className="empty-state-art" />}
       <h2 className="empty-state-title">{title}</h2>
       {line && <p className="empty-state-line">{line}</p>}
       {action && <div className="empty-state-action">{action}</div>}

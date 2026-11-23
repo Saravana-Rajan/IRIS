@@ -196,6 +196,29 @@
 .proj-file { max-width: 0; width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-hash { color: var(--muted); }
 
+/* The Activity page's tables (saved states, decisions): fixed column widths. Short columns hold one line (.proj-clip,
+   an ellipsis and a title if ever too long); the long ones wrap (the files between names, the proposal and why
+   anywhere). Each keeps a minimum width and scrolls sideways inside its card on a narrow screen. */
+.proj-saved-states, .proj-decisions { table-layout: fixed; }
+.proj-saved-states .proj-clip, .proj-decisions .proj-clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-saved-states { min-width: 520px; }
+.proj-saved-states col.c-n { width: 36px; }
+.proj-saved-states col.c-saved { width: 108px; }
+.proj-saved-states col.c-edits { width: 56px; }
+.proj-saved-states th:last-child, .proj-saved-states td:last-child { padding-left: 20px; }
+.proj-files { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 0; }
+.proj-files li { min-width: 0; overflow-wrap: anywhere; }
+.proj-files li:not(:last-child)::after { content: ","; margin-right: 6px; }
+.proj-table-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.proj-decisions { min-width: 820px; }
+.proj-decisions td { vertical-align: baseline; }
+.proj-decisions col.c-when { width: 124px; }
+.proj-decisions col.c-clash { width: 60px; }
+.proj-decisions col.c-state { width: 164px; }
+.proj-decisions col.c-decision { width: 140px; }
+.proj-decisions col.c-reviewer { width: 116px; }
+.proj-decisions .proj-wrap { overflow-wrap: anywhere; }
+
 /* Coordination: the numbers and one bar (unresolved against resolved) */
 .proj-tally { display: flex; flex-direction: column; gap: 12px; }
 .proj-tally-nums { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }

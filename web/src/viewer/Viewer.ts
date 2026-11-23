@@ -10,6 +10,7 @@ import { ViewCube } from "./cube";
 import { CAP_LAYER, CUT, DrawingStyle, DrawingView, farBehind, PAPER, targets, toIfc } from "./drawing";
 import { annotate, type Handle } from "./annotate";
 import type { RuleView } from "../filters";
+import { NoWebGL, webglAvailable } from "../webgl";
 import { candidatesOf, clipSegment, cutSegments, measureText, mergeRuns, pickSnap, type Candidates, type Measurement, type Segment,
   type SnapKind } from "./measure";
 import { CameraHistory, defaultKinds, facingFor, levelsOrModel, paneRects, planThrough, sectionFrame, sectionThrough, shownBy,
@@ -246,7 +247,14 @@ export class Viewer {
 
   constructor(private host: HTMLElement) {
     this.homeHost = host;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    // No WebGL (turned off, blocklisted, no GPU the browser will use): say so before anything is made, and turn three's
+    // own "Error creating WebGL context" into the same. App shows its note in the stage and goes on without 3D.
+    if (!webglAvailable()) throw new NoWebGL();
+    try {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    } catch (e) {
+      throw new NoWebGL(e);
+    }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.localClippingEnabled = true;
     this.own(this.renderer.domElement);

@@ -26,7 +26,7 @@ const compiledUrl = await compiled("../src/HowIrisWorks.tsx", {
 const how = await import(url(Buffer.from(compiledUrl.slice(compiledUrl.indexOf(",") + 1), "base64").toString("utf8").replace(cssLine, "")));
 
 const NAMES = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
-const PROOFS = ["IFC · STEP", "4 models · 1,732 elements", "464 clashes in 11 s", "#1 · −300 mm", "Gemini 3.8 Flash",
+const PROOFS = ["IFC · STEP", "4 models · 1,997 elements", "464 clashes in 11 s", "#1 · −300 mm", "Gemini 3.8 Flash",
   "Clash gone · 50 mm clear · nothing new hit", "8 of 8 fixes ready to review", "PDF + BCF"];
 const STEPS = ["models", "models", "coordination", "clash", "clash", "clash", "clash", "reports"];
 const render = (p = {}) => renderToStaticMarkup(h(how.HowIrisWorks, p));
@@ -117,13 +117,16 @@ test("everything shows in a static render (no window): no reveal armed", () => {
   assert.equal((html.match(/style="--i:\d"/g) ?? []).length, 8, "each card's place in the stagger");
 });
 
-test("the stylesheet: light, container-sized (4, 2 and 1 columns), a dashed line, a 150 ms lift, still under reduced motion", async () => {
+test("the stylesheet: light, container-sized (4 and 2 columns, a compact sideways row on a phone), a dashed line, a 150 ms lift, still under reduced motion", async () => {
   const css = await readFile(new URL("../src/howIrisWorks.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /prefers-color-scheme|\bdark\b/i, "light only");
   assert.match(css, /\.hiw \{[^}]*container: hiw \/ inline-size;/);
   assert.match(css, /\.hiw-grid \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /@container hiw \(max-width: 980px\) \{\s*\.hiw-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /@container hiw \(max-width: 560px\) \{[^@]*\.hiw-grid \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+  const phone = css.match(/@container hiw \(max-width: 560px\) \{[^@]*/)?.[0] ?? "";
+  assert.match(phone, /\.hiw-grid \{ grid-template-columns: none; grid-auto-flow: column;[^}]*overflow-x: auto;[^}]*scroll-snap-type: x mandatory;/,
+    "a phone: one row that scrolls sideways, card by card, not eight cards stacked");
+  assert.match(phone, /\.hiw-item \{ scroll-snap-align: start; \}/);
   assert.match(css, /\.hiw-card \{[^}]*border: 1px solid var\(--line\);[^}]*border-radius: 16px;[^}]*background: var\(--surface\);[^}]*transition: transform \.15s/);
   assert.match(css, /\.hiw-card:hover \{ transform: translateY\(-2px\);/);
   assert.match(css, /\.hiw-icon \{[^}]*width: 48px; height: 48px;/);

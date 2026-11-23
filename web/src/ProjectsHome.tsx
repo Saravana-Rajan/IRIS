@@ -119,7 +119,7 @@ export function ProjectsHome({ projects, loading, error, onNew, onOpen, onRename
 
           {empty && (
             <div className="proj-empty">
-              <EmptyState title="Start your first project"
+              <EmptyState title="Start your first project" glass="aperture"
                 line="A project keeps the models, the clash results, every review decision and the reports together, so the work can be closed and picked up again."
                 action={<>
                   <button type="button" className="btn primary" onClick={onNew}><Plus size={15} aria-hidden /> New project</button>

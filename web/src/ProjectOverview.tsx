@@ -4,9 +4,10 @@ import { CountUp, EmptyState } from "./Holo";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { ownClick, stepLabel, type Step } from "./projectRoute";
 import {
-  REVIEW_LABEL, closedText, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, whenText,
+  REVIEW_LABEL, closedText, fullTime, knownCounts, lastSaved, modelMix, nextAction, plural, projectReportUrl, reviewTally, sizeText, toMs, whenText,
   type ActivityItem, type CoordCounts, type Project, type ReviewStatus,
 } from "./projectsApi";
+import { STATE_LABEL, decisionWords, type Decision } from "./proposalState";
 import "./projects.css";
 
 type Known = ReturnType<typeof knownCounts>;
@@ -56,10 +57,11 @@ export function SaveButton({ onSave, saving = false, disabled = false, tip }: {
  * page's primary action, so this page is the header (breadcrumb, title, the project's dates, Save) and the step's body.
  * Overview: four stat cards (models, clashes, open, resolved), the models and the coordination tally on the left, the
  * next step (decided from the project's real state) and recent activity on the right. Reports and Activity are full
- * lists here; Models, Coordination and Clash review are drawn by the workspace, with a simple body here as a fallback.
+ * lists here (Activity: the activity, the saved states and, when `decisions` is given, the decisions); Models,
+ * Coordination and Clash review are drawn by the workspace, with a simple body here as a fallback.
  * `children` (App's cards for the step) follow the step's body.
  */
-export function ProjectOverview({ project, step, onStep, counts, reports, activity = [], onImport, onOpenWorkspace,
+export function ProjectOverview({ project, step, onStep, counts, reports, activity = [], decisions, onImport, onOpenWorkspace,
   onSave, saving, onProjects, children, stepHref, projectsHref }: {
   project: Project;
   step: Step;
@@ -67,6 +69,9 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
   counts?: CoordCounts | null;           // the open page's numbers; else the project's last known are shown, labelled
   reports: Project["reports"];
   activity?: ActivityItem[];
+  /** The open session's decisions, for the Activity page's Decisions card; `null` when the models are not open (the
+   *  decisions come back with them). Left out, there is no Decisions card. */
+  decisions?: Decision[] | null;
   onImport(): void;
   onOpenWorkspace(): void;
   /** Resolves `false` (or throws) when the project was not saved: the button then says so. */
@@ -149,7 +154,7 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
 
           {step === "reports" && (
             <ReportsCard pid={project.id} reports={reports}
-              empty={<EmptyState compact title="No reports yet"
+              empty={<EmptyState compact glass="pill" title="No reports yet"
                 line="PDF and BCF reports made from the clash review are listed here."
                 action={hasModels && <button type="button" className="btn primary" onClick={onOpenWorkspace}>
                   Open workspace <ArrowRight size={15} aria-hidden /></button>} />}
@@ -164,6 +169,7 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
           {step === "activity" && <>
             <ActivityCard activity={activity} />
             <SavedCard project={project} />
+            {decisions !== undefined && <DecisionsCard decisions={decisions} />}
           </>}
 
           {children}
@@ -387,27 +393,88 @@ function ActivityCard({ activity, limit, all }: { activity: ActivityItem[]; limi
   );
 }
 
+/**
+ * A decision's time for a narrow column, in one line: "Nov 22, 14:05" in the current year, "Nov 22, 2025" in another,
+ * "—" when not known. Always en-US so the column's width holds; the cell's title has the full time. Server seconds or
+ * page milliseconds.
+ */
+export function shortWhen(t: number, now = Date.now()): string {
+  const d = new Date(toMs(t));
+  if (!Number.isFinite(d.getTime())) return "—";
+  return d.getFullYear() === new Date(now).getFullYear()
+    ? d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function SavedCard({ project }: { project: Project }) {
   const saved = [...project.saved].sort((a, b) => b.n - a.n);
   return (
     <Card title="Saved states" count={saved.length || undefined}>
       {saved.length ? (
-        <table className="proj-mini">
+        <div className="proj-table-scroll"><table className="proj-mini proj-saved-states">
+          <colgroup><col className="c-n" /><col className="c-saved" /><col className="c-edits" /><col /></colgroup>
           <thead><tr><th scope="col" className="num">#</th><th scope="col">Saved</th><th scope="col" className="num">Edits</th><th scope="col">Files</th></tr></thead>
           <tbody>
             {saved.map((s) => (
               <tr key={s.n}>
                 <td className="num mono">{s.n}</td>
-                <td title={fullTime(s.at)}>{whenText(s.at)}</td>
+                <td className="proj-clip" title={fullTime(s.at)}>{whenText(s.at)}</td>
                 <td className="num mono">{s.edits}</td>
-                <td className="proj-file" title={s.files.join(", ")}>{s.files.join(", ") || "—"}</td>
+                <td>{s.files.length
+                  ? <ul className="proj-files">{s.files.map((f, i) => <li key={`${i}|${f}`}>{f}</li>)}</ul>
+                  : "—"}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       ) : (
         <p className="proj-text proj-empty-line">Not saved yet. Saving keeps the edited models, the edit journal and the decisions; reopening
           the project starts from the latest saved state.</p>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The decisions on the open session's proposals, newest first; `null` when the models are not open. The short columns
+ * (when, clash, state, decision, reviewer) hold one line at fixed widths, the proposal and why share the rest and wrap;
+ * on a narrow screen the table scrolls sideways inside its card.
+ */
+function DecisionsCard({ decisions }: { decisions: Decision[] | null }) {
+  return (
+    <Card title="Decisions" count={decisions?.length || undefined}>
+      {decisions?.length ? (
+        <div className="proj-table-scroll">
+          <table className="proj-mini proj-decisions">
+            <colgroup>
+              <col className="c-when" /><col className="c-clash" /><col /><col className="c-state" /><col className="c-decision" />
+              <col className="c-reviewer" /><col />
+            </colgroup>
+            <thead><tr><th scope="col">When</th><th scope="col">Clash</th><th scope="col">Proposal</th><th scope="col">State</th>
+              <th scope="col">Decision</th><th scope="col">Reviewer</th><th scope="col">Why</th></tr></thead>
+            <tbody>{[...decisions].reverse().map((d, k) => {
+              const at = toMs(d.at);
+              const state = STATE_LABEL[d.state] ?? d.state;
+              const reviewer = d.reviewer || "not recorded";
+              const verb = decisionWords({ ...d, at }).verb;
+              return (
+                <tr key={`${k}|${d.clash_id}|${d.at}`}>
+                  <td className="proj-clip mono" title={fullTime(at)}>{shortWhen(at)}</td>
+                  <td className="proj-clip mono" title={d.number ? undefined : d.clash_id}>{d.number ? `#${d.number}` : d.clash_id}</td>
+                  <td className="proj-wrap">{d.option.title}</td>
+                  <td className="proj-clip" title={state}>{state}</td>
+                  <td className="proj-clip" title={verb}>{verb}</td>
+                  <td className="proj-clip" title={reviewer}>{reviewer}</td>
+                  <td className="proj-wrap">{d.reason ?? ""}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="proj-text proj-empty-line">{decisions
+          ? "No decisions yet. Accepting, rejecting, modifying or asking for another proposal records one here, with the reviewer and why."
+          : "Open the workspace to read the decisions: a saved project's decisions come back with its models."}</p>
       )}
     </Card>
   );

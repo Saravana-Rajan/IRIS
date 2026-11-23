@@ -1,6 +1,7 @@
-import { Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
-import type { CSSProperties, MouseEvent } from "react";
+import { ArrowDown, Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
+import { lazy, Suspense, type CSSProperties, type MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
+import { HERO_POSTER } from "./glassModel";
 import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
 import { ownClick, projectPath, type ProjectStep } from "./projectRoute";
@@ -14,6 +15,21 @@ export const RECENT_MAX = 4;
 export function greetingFor(now: number): string {
   const h = new Date(now).getHours();
   return h >= 5 && h < 12 ? "Good morning" : h >= 12 && h < 18 ? "Good afternoon" : "Good evening";
+}
+
+/** The hero's live 3D glass aperture (three.js), loaded after the first paint; its still shows until then. */
+const HeroGlass = lazy(() => import("./HeroGlass"));
+/** The area whose hover makes the aperture open a little more: the hero. */
+const heroArea = () => (typeof document === "undefined" ? null : document.querySelector(".home-hero"));
+
+/** The tagline, in two lines beside the aperture. */
+export const TAGLINE = ["AI proposes. Geometry proves.", "The engineer decides."] as const;
+
+/** The scroll cue: down to the start tiles (instantly under reduced motion). No hooks, so tests can call StartScreen. */
+function toTiles(e: MouseEvent<HTMLButtonElement>) {
+  const body = e.currentTarget.closest(".home")?.querySelector(".home-body");
+  const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  body?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
 }
 
 /** A link the page opens itself on a plain click (a new tab or window still gets the address). */
@@ -33,9 +49,11 @@ function ProjectStatus({ p }: { p: Project }) {
 }
 
 /**
- * Home (`/home`, docs/ui-design.md §10.1): the first page inside the app shell, light and calm, Synthesia-like. A
- * greeting that reveals word by word beside the holographic ribbon, Iris's principle and what it does; the last session
- * to resume; three ways to start (a new project, the sample building, the sample drawings); Iris's eight steps as cards
+ * Home (`/home`, docs/ui-design.md §10.1): the first page inside the app shell, light and calm, Synthesia-like. The
+ * hero: the greeting, Iris's principle in large regular type and what it does, revealed word by word, beside our logo as
+ * a 3D glass aperture floating over a white pedestal, breathing and leaning toward the pointer (HeroGlass, lazy; its
+ * still until it loads), and a square "↓" cue down to the rest; then the last session to resume; three ways to start
+ * (a new project, the sample building, the sample drawings), all styled alike; Iris's eight steps as cards
  * (HowIrisWorks); and the recent projects. No brand header or chrome of its own: the shell has
  * them. It scrolls inside its container. Props only; nothing here calls the server.
  */
@@ -74,7 +92,7 @@ export function StartScreen({
 }) {
   const who = name.trim() || "there";
   const hello = `${greetingFor(now)}, ${who}`;
-  const tagline = "AI proposes. Geometry proves. The engineer decides.";
+  const helloMs = 90 * hello.split(/\s+/).length + 120;
   const shown = recent.slice(0, RECENT_MAX);
   const anyBusy = sampleBusy || sampleDrawingsBusy;
   const tiles = 1 + (onSample ? 1 : 0) + (onSampleDrawings ? 1 : 0);
@@ -82,32 +100,38 @@ export function StartScreen({
     <div className="home">
       <header className="home-hero">
         <div className="home-hero-in">
-          {/* The hero's art: a soft pink wash until the 3D glass aperture arrives (feature/hero-ribbon) */}
-          <div className="home-art" aria-hidden><div className="home-art-wash" /></div>
           <div className="home-hero-text">
-            <h1 className="home-greeting"><TextReveal text={hello} once="home-greeting" step={90} /></h1>
-            <p className="home-tagline">
-              <TextReveal text={tagline} once="home-tagline" delay={90 * hello.split(/\s+/).length + 180} step={70} /></p>
+            <p className="home-greeting"><TextReveal text={hello} once="home-greeting" step={90} /></p>
+            <h1 className="home-tagline">
+              <span className="home-tagline-line"><TextReveal text={TAGLINE[0]} once="home-tagline" delay={helloMs} step={80} /></span>
+              <span className="home-tagline-line"><TextReveal text={TAGLINE[1]} once="home-tagline-2" delay={helloMs + 80 * 4} step={80} /></span>
+            </h1>
             <p className="home-what">Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked,
               and report what was decided.</p>
-            {resume && (
-              <div className="home-resume" role="region" aria-label="Your last session">
-                <span className="home-resume-icon" aria-hidden><History size={16} /></span>
-                <p className="home-resume-text">
-                  Resume <b>{projectName(resume.files)}</b>
-                  {resume.fixed ? ` · ${plural(resume.fixed, "fix", "fixes")} kept` : ""}
-                  {resume.clashes != null ? ` · ${plural(resume.clashes, "clash", "clashes")}` : ""}
-                  {` · saved ${whenText(resume.savedAt, now)}`}</p>
-                <span className="home-resume-actions">
-                  <button type="button" className="btn primary small" onClick={resume.onResume}>Resume</button>
-                  <button type="button" className="btn ghost small" onClick={resume.onFresh}>Start fresh</button>
-                </span>
-              </div>)}
+          </div>
+          <div className="home-art" aria-hidden="true">
+            <Suspense fallback={<div className="hero-glass home-glass"><img className="hero-glass-still" src={HERO_POSTER} alt="" /></div>}>
+              <HeroGlass className="home-glass" track={heroArea} />
+            </Suspense>
           </div>
         </div>
+        <button type="button" className="home-cue" aria-label="Down to start" onClick={toTiles}><ArrowDown size={16} /></button>
       </header>
 
       <div className="home-body">
+        {resume && (
+          <div className="home-resume" role="region" aria-label="Your last session">
+            <span className="home-resume-icon" aria-hidden><History size={16} /></span>
+            <p className="home-resume-text">
+              Resume <b>{projectName(resume.files)}</b>
+              {resume.fixed ? ` · ${plural(resume.fixed, "fix", "fixes")} kept` : ""}
+              {resume.clashes != null ? ` · ${plural(resume.clashes, "clash", "clashes")}` : ""}
+              {` · saved ${whenText(resume.savedAt, now)}`}</p>
+            <span className="home-resume-actions">
+              <button type="button" className="btn primary small" onClick={resume.onResume}>Resume</button>
+              <button type="button" className="btn ghost small" onClick={resume.onFresh}>Start fresh</button>
+            </span>
+          </div>)}
         <section className="home-tiles" aria-label="Start" style={{ "--tiles": tiles } as CSSProperties}>
           <button type="button" className="home-tile home-tile-new" data-start="new-project" onClick={onNewProject}>
             <span className="home-tile-icon" aria-hidden><Plus size={20} /></span>
@@ -122,7 +146,7 @@ export function StartScreen({
                 <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
             </button>)}
           {onSampleDrawings && (
-            <button type="button" className="home-tile holo-edge" data-start="sample-drawings" disabled={anyBusy}
+            <button type="button" className="home-tile" data-start="sample-drawings" disabled={anyBusy}
               aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
               <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
               <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>

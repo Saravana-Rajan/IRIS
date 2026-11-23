@@ -38,7 +38,7 @@ const react = url("export const useState=(v)=>[typeof v==='function'?v():v,()=>{
   + "export const useEffect=()=>{};export const useRef=(v)=>({current:v ?? null});");
 const TRIAGE = url(`export const TRIAGE={${["real_clash", "modelling_error", "by_design", "non_physical", "unknown"]
   .map((k) => `${k}:{label:"${k}",cls:"",tip:"",colour:"",long:"${k}"}`).join(",")}};`);
-const { ReportList, rowWindow, FIRST_ROWS, OVERSCAN } = await import(await compiled("../src/ReportList.tsx", { react, "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
+const { ReportList, rowWindow, FIRST_ROWS, OVERSCAN, listTitle } = await import(await compiled("../src/ReportList.tsx", { react, "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
   "lucide-react": stub(["CircleCheck", "EllipsisVertical", "Eye", "Focus", "Network", "Search", "Sparkles", "Wand2", "X"]), "./api": url("export const api={imageUrl:()=>''};"),
   "./ClashPanel": stub(["ClashThumb"]), "./Triage": TRIAGE, "./noClash": await compiled("../src/noClash.ts", {}),
   "./aiNames": await compiled("../src/aiNames.ts", {}) }));
@@ -153,4 +153,35 @@ test("picking a tab narrows the list, along with the other filters (a focus from
   extra = { reviewed: {} };
   assert.deepEqual(idsOf(draw()), ["a", "b", "c", "d"], "its tab emptied (the mark undone): back to every clash");
   assert.equal(tab(draw(), "All").props["aria-selected"], true);
+});
+
+// ---------------------------------------------------------------- the heading: models checked, and which are context
+
+test("a detection run's heading counts the models it checked and names the context ones, never a bare count beside the open models'", () => {
+  // QA, Nov 22: "Coordination · 3 models" sat beside the sidebar's "Models 4" (Site is open for context, not checked).
+  const among = (a, b) => ({ ...clash(`${a}-${b}`, 1), a: { name: "A", global_id: "a", file: a }, b: { name: "B", global_id: "b", file: b } });
+  const run = (title, sources, clashes) => listTitle({ title, sources, clashes });
+  const S = "Northbank-Structure.ifc", M = "Northbank-MEP.ifc", A = "Northbank-Architecture.ifc", SITE = "Northbank-Site.ifc", G = "Northbank-Grids.ifc";
+  const hits = [among(M, S), among(A, A), among(A, S)];
+  assert.equal(run("Coordination · 3 models", [A, M, SITE, S], hits), "3 models checked · Site is context");
+  assert.equal(run("Coordination · 3 models", [A, G, M, SITE, S], hits), "3 models checked · Grids, Site are context");
+  assert.equal(run("Coordination · 3 models", [A, M, S], hits), "3 models checked", "nothing open for context");
+  assert.equal(run("Coordination · 1 model", ["cell.step"], []), "1 model checked");
+  assert.equal(run("Coordination · 3 models", [A, M, SITE, S], hits.slice(0, 1)), "3 of 4 models checked",
+    "a checked model with no clash: which one is context is not known here, so no name is guessed");
+  assert.equal(run("Coordination · 3 models + 2 checks", [A, M, SITE, S], hits), "3 models checked + 2 checks · Site is context");
+  for (const other of ["Coordination · Ducts vs Everything", "Coordination · 2 checks", "Level 02 MEP vs Structure.xml"])
+    assert.equal(run(other, [A, M, SITE, S], hits), other, "any other title as it is");
+});
+
+test("the list heads itself with that heading", () => {
+  const tree = ReportList({ report: { ...report, title: "Coordination · 1 model", sources: ["model.ifc", "site.ifc"],
+    clashes: [{ ...OPEN, a: { ...OPEN.a, file: "model.ifc" }, b: { ...OPEN.b, file: "model.ifc" } }] }, matches: null, selected: null,
+    onSelect() {}, onImage() {}, fixes: {}, reviewed: {}, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false,
+    triage: {}, triageFilter: null });
+  const heads = [];
+  const walk = (n) => { if (!n || typeof n !== "object") return; if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === "h2") heads.push(text(n)); [n.props?.children].flat(Infinity).forEach(walk); };
+  walk(tree);
+  assert.deepEqual(heads, ["1 model checked · site is context", "1 model checked · site is context"], "the Insights tab's and the Clashes tab's");
 });

@@ -212,7 +212,8 @@ test("the next step follows the project's real state", () => {
 
 
 const REAL = { react: import.meta.resolve("react"), "react/jsx-runtime": import.meta.resolve("react/jsx-runtime"),
-  "lucide-react": import.meta.resolve("lucide-react"), "./projectsApi": projectsUrl, "./projectRoute": routeUrl };
+  "lucide-react": import.meta.resolve("lucide-react"), "./projectsApi": projectsUrl, "./projectRoute": routeUrl,
+  "./proposalState": await compiled("../src/proposalState.ts", { "./fixKinds": await compiled("../src/fixKinds.ts") }) };
 
 /** A module compiled with its own modules (`deps` on top of the real ones above); its stylesheet imports are dropped
  *  (Vite's job, not Node's). Returns the module's URL. */
@@ -221,9 +222,9 @@ async function module(path, deps = {}) {
   const js = Buffer.from(url.slice(url.indexOf(",") + 1), "base64").toString().replace(/^import "\.\/[\w.-]+\.css";$/gm, "");
   return `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
 }
-const pages = { "./Holo": await module("../src/Holo.tsx"), "./PageHeader": await module("../src/PageHeader.tsx") };
+const pages = { "./Holo": await module("../src/Holo.tsx", { "./glassModel": await compiled("../src/glassModel.ts") }), "./PageHeader": await module("../src/PageHeader.tsx") };
 const { ProjectsHome, ProjectRow, NewProjectDialog, PROJECT_FLOW, projectStatus } = await import(await module("../src/ProjectsHome.tsx", pages));
-const { ProjectOverview } = await import(await module("../src/ProjectOverview.tsx", pages));
+const { ProjectOverview, shortWhen } = await import(await module("../src/ProjectOverview.tsx", pages));
 const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ");
 const noop = () => {};
 const home = (over = {}) => renderToStaticMarkup(h(ProjectsHome, { projects: [], loading: false, onNew: noop, onOpen: noop, ...over }));
@@ -382,6 +383,55 @@ test("empty states: no models, no reports, no activity", () => {
   assert.match(activity, /No activity yet .*Saved states 2/);
   const kids = renderToStaticMarkup(h(ProjectOverview, overview({ step: "drawings" }), h("section", { className: "proj-card" }, "Drawings card")));
   assert.match(kids, /<section class="proj-card">Drawings card<\/section>/, "App's cards follow the step's body");
+});
+
+test("a decision's time fits one short line: month, day and 24 h time this year, the year otherwise", () => {
+  assert.equal(shortWhen(new Date(2026, 10, 22, 14, 5).getTime(), NOW), "Nov 22, 14:05");
+  assert.equal(shortWhen(new Date(2026, 0, 3, 0, 7).getTime(), NOW), "Jan 3, 00:07", "midnight is 00, never 24");
+  assert.equal(shortWhen(new Date(2025, 10, 22, 14, 5).getTime(), NOW), "Nov 22, 2025", "another year: the date, no time");
+  assert.equal(shortWhen(sec(new Date(2026, 10, 22, 9, 30).getTime()), NOW), "Nov 22, 09:30", "server seconds too");
+  assert.equal(shortWhen(Number.NaN, NOW), "—");
+});
+
+test("the Activity page's tables: short columns on one line at fixed widths, long ones wrap, both scroll on a phone", () => {
+  const opt = (title) => ({ title, kind: "move", moved: [] });
+  const decisions = [
+    { clash_id: "c17", clash_key: "k17", number: 17, option: opt("Seat the lift pit wall on the pad footing"), state: "geometry_validated",
+      decision: "accepted", reviewer: "QA Tester", at: sec(new Date(2026, 10, 22, 14, 5).getTime()) },
+    { clash_id: "1eVHoPtl1IhAbbhivqVqb0", clash_key: "k", option: opt("Trim bolt end to footing top face"), state: "failed_validation",
+      decision: "requested_another", reason: "Needs a sleeve, not a move", at: new Date(2025, 10, 3, 8, 0).getTime() },
+  ];
+  const html = renderToStaticMarkup(h(ProjectOverview, overview({ step: "activity", decisions })));
+  const table = html.match(/<div class="proj-table-scroll"><table class="proj-mini proj-decisions">.*?<\/table><\/div>/)?.[0];
+  assert.ok(table, "the decisions table scrolls inside its own wrapper");
+  assert.equal((table.match(/<col[ /]/g) ?? []).length, 7, "a column each");
+  assert.match(table, /<colgroup><col class="c-when"\/><col class="c-clash"\/><col\/><col class="c-state"\/><col class="c-decision"\/><col class="c-reviewer"\/><col\/><\/colgroup>/);
+  assert.match(text(table), /When Clash Proposal State Decision Reviewer Why/);
+  const rows = table.match(/<tr>.*?<\/tr>/g).slice(1);
+  assert.match(text(rows[0]), /Nov 3, 2025 1eVHoPtl1IhAbbhivqVqb0 Trim bolt end .* Failed validation ✕ Requested another not recorded Needs a sleeve/,
+    "newest first; the clash's id when it has no number");
+  assert.match(text(rows[1]), /Nov 22, 14:05 #17 Seat the lift pit wall .* Geometry-validated ✓ Accepted QA Tester/);
+  const when = rows[1].match(/<td class="proj-clip mono" title="([^"]+)">Nov 22, 14:05<\/td>/);
+  assert.ok(when, "the short time, on one line");
+  assert.equal(when[1], new Date(2026, 10, 22, 14, 5).toLocaleString(), "the full time in its title");
+  assert.equal((rows[1].match(/class="proj-clip/g) ?? []).length, 5, "when, clash, state, decision and reviewer hold one line");
+  assert.equal((rows[1].match(/class="proj-wrap"/g) ?? []).length, 2, "the proposal and why wrap");
+
+  const saved = html.match(/<div class="proj-table-scroll"><table class="proj-mini proj-saved-states">.*?<\/table><\/div>/)?.[0];
+  assert.ok(saved, "the saved states scroll inside their wrapper too");
+  assert.match(saved, /<colgroup><col class="c-n"\/><col class="c-saved"\/><col class="c-edits"\/><col\/><\/colgroup>/);
+  assert.match(saved, /<td class="num mono">2<\/td><td class="proj-clip" title="[^"]+">[^<]+<\/td><td class="num mono">4<\/td>/,
+    "numbers right-aligned, the time on one line");
+  assert.match(saved, /<ul class="proj-files"><li>MEP\.ifc<\/li><\/ul>/, "each file its own item, so a line breaks between names");
+  assert.ok(html.indexOf("Saved states") < html.indexOf("Decisions"), "the decisions follow the saved states");
+
+  const none = text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "activity", decisions: [] }))));
+  assert.match(none, /Decisions No decisions yet\. Accepting, rejecting/);
+  const closed = text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "activity", decisions: null }))));
+  assert.match(closed, /Decisions Open the workspace to read the decisions/);
+  assert.doesNotMatch(text(renderToStaticMarkup(h(ProjectOverview, overview({ step: "activity" })))), /Decisions/,
+    "no card unless the decisions are passed");
+  assert.doesNotMatch(text(renderToStaticMarkup(h(ProjectOverview, overview({ decisions })))), /Decisions/, "the Activity page only");
 });
 
 test("the share closed is never rounded to a claim that isn't true", () => {

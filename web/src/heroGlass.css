@@ -1,0 +1,12 @@
+/* The hero's glass aperture (HeroGlass.tsx): it fills its container. The canvas fades in over the pre-rendered still
+   once its first frame is drawn; with no WebGL the still stays. Light only, decorative. */
+.hero-glass { position: relative; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.hero-glass-canvas, .hero-glass-still { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hero-glass-still { object-fit: contain; }
+.hero-glass-canvas { opacity: 0; transition: opacity .6s ease; }
+.hero-glass[data-mode="live"] .hero-glass-canvas { opacity: 1; }
+.hero-glass[data-mode="still"] .hero-glass-canvas { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-glass-canvas { transition: none; }
+}

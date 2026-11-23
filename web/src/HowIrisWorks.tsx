@@ -15,10 +15,11 @@ export const HIW_PHASES = [
 ] as const;
 
 /** What each of PROJECT_FLOW's steps shows on its card (same order): its icon, its measured proof chip (these values and
- *  no others) and the project step a click opens on the sample building. */
+ *  no others; each the number the app itself shows there, e.g. the Models step's "1,997 elements · 4 models") and the
+ *  project step a click opens on the sample building. */
 export const HIW_CARDS: readonly { icon: LucideIcon; proof: string; step: ProjectStep }[] = [
   { icon: Upload, proof: "IFC · STEP", step: "models" },
-  { icon: Layers, proof: "4 models · 1,732 elements", step: "models" },
+  { icon: Layers, proof: "4 models · 1,997 elements", step: "models" },
   { icon: Radar, proof: "464 clashes in 11 s", step: "coordination" },
   { icon: Crosshair, proof: "#1 · −300 mm", step: "clash" },
   { icon: Sparkles, proof: "Gemini 3.8 Flash", step: "clash" },

@@ -104,6 +104,45 @@ test("a row's actions are not inline: icons at its end on hover, or a ⋮ menu t
   assert.equal(fixed.props.children, "Fixed");
 });
 
+test("the whole row opens its clash; its actions never do (QA, Nov 22: on hover they took the row's middle)", () => {
+  const opened = [], proposed = [];
+  const tree = draw(list.ReportList({ report, matches, selected: null, onSelect: (c) => opened.push(c.id), onImage() {}, fixes: {},
+    reviewed: {}, checked: new Set(), onCheck() {}, onFixChecked() {}, insights: null, busy: false, triage: {}, triageFilter: null,
+    onPropose: (c) => proposed.push(c.id), onSetAside() {}, onFocus() {}, onIsolate() {} }));
+  const row = find(tree, (n) => n.props?.["data-clash"] === "c1");
+  // A press on `control` (or on none): the row asks the target whether it is inside a button, input, link or label.
+  const at = (control) => ({ target: { closest: (sel) => (control && sel.split(/,\s*/).includes(control) ? {} : null) } });
+  row.props.onClick(at(null));
+  assert.deepEqual(opened, ["c1"], "a press on the row's edge or a gap opens it");
+  for (const control of ["button", "input", "a", "label"]) row.props.onClick(at(control));
+  assert.deepEqual(opened, ["c1"], "not through its own controls (the checkbox, the thumbnail, View, the actions)");
+  find(row, (n) => n.props?.className === "clash-main").props.onClick();
+  assert.deepEqual(opened, ["c1", "c1"], "the title opens it, once");
+  const group = find(row, (n) => n.props?.role === "group");
+  let stopped = 0;
+  group.props.onClick({ stopPropagation: () => { stopped++; } });
+  assert.equal(stopped, 1, "a press in the actions (a button or between them) stops there");
+  const icons = rowButtons(tree, "c1").filter((b) => find(group, (n) => n === b) && !b.props.className.includes("row-more"));
+  assert.deepEqual(icons.map((b) => b.props["aria-label"].split(" ")[0]), ["Isolate", "Propose", "Mark", "2"], "four, each named");
+  assert.ok(icons.every((b) => b.props["data-tip"] && b.props.className.includes("ibtn")), "icon buttons, each with its tip");
+  icons[1].props.onClick();
+  assert.deepEqual([proposed, opened], [["c1"], ["c1", "c1"]], "Propose proposes and opens nothing else");
+});
+
+test("the actions take the row's own last column, small and two to a column: never an overlay across the title", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
+  const lines = css.split("\n").filter((l) => /\.row-actions\b/.test(l));
+  assert.ok(lines.length > 0 && lines.every((l) => !/linear-gradient|right: 0; top: 0; bottom: 0/.test(l)),
+    "no fade laid over the row's end");
+  assert.match(css, /^\.row-actions \{ display: none; flex: none; align-self: center; \}$/m, "in the row's flow, its last item");
+  const hover = css.slice(css.indexOf(".report .groups .clash-row:hover .row-actions"));
+  assert.match(hover, /^[^}]*\.report \.groups \.clash-row\.pick:focus-within \.row-actions \{\s*display: grid; grid-template-rows: repeat\(2, auto\); grid-auto-flow: column;/,
+    "on hover and focus (as specific as workspace.css's rules, and later): a grid two buttons high");
+  assert.match(hover, /\.row-actions \.ibtn \{ width: 24px; height: 24px;/, "24 px icon buttons");
+  assert.match(hover, /\.row-actions \.row-view \{ display: none; \}/, "the row's own View is the one on screen");
+});
+
 test("on the page: Propose fixes from a row proposes for it; Mark sets it aside; same elements narrow the list", async () => {
   const host = await appHost();
   await host.settle();

@@ -13,7 +13,8 @@ const jsx = { "react/jsx-runtime": import.meta.resolve("react/jsx-runtime") };
 
 const routeUrl = await compiled("../src/projectRoute.ts");
 const navUrl = await compiled("../src/shellNav.ts");
-const brandUrl = await compiled("../src/Brand.tsx", { ...jsx, react: import.meta.resolve("react"), "./Holo": url("export function HoloRibbon(){return null;}") });
+const brandUrl = await compiled("../src/Brand.tsx", { ...jsx, react: import.meta.resolve("react"), "./Holo": url("export function HoloRibbon(){return null;}"),
+  "./glassModel": await compiled("../src/glassModel.ts") });
 const nav = await import(navUrl);
 
 /** AppShell compiled with its own modules and `react` as given; its stylesheet import is dropped (Vite's job). */
@@ -293,4 +294,30 @@ test("the pure helpers: the initial, the saved name, the shortcut and the groupi
   assert.equal(groups.flatMap((g) => g.items).length, nav.MAX_HITS);
   assert.deepEqual(nav.groupHits([]), []);
   assert.deepEqual(nav.groupHits(hits, 1).map((g) => g.items.length), [1]);
+});
+
+test("Settings and Help have their own address: /settings and /help over the page, back to it on close", () => {
+  for (const [path, sheet] of [["/settings", "settings"], ["/settings/", "settings"], ["/help", "help"], ["/help/", "help"]])
+    assert.equal(nav.sheetOfPath(path), sheet, path);
+  for (const path of ["", "/", "/home", "/settingsx", "/settings/owner", "/projects/settings", "/about", "/helpme"])
+    assert.equal(nav.sheetOfPath(path), null, path);
+  const calls = [];
+  const location = { pathname: "/projects/abc/clashes/3", search: "?x=1", hash: "" };
+  const go = (kind) => (_s, _t, to) => { calls.push([kind, to]); location.pathname = String(to).split("?")[0]; };
+  const before = globalThis.window;
+  globalThis.window = { location, history: { state: null, pushState: go("push"), replaceState: go("replace") } };
+  try {
+    nav.showSheetPath("settings", true);
+    assert.deepEqual(calls.at(-1), ["push", "/settings?x=1"], "opening adds a history entry: Back closes it");
+    nav.showSheetPath("help", true);
+    assert.deepEqual(calls.at(-1), ["replace", "/help?x=1"], "one sheet to the other: in place");
+    nav.showSheetPath(null, false);
+    assert.deepEqual(calls.at(-1), ["replace", "/projects/abc/clashes/3?x=1"], "closing: back where it was opened");
+    location.pathname = "/settings"; calls.length = 0;
+    nav.showSheetPath(null, false, "/workspace");
+    assert.deepEqual(calls, [["replace", "/workspace?x=1"]], "opened as it is: the fallback");
+    calls.length = 0; location.pathname = "/projects";
+    nav.showSheetPath(null, false);
+    assert.deepEqual(calls, [], "not on a sheet's address: nothing to put back");
+  } finally { globalThis.window = before; }
 });
