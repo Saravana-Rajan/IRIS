@@ -533,9 +533,9 @@ full demo** under the hero's tagline (the `full` video), and the **Watch the dem
 
 | Id | Files | Title | What it shows | Duration |
 |---|---|---|---|---|
-| `3d` | `iris-3d-demo.mp4`, `.vtt`, `.webp` | Fix clashes in your building models | The sample building's clash review: the check, a clash's pictures, fixes proposed by AI and verified by geometry, reviewed in 3D before and after, and kept | 1:32 |
-| `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 1:00 |
-| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 2:19 |
+| `3d` | `iris-3d-demo.mp4`, `.vtt`, `.webp` | Fix clashes in your building models | The sample building's clash review: the check, a clash's pictures, fixes proposed by AI and verified by geometry, reviewed in 3D before and after, and kept | 1:30 |
+| `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 0:58 |
+| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 2:17 |
 
 They were recorded on 2026-11-23 from this app (808329d's final UI with the lightbox) in headless Chromium on the real
 GPU, against a local one-origin server with every Gemini credential empty and the model client replaced by one that
