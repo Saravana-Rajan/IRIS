@@ -1463,8 +1463,9 @@ is gone. Checked: the server suite without `tests/bench` on a 10-core Mac took 2
 `-n 4 --dist loadfile`; the same 1,189 passed each time, with the same 2 local-only failures (the PDF tests in
 `test_document.py`: this Mac lacks Pango for WeasyPrint, which CI installs), nothing flaky. `actionlint` is clean on
 both workflows. `deploy/changed-parts.sh` on recent commits: f711e56 web-only, 3ede641 docs-only, an unknown base
-deploys both. CI on the branch (`ci.yml`): 2:39 and 2:11 (runs 45123249870 and 45123667277) against 4:09 before (run
-45122442429); the `server` job 1:41 and 2:08 against 4:06 (pytest 1:18 and 1:25 against 3:09). The first run after the
+deploys both. CI on the branch (`ci.yml`), four runs: 2:39, 2:11, 2:06 and 2:42 of jobs (45123249870, 45123667277,
+45124516943, 45124554617) against 4:09 before (45122442429); the `server` job 1:41 to 2:42 against 4:06 (pytest
+1:18, 1:25, 1:25 and 2:16 against 3:09). The first run after the
 `uv.lock` change also saved a new uv cache (1:00 in VisionBench's post step), once. `deploy/changed-parts.sh` lists
 the changed paths before reading them, so a failing `git diff` fails the job instead of reading as nothing changed.
 The Dockerfile, built locally (arm64, the web stage stubbed) before and after: the image 1,211 MB against 511 MB, the
