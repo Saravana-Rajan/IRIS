@@ -21,7 +21,7 @@
 
 ## For judges: 5-minute tour
 
-**Demo video: <link>**
+**Demo video: [youtu.be/z-OW9ThxPr0](https://youtu.be/z-OW9ThxPr0)** (2:17, narrated, captions on)
 
 1. **Open the live app:** <https://iris-techjays.web.app>. No sign-in, and the sample flows below cost nothing.
 2. **Try the sample building → Prepare fixes.** Iris finds 464 clashes in the synthetic Northbank building, then the
