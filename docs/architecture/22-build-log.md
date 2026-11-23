@@ -1325,3 +1325,53 @@ accents. `web/index.html` gains `og:type`, `og:url`, `og:description`, the image
 and the `twitter:` card tags; `og:title` carries the current tagline. The other `web/public/brand/` icons already had
 the Aperture. Checked: headless Chromium (GPU) on a local one-origin server with no Gemini key (saved sample data),
 each image looked at; `npm test`, `npm run build`, `test_docs_map.py`.
+**Nov 22 (2026-11-22), demo videos on Home** ([12](12-web-app.md), [19](19-demo-data.md), [18](18-testing-and-evals.md)).
+Home gains three narrated demo videos, each played in a light lightbox. `web/src/DemoVideo.tsx`, with its own
+`demoVideo.css`, holds `DEMO_VIDEOS` (`3d` "Fix clashes in your building models", `2d` "Check drawings against the
+model", `full` "Iris: does AI truly see?"; files `web/public/demos/iris-<id>-demo.mp4` with a `.vtt` and a `.webp`
+poster; the durations 2:36, 1:54 and 4:19 are the narrated timeline's lengths; captions in the player are styled
+like the burned-in ones, ink on a white card in Plex, through `video::cue`), `DemoVideo` (a white
+card in a native modal `<dialog>` that is itself the frosted white scrim, never a dark overlay, portalled to
+`document.body`; a 16:9 `<video>` with `preload="none"`, its poster and English captions on by default; nothing
+rendered or fetched while closed; it plays on open; "The video couldn't load." on a missing or broken file; focus on
+Close, focus guards that keep Tab inside and still reach the video's own controls, Escape and the scrim closing it,
+focus given back to the Watch button, the body's scroll locked, no zoom-in under reduced motion, a 16 px gutter on a
+phone) and `WatchDemoButton` (a play icon, the label and the duration in mono, keeping its own open state).
+`StartScreen.tsx` wraps the two sample tiles in `div.home-tile-wrap` (`home.css`) with a Watch the demo button laid
+over each tile's foot as the tile's sibling (the 3D video on the building tile, the 2D on the drawings tile; the
+tile's click unchanged; Tab goes to the tile, then its button), and puts Watch the full demo (holo edge) under the
+hero's tagline; StartScreen stays hook-free and `App.tsx` is untouched. Found on the way: with focus inside a
+`<video>`'s own controls, Chrome sends the page no key event for Escape, so a plain overlay could not close on it;
+the native dialog gets the close request as `cancel`, so Escape is caught both on the document (stopped there, before
+App's own) and as `cancel`. The videos are to be recorded from the sample building with its saved checks, saved
+drawing readings and saved prepared proposals (no live Gemini call), narrated with Gemini TTS, with WebVTT captions;
+none is in the repo yet, so each opens on "The video couldn't load." until it is. Checked: `web/tests/demoVideo.test.mjs`
+(10, new) and `start-screen.test.mjs` (25), the full web suite (539 passing under an en-US locale; under en-IN,
+`uploads.test.mjs`'s "137,181" reads "1,37,181", a locale assumption that predates this work), `tsc` and
+`vite build` (with f3b1bbb's `appShell.css` fix, which this branch's base lacks), `test_docs_map.py`, and headless
+Chromium against `vite preview` at 1440×900 and 390×844 with the API and a test clip routed by Playwright: nothing under
+`/demos/iris-*` fetched before a click, Tab from the tile reaches its Watch button, Enter opens with focus on Close,
+twelve Tab and Shift+Tab presses stay inside, captions showing, Escape closes from Close, the video and inside its
+controls, focus back on the Watch button, a 404 shows the error line, the scrim closes it, no sideways scroll, no
+overlap with the tiles' text.
+
+**Nov 23 (2026-11-23), the demo videos recorded** ([12](12-web-app.md), [19](19-demo-data.md)). 808329d (UI ready) is
+merged into `feature/demo-videos` (a579025): 808329d's Home (the glass aperture hero, the two-line tagline, How Iris
+works, three tiles alike) keeps the lightbox's Watch buttons; the hero's Watch the full demo lost its holo edge, as
+nothing on Home wears one now. The three narrated videos are recorded from that code and committed in
+`web/public/demos/`: `iris-3d-demo` (2:35, Fix clashes in your building models), `iris-2d-demo` (1:51, Check
+drawings against the model) and `iris-full-demo` (4:19, the hackathon submission: the problem, Iris, the 3D flow, the
+2D flow, Iris VisionBench, "AI proposes. Geometry proves. The engineer decides.", Built by Techjays and the URL), each
+an `.mp4` (H.264 + AAC, faststart, no burned captions: 22.3, 20.4 and 22.0 MB; the 3D and full ones at 1280×720 to stay under 24 MB, the 2D at 1920×1080), a WebVTT `.vtt` and a `.webp` poster. Recording:
+headless Chromium on the real GPU, a virtual 30 fps timeline, against a local one-origin server of this branch with
+`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` set empty (so `.env` can't
+fill them), `GEMINI_MODEL=gemini-3.8-flash` and the model client replaced by one that refuses: the saved check (464
+clashes), the saved drawing readings (119 of 123 confirmed; the planted sheet's 4 mismatches) and the saved fixes (8
+of 8 ready, #1 the duct up 400 mm) replay; the page's automatic title and patterns calls were refused (none reached
+Gemini), and the browser fetched nothing outside the app's origin but the Plex fonts, from a local cache. Narration:
+Gemini TTS (`gemini-3.8-flash-tts` on Vertex AI, voice Achird), $0.24 for every line, audition and check. Two
+lines follow the final UI: the 2D read line (the sample sheets open already read; the button says Replay the
+reading) and the compare line (both sample sheets are compared at once, so the clean sheet's result is shown on the
+sheet: no mismatch marks). `DEMO_VIDEOS`' durations are the files' lengths, rounded down as the video controls show
+them (2:35, 1:51, 4:19). Checked: `npm test` (591 passing), `tsc` and `vite build`, and frames of each video at every
+narrated line.

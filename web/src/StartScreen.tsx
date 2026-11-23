@@ -1,6 +1,7 @@
 import { ArrowDown, Building2, FileText, FolderKanban, History, Plus } from "lucide-react";
 import { lazy, Suspense, type CSSProperties, type MouseEvent } from "react";
 import { projectName, type Resume } from "./About";
+import { WatchDemoButton } from "./DemoVideo";
 import { HERO_POSTER } from "./glassModel";
 import { MarkBadge, TextReveal } from "./Holo";
 import { HowIrisWorks } from "./HowIrisWorks";
@@ -106,6 +107,7 @@ export function StartScreen({
               <span className="home-tagline-line"><TextReveal text={TAGLINE[0]} once="home-tagline" delay={helloMs} step={80} /></span>
               <span className="home-tagline-line"><TextReveal text={TAGLINE[1]} once="home-tagline-2" delay={helloMs + 80 * 4} step={80} /></span>
             </h1>
+            <WatchDemoButton id="full" label="Watch the full demo" className="watch-demo-hero" />
             <p className="home-what">Coordinate IFC and STEP models: find the clashes, review fixes the geometry has checked,
               and report what was decided.</p>
           </div>
@@ -139,19 +141,25 @@ export function StartScreen({
               <span className="home-tile-line">Import your IFC or STEP models and check them for clashes.</span></span>
           </button>
           {onSample && (
-            <button type="button" className="home-tile" data-start="sample" disabled={anyBusy} aria-busy={sampleBusy || undefined}
-              onClick={onSample}>
-              <span className="home-tile-icon" aria-hidden>{sampleBusy ? <i className="spinner" /> : <Building2 size={20} />}</span>
-              <span className="home-tile-text"><span className="home-tile-title">Try the sample building</span>
-                <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
-            </button>)}
+            <div className="home-tile-wrap">
+              <button type="button" className="home-tile" data-start="sample" disabled={anyBusy} aria-busy={sampleBusy || undefined}
+                onClick={onSample}>
+                <span className="home-tile-icon" aria-hidden>{sampleBusy ? <i className="spinner" /> : <Building2 size={20} />}</span>
+                <span className="home-tile-text"><span className="home-tile-title">Try the sample building</span>
+                  <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
+              </button>
+              <WatchDemoButton id="3d" />
+            </div>)}
           {onSampleDrawings && (
-            <button type="button" className="home-tile" data-start="sample-drawings" disabled={anyBusy}
-              aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
-              <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
-              <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>
-                <span className="home-tile-line">Its PDF sheets, read by AI and compared with the 3D model.</span></span>
-            </button>)}
+            <div className="home-tile-wrap">
+              <button type="button" className="home-tile" data-start="sample-drawings" disabled={anyBusy}
+                aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
+                <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
+                <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>
+                  <span className="home-tile-line">Its PDF sheets, read by AI and compared with the 3D model.</span></span>
+              </button>
+              <WatchDemoButton id="2d" />
+            </div>)}
         </section>
 
         <HowIrisWorks onStep={onSampleStep} />

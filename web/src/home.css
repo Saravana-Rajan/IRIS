@@ -69,6 +69,17 @@
 .home-tile-text { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; min-width: 0; }
 .home-tile-title { font-size: 15.5px; font-weight: 500; line-height: 1.3; }
 .home-tile-line { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+/* A sample tile with its "Watch the demo" (DemoVideo.tsx): the tile is a button, so the Watch button is its sibling in a
+   wrapper, laid over the tile's foot. The tile's click is unchanged; Tab reaches the tile, then its Watch button. */
+.home-tile-wrap { position: relative; display: flex; min-width: 0; }
+.home-tile-wrap > .home-tile { flex: 1 1 auto; min-width: 0; padding-bottom: 68px; }
+.home-tile-wrap > .watch-demo { position: absolute; left: 20px; bottom: 20px; }
+.home-tile-wrap:has(> .home-tile:hover:not(:disabled)) > .watch-demo { transform: translateY(-2px); }
+@container home (max-width: 600px) {
+  .home-tile-wrap > .home-tile { padding-bottom: 56px; }
+  .home-tile-wrap > .watch-demo { left: 70px; bottom: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .home-tile-wrap > .watch-demo { transform: none !important; } }
 
 /* Recent projects: up to four cards, each a link */
 .home-recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px;

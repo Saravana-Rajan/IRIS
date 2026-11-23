@@ -8,7 +8,8 @@ import { appHost, compiled, projectOf } from "./app-host.mjs";
 
 /** Home (StartScreen.tsx) and its ways in: the greeting, the start tiles ("Try the sample drawings" opens the sample
  * building as a project on its Drawings step with the sample PDF sheets attached, POST .../drawings/samples, in the order
- * sampleDrawings.ts keeps), Iris's eight steps (HowIrisWorks.tsx, stubbed here; its own test is how-iris-works) and
+ * sampleDrawings.ts keeps), the demo videos' Watch buttons (DemoVideo.tsx: on the two sample tiles and in the hero),
+ * Iris's eight steps (HowIrisWorks.tsx, stubbed here; its own test is how-iris-works) and
  * the recent projects. */
 
 const url = (js) => `data:text/javascript;base64,${Buffer.from(js).toString("base64")}`;
@@ -28,6 +29,8 @@ async function moduleUrl(path, css, deps = {}) {
 const glassUrl = await compiled("../src/glassModel.ts");
 const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css", { "./glassModel": glassUrl });
 const holo = await import(holoUrl);
+const videoUrl = await moduleUrl("../src/DemoVideo.tsx", "demoVideo.css", { "react-dom": import.meta.resolve("react-dom") });
+const videos = (await import(videoUrl)).DEMO_VIDEOS;
 const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
 /** HowIrisWorks stands in as one section that names the steps in order, so Home's order shows in its markup. */
 const howStub = url(`import { jsx } from ${JSON.stringify(import.meta.resolve("react/jsx-runtime"))};
@@ -35,7 +38,7 @@ export function HowIrisWorks() { return jsx("section", { className: "hiw", child
 /** HeroGlass (three.js) never loads here: a lazy stand-in that never resolves, so the static render shows the still. */
 const heroStub = url("export default function HeroGlass() { return null; }; await new Promise(() => {});");
 const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./HowIrisWorks": howStub, "./Holo": holoUrl,
-  "./glassModel": glassUrl, "./HeroGlass": heroStub,
+  "./glassModel": glassUrl, "./HeroGlass": heroStub, "./DemoVideo": videoUrl,
   "./About": url("export const projectName = (files) => files.join(' + ');"),
   "./projectRoute": await compiled("../src/projectRoute.ts"),
   "./projectsApi": await compiled("../src/projectsApi.ts", {
@@ -111,6 +114,30 @@ test("three start tiles, styled alike: New project, the sample building, the sam
   let made2 = 0;
   byStart({ onNewProject: () => made2++ }, "new-project").props.onClick();
   assert.equal(made2, 1, "the tile asks for a new project");
+});
+
+test("Watch the demo: the 3D video on the sample building's tile, the 2D on the drawings', the full demo under the tagline; nothing loaded until asked", () => {
+  const html = markup({ onSample: noop, onSampleDrawings: noop });
+  const wraps = html.match(/<div class="home-tile-wrap">.*?<\/div>/g);
+  assert.equal(wraps?.length, 2, "the two sample tiles, each in a wrapper");
+  for (const [wrap, tile, id, time] of [[wraps[0], "sample", "3d", videos["3d"].duration], [wraps[1], "sample-drawings", "2d", videos["2d"].duration]]) {
+    assert.match(wrap, new RegExp(`^<div class="home-tile-wrap"><button type="button" class="home-tile[^"]*" data-start="${tile}"[^>]*>.*?</button>`
+      + `<button type="button" class="watch-demo" data-video="${id}"[^>]*>.*?</button></div>$`), `${tile}: the tile, then its Watch button`);
+    assert.match(text(wrap), new RegExp(`Watch the demo · ${time}`));
+    assert.equal(startButton(html, tile).match(/<button/g).length, 1, `${tile}: no button inside the tile`);
+  }
+  assert.match(html, /<section class="home-tiles"[^>]*><button type="button" class="home-tile home-tile-new"/, "New project is still a tile of its own");
+  const full = html.match(/<button type="button" class="watch-demo watch-demo-hero" data-video="full"[^>]*>.*?<\/button>/)?.[0];
+  assert.ok(full, "the full demo in the hero, the larger button (no holo edge: none on Home)");
+  assert.ok(text(full).includes(`Watch the full demo · ${videos.full.duration}`));
+  const hero = html.slice(html.indexOf('<div class="home-hero-text">'), html.indexOf('<div class="home-body">'));
+  assert.ok(hero.indexOf('class="home-tagline"') < hero.indexOf('data-video="full"') && hero.indexOf('data-video="full"') < hero.indexOf('class="home-what"'),
+    "under the tagline");
+  assert.doesNotMatch(html, /<video|\.mp4|iris-\w+-demo\.(webp|vtt)/, "no video, poster or captions until one is opened");
+  assert.deepEqual(markup({}).match(/data-video="\w+"/g), ['data-video="full"'], "no samples listed: the hero's alone");
+  let opened = 0;
+  byStart({ onSample: () => opened++ }, "sample").props.onClick();
+  assert.equal(opened, 1, "the tile's own click is unchanged");
 });
 
 test("'Try the sample drawings' shows only when the page can open them, beside 'Try the sample building'", () => {

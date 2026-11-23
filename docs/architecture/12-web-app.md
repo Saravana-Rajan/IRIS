@@ -9,7 +9,7 @@
 > `shellNav.ts`, `PageHeader.tsx`, `Holo.tsx`, `StartScreen.tsx`, the projects pages, the decluttered workspace, `dock.tsx`,
 > `dockLayout.ts` and the stylesheets) on 2026-11-22; the sidebar's footer (`BuiltBy`), the white + pink theme and
 > Home's How Iris works (`HowIrisWorks.tsx`) on 2026-11-22; the Page not found page (`NotFound.tsx`, `isAppPath`) on
-> 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
+> 2026-11-22; demo videos (`DemoVideo.tsx`, `demoVideo.css`, Home's Watch buttons) 2026-11-22 · **Deeper design:** [docs/mobile.md](../mobile.md),
 > [docs/views.md](../views.md), [docs/panels.md](../panels.md), [docs/brand-assets.md](../brand-assets.md),
 > [docs/engineer-workflow.md](../engineer-workflow.md), [docs/drawings.md](../drawings.md)
 
@@ -61,6 +61,8 @@ a mistyped or old link) shows the app's own Page not found page (`NotFound.tsx`)
 | `glass.ts` | Iris's 3D glass with three.js, our own (no stock or third-party assets): `glassMaterial` (`MeshPhysicalMaterial`: transmission, thickness, a light violet attenuation, dispersion, iridescence with `iridescenceIOR` and `iridescenceThicknessRange`, clearcoat, roughness 0.06), a generated studio environment (white in front, the holo colours round the sides and back, white strips for the clear coat's streaks, pre-filtered with `PMREMGenerator`), a backdrop of soft holo colour fields that only the transmission pass sees (the page stays white while the glass bends colour), and `createGlassStage(canvas, { shape, hero })`: the Aperture (the mark's six blades extruded thick with a rounded bevel, each in a pin group that slides out and turns a little as it opens, round an ink hexagonal pupil that grows with the opening), the ring and the pill; with `hero`, a white pedestal (its own hemisphere light) with a contact shadow that tightens as the aperture comes down. ACES tone mapping, sRGB output, antialiasing, a camera that fits `GLASS_EXTENT` like `object-fit: contain`; `render(t, aim)`, `resize`, `snapshot`, `dispose`. Throws without WebGL | `createGlassStage`, `GlassStage`, `glassMaterial` | `HeroGlass.tsx`, `glassStill.ts` |
 | `glassModel.ts` | The glass's pure parts (no three, no DOM; Node tests load it): `pathOutlines` (an SVG path's outlines for M, L, circular A and Z), `apertureParts` (the mark's six `Blade`s from Brand.tsx's paths, centred, y up, radius 1: outline, pin, tip, way out, turn sign; the pupil and its clean `hexagon`), `bladeMove` (`BLADE_SLIDE`, `BLADE_TURN`), `turnAbout`, `pupilScale`, `aperturePose(t)` (spin, lean, float and `open`; periodic in `LOOP_S`), `pointerAim`, `follow`, `pointerFollows`, `shouldAnimate`, `capPixelRatio` (`MAX_DPR` 2), `sweepMesh` (a superellipse cross-section swept round a closed loop with half-turns of twist, the seam stitched so the mesh is closed with smooth `vertexNormals`) and `ringMesh`, `GLASS_SHAPES` (aperture, ring, pill), `GLASS_EXTENT`, the stills' paths (`HERO_POSTER` `/hero/aperture.webp`, `glassStill(shape)` `/glass/<shape>.webp`) | `GlassMesh`, `GlassShape`, `GLASS_SHAPES`, `GLASS_EXTENT`, `HERO_POSTER`, `glassStill`, `LOOP_S`, `BREATH_S`, `MAX_DPR`, `MAX_TILT`, `Blade`, `BLADE_SLIDE`, `BLADE_TURN`, `bladeMove`, `pathOutlines`, `apertureParts`, `turnAbout`, `pupilScale`, `aperturePose`, `pointerAim`, `follow`, `pointerFollows`, `sweepMesh`, `vertexNormals`, `ringMesh`, `shouldAnimate`, `capPixelRatio` | `glass.ts`, `HeroGlass.tsx`, `StartScreen.tsx` (`HERO_POSTER`, `glassStill`), `glassStill.ts` |
 | `glassStill.ts` | The page `web/scripts/render-glass.mjs` renders the stills from (`web/scripts/render-glass.html`, on a Vite dev server only; not in the app's build): one shape by the same `createGlassStage` at `?shape=&hero=&w=&h=&t=`, drawn on white; with `transparent=1` white is taken out to transparency (colour to alpha, exact over white). Sets `window.glassStill.snapshot(type, quality)` | (none) | `web/scripts/render-glass.html` |
+| `DemoVideo.tsx` | The demo videos, played in a light lightbox ([19](19-demo-data.md), "Demo videos"). `DEMO_VIDEOS`, keyed by `DemoVideoId` (`"3d"`, `"2d"`, `"full"`), each `{ id, title, src, vtt, poster, duration }`: `3d` "Fix clashes in your building models" (`/demos/iris-3d-demo.mp4`), `2d` "Check drawings against the model" (`iris-2d-demo.mp4`), `full` "Iris: does AI truly see?" (`iris-full-demo.mp4`), each with a `.vtt` (captions) and a `.webp` (poster) of the same name; the durations ("2:40", "2:00", "4:30") are placeholders until the recordings are measured. `DemoVideo` (`id`, `open`, `onClose`, `opener`): closed, it renders nothing, so neither the video nor its poster is fetched; open, a native modal `<dialog>` (`showModal`: the page behind inert, the dialog in the top layer) that is itself the frosted white scrim (`rgba(255,255,255,.72)`, a 10 px blur, the browser's `::backdrop` cleared; never a dark overlay) round a white card, portalled to `document.body` (inline where there is no document, as in a static render): the title, a close button (lucide `X`, "Close"), and a 16:9 `<video>` (`controls`, `playsInline`, `preload="none"`, the poster) with an English captions `<track>` marked `default`; its `mode` is also set to `"showing"` once mounted and on `loadedmetadata`, since some browsers ignore `default` on a track added later. It plays on open (the click is a user gesture; if `play()` is refused, the controls are there). A missing or broken file (the video's `error` event) shows "The video couldn't load." in the frame. A dialog (`role="dialog"`, `aria-modal`, labelled by its title): focus goes to Close on open; a focus trap (guards before and after the card, so Tab also reaches the video's own controls) keeps Tab and Shift+Tab inside; Escape (caught on `document` and stopped, before App's own Escape on window; and as the dialog's `cancel`, since with focus inside the video's own controls Chrome sends the page no key event, only the close request) or a click on the scrim closes it; focus goes back to the opener (the Watch button); the body's scroll is locked while open and restored after; no zoom-in under `prefers-reduced-motion`; on a phone full width with a 16 px gutter, no sideways scroll at 390 px. `WatchDemoButton` (`id`, `label` "Watch the demo", `className`): a play icon (lucide `Play`), the label and the duration in mono ("Watch the demo · 2:40"), `data-video` its id, its accessible name adding the video's title; it keeps its own open state and renders the `DemoVideo` for its id, so a page needs one line per place. Self-contained, its own stylesheet | `DemoVideo`, `WatchDemoButton`, `DEMO_VIDEOS`, `DemoVideoId`, `DemoVideoInfo` | `StartScreen.tsx` (Home: the two sample tiles and the hero) |
+| `demoVideo.css` | DemoVideo's and the Watch button's styles (`.demo-video*`, `.watch-demo*`): the frosted white scrim, the white card and its title row, the 16:9 frame with its "couldn't load" line, the card's zoom-in (none under `prefers-reduced-motion`), the phone's 16 px gutter; the Watch button a small light pill with the duration in IBM Plex Mono; on `index.css`'s tokens | (CSS) | `DemoVideo.tsx` |
 | `landing/Hero.tsx` | The landing's first screen: the hook and the ways in (with `data-tour` `golden` and `blank`), and the live 3D replay of Iris fixing Northbank's three girder clashes: labels hung on the scene each frame, the log (each line tagged with its step: Observe, Resolve, Check, Apply), chapter buttons and pause. It frames the scene in the HUD's empty window wherever the layout puts it, pauses off screen and in a hidden tab, gives a still frame (and still chapters) for less motion, a recorded still of the app without WebGL, and a fresh canvas each mount | `Hero`, `HeroActions` | `About.tsx` |
 | `landing/heroScene.ts` | The hero's three.js scene, apart from the viewer ([13](13-3d-viewer.md)): the girder, the services, their fixes and the context from `landing/northbank.ts`, materials in the viewer's colours with a scan band, a fade beyond the crossings and an idea's lift from its run in their shaders, a camera that eases to the clash being told and fits the window, fog by distance; draws one frame of `landing/timeline.ts` and gives its WebGL context back on dispose | `HeroScene`, `webglAvailable`, `Anchor` | `landing/Hero.tsx` |
 | `landing/timeline.ts` | The replay as a pure function of time (36 s): the check's sweep, the three pins, each run's idea, check, keep and old self, the tray's recorded round (the whole lift failing on the spigots and a core wall, then its offset), the log's lines from Iris's records (the opening as Gemini Pro is told it, the recorded numbers), chapters, the still frame | `heroAt`, `logAt`, `LOG`, `CHAPTERS`, `T`, `LOOP`, `STILL`, `chapterStill`, `ramp`, `HeroFrame` | `landing/Hero.tsx`, `landing/heroScene.ts` |
@@ -357,7 +359,7 @@ the workspace and the pages in it.
   Unverified proposal cards), on Home's Try the sample drawings tile and on the Propose card in How Iris works (with an "AI"
   badge). What the geometry proved wears the green check instead (Validate's "✓ Geometry" badge there).
 - **Reduced motion:** under `prefers-reduced-motion` (or with no window) the ribbon, the reveal, the count-up and the
-  shimmer are still (`useReducedMotion`, `holo.css`).
+  shimmer are still (`useReducedMotion`, `holo.css`), and a demo video opens without its zoom-in (`demoVideo.css`).
 
 ## `App.tsx`: state by concern
 
@@ -875,7 +877,7 @@ The shell brought six stylesheets, each imported by the file it styles: `frame.c
 `holo.css` by `Holo.tsx` and `workspace.css` by `dock.tsx`. App's imports load before `main.tsx` loads `index.css`, so
 `index.css` comes later in the cascade: `workspace.css` writes every rule more specific than the `index.css` rule it
 overrides. The engineer-workflow components import theirs (`projects.css`, `import.css`, `model-summary.css`,
-`coordination.css`, `proposal.css`), and `HowIrisWorks.tsx` `howIrisWorks.css`. `frame.css` ends with the white + pink
+`coordination.css`, `proposal.css`), `HowIrisWorks.tsx` `howIrisWorks.css`, and `DemoVideo.tsx` `demoVideo.css`. `frame.css` ends with the white + pink
 theme (above, "Theme and motion"), so it wins over the component sheets. Each is built on the tokens above (most with
 the brief's value as a fallback), so a theme that redefines them restyles those pages too.
 
@@ -890,7 +892,8 @@ Iris VisionBench (the Track 2 benchmark) is a separate pipeline and never appear
 **Where it stands at HEAD:** wired into `App`, inside the app shell (Nov 22; above, "The app shell"). The first
 screen is Home (`StartScreen`, `/home`); its **Try the sample building** and **Try the sample drawings** open the same
 sample project, on Clash review or on Drawings with the sample sheets attached (`trySample`, `trySampleDrawings`,
-above); `/projects` is `ProjectsHome`, with **New project** a dialog (`NewProjectDialog`). A project's Overview,
+above), and the Watch the demo button on each only plays a recorded video (`DemoVideo.tsx`), opening nothing;
+`/projects` is `ProjectsHome`, with **New project** a dialog (`NewProjectDialog`). A project's Overview,
 Drawings, Reports and Activity are `ProjectOverview` pages over the workspace inside the shell's body (`.proj-shell`,
 absolute; the workspace and its 3D view stay mounted beneath), and Models, Coordination and Clash review are the
 workspace itself. The sidebar's project group carries the steps, with counts, on every layout (the drawer on a phone
@@ -1086,7 +1089,7 @@ IndexedDB is used.
   record screen takes of the app with Playwright (`web/tests/record-demo.test.mjs` covers the recorder). Not served by
   the app.
 - **`web/public/`:** `favicon.svg`, `brand/` (above), `popout.html` (the page a panel's own window opens: dockview moves the panel in
-  and copies the styles), `demos/*.webp` (the stills, the landing's clips with their stills, and `check.webp` and `drawings.webp` with their `-still.webp`, no longer on Home: kept for the submission video), `tour/*.json` (the five recordings), and the generated `wasm/`.
+  and copies the styles), `demos/*.webp` (the stills, the landing's clips with their stills, and `check.webp` and `drawings.webp` with their `-still.webp`, no longer on Home: kept for the submission video), `demos/iris-3d-demo.mp4`, `iris-2d-demo.mp4` and `iris-full-demo.mp4` with their `.vtt` captions and `.webp` posters (the demo videos `DemoVideo.DEMO_VIDEOS` names, [19](19-demo-data.md), "Demo videos"), `tour/*.json` (the five recordings), and the generated `wasm/`.
 - **`web/index.html`:** the shell (`#root`, `viewport-fit=cover`, the IBM Plex fonts from Google Fonts, title "Iris ·
   AI design coordination", theme colour white `#ffffff`, the icon and manifest links, the Open Graph image). `#root`
   starts with the boot splash: the wordmark's letters arrive once (inline CSS) until React mounts and replaces it.
@@ -1108,9 +1111,11 @@ IndexedDB is used.
   `import-rows.test.mjs`, `model-summary.test.mjs` (which also keeps `FRAME` equal to the server's `domains._FRAME`),
   `coordination.test.mjs` and `proposal-state.test.mjs`; the Drawings step `drawings.test.mjs` and
   `drawings-samples.test.mjs` (saved readings, the sample offer), Home `start-screen.test.mjs` (the greeting, the
-  tiles, recent projects, Home's order with How Iris works stubbed, `onSampleStep`, its ways in in the real `App`) and
+  tiles and their Watch buttons, Watch the full demo, recent projects, Home's order with How Iris works stubbed, `onSampleStep`, its ways in in the real `App`) and
   `how-iris-works.test.mjs` (the eight cards, the phases, the proof chips, Propose and Validate, the buttons, the
-  stylesheet). The app shell has `sidebar.test.mjs` (links, the active item, the project group, the rail, the footer
+  stylesheet), the demo videos `demoVideo.test.mjs` (closed renders no `<video>`; open, the video with its source,
+  poster and a default captions track; Escape calls `onClose`; the focus trap wraps; a Watch button opens its own
+  video). The app shell has `sidebar.test.mjs` (links, the active item, the project group, the rail, the footer
   "Built by Techjays", the drawer, the rail kept in storage) and `shell.test.mjs` (the shell in the real `App`: the
   sidebar's pages and addresses, the collapse per page kind, the project group, Settings and Help), the 3D toolbar `viewer-toolbar.test.mjs` (six core tools, the rest under More tools, several panes, the
   phone's Tools sheet), the fixed clash `clash-fixed.test.mjs`, the report dialog without triage
@@ -1137,5 +1142,7 @@ IndexedDB is used.
 - A new or renamed panel, a change to the default layout, the side bars' buttons, what is saved, or how `setTab` and
   the dock follow each other (also [docs/panels.md](../panels.md)).
 - A new tour, act, `TourState` field, `TourActions` action or recording in `web/public/tour/`.
+- A demo video added, renamed or re-recorded, or where a Watch button sits (`DEMO_VIDEOS`, `WatchDemoButton`; also
+  [19](19-demo-data.md), "Demo videos").
 - A change to the build: scripts, dependencies, the Vite proxy, `copy-wasm.mjs`, `capture-demos.cjs`, `capture-proposals.cjs`, `capture-drawings.cjs`, `record-demo.cjs`, `video-cards.cjs`, `web/public/`.
 - The identity or motion library in `assets/brand/iris/`, or its adoption by the app.
