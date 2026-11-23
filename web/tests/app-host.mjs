@@ -43,7 +43,8 @@ export async function viewerModule(loader = "export const loadIfc=()=>null;") {
     "./measure": await compiled("../src/viewer/measure.ts", { three, "./origin": origin }),
     "./normals": normals, "./origin": origin,
     "./patch": await compiled("../src/viewer/patch.ts", { three, "./normals": normals, "./origin": origin }),
-    "./edit": await compiled("../src/viewer/edit.ts", { three }), "../webgl": await compiled("../src/webgl.ts", {}) }));
+    "./edit": await compiled("../src/viewer/edit.ts", { three }), "../webgl": await compiled("../src/webgl.ts", {}),
+    "./navigate": await compiled("../src/viewer/navigate.ts", { three }) }));
 }
 /** The first element in a tree that `predicate` accepts: through children, and through the app shell's slots that
  * hold elements (a top bar's `actions` and `search`, a page header's `status`). */

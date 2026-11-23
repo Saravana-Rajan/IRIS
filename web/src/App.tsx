@@ -2431,14 +2431,15 @@ export function App() {
     return { shown: shown.some((p) => p.spec.kind === "3d"), x: r.x, y: r.y, h: r.h };
   }
 
-  /** F: frame the selected element, else go to the clash. */
+  /** F: frame the selected element, else go to the clash, else fit the whole model (navigate.ts's key map). */
   function focusNow() {
     if (selected) viewer.current?.frame([selected.globalId]);
     else if (clash) goToClash(clash, undefined, true);
     else if (a || b) viewer.current?.frame([a, b].filter((g): g is string => !!g));
+    else viewer.current?.fitAll();
   }
 
-  // Keyboard: 1-4 views, H home, F selection or clash, X/C/I/V modes, G style, O projection, Q layout, [ ] back and
+  // Keyboard: 1-4 views, H home, F selection, clash or the whole model, X/C/I/V modes, G style, O projection, Q layout, [ ] back and
   // forward, S section, E edges, M measure, L links, Esc one thing at a time.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -2,8 +2,8 @@
 
 > **Covers:** `web/src/viewer/` (`Viewer.ts`, `ifcLoader.ts`, `ifcParse.ts`, `ifcWorker.ts`, `normals.ts`, `origin.ts`,
 > `patch.ts`, `views.ts`,
-> `cube.ts`, `drawing.ts`, `annotate.ts`), and the viewer's controls in `web/src/ViewerToolbar.tsx`, `web/src/ViewPanes.tsx`, `web/src/App.tsx`,
-> `web/src/pilot.ts` · **Checked against code:** re-branded on 2026-11-11 · **Deeper design:**
+> `cube.ts`, `navigate.ts`, `drawing.ts`, `annotate.ts`), and the viewer's controls in `web/src/ViewerToolbar.tsx`, `web/src/ViewPanes.tsx`, `web/src/App.tsx`,
+> `web/src/pilot.ts` · **Checked against code:** 2026-11-23 (moving and zooming) · **Deeper design:**
 > [docs/views.md](../views.md) (navigation, styles, visibility, drawing views), [docs/edits.md](../edits.md) ("Keeping
 > a fix"), [docs/show-it-built.md](../show-it-built.md) ("Capture"), [docs/mobile.md](../mobile.md) ("Touch")
 
@@ -33,6 +33,7 @@ numbers read out of Northbank, with its own WebGL context, given back when the l
 | `viewer/Viewer.ts` | The `Viewer` class: scene, camera, modes, focus, previews, picking, measuring, section box, captures | `Viewer`, `serverDeltaToViewer`, `serverPointToViewer`, `meetingZone`, types `Mesh`, `BuiltPiece`, `BuiltPasses`, `OptionShape`, `ViewMode`, `Preset`, `Side`, `Focus`, `Pick` | `App.tsx`, `pilot.ts`, `ViewerToolbar.tsx` (types), `web/spikes/built.ts` |
 | `webgl.ts` | Whether the browser can draw 3D (`webglAvailable`: a WebGL 2, else 1, context on a probe canvas, given back at once; true without a page) and `NoWebGL`, which `Viewer`'s constructor throws, before it makes anything, when there is none or three cannot make its context. `App` catches it, keeps `viewer` null, hides the 3D toolbar and shows "3D needs WebGL" in the stage; a scene still opens (nothing drawn, `UNDRAWN` stats) for its clash list, drawings and reports | `webglAvailable`, `NoWebGL` | `viewer/Viewer.ts` |
 | `viewer/views.ts` | The views' pure rules: layouts, plan view ranges and presets, clash defaults, section frames, compass, scales, view cube regions, camera history, visibility filters, the Esc steps | `paneRects`, `planRange`, `planPreset`, `planThrough`, `sectionFrame`, `sectionThrough`, `nearestScale`, `scaleBar`, `cubeRegion`, `CameraHistory`, `shownBy`, `escStep`, types `ViewSpec`, `Datums`, `Filters`, `Temporary`, `Pose` | `viewer/Viewer.ts`, `viewer/cube.ts`, `App.tsx`, `ViewerToolbar.tsx`, `api.ts` (types) |
+| `viewer/navigate.ts` | Moving and zooming for anyone (owner, Nov 23; "Moving and zooming", below): the camera's near and far limits from the scene's size, the eased zoom (`easeDistance`, press `stepGoal`, hold `holdGoal`, never backing the wrong way: `towards`), the wheel's step (`wheelScale`), the key map (`navKey`), what a drag does in Rotate or Move mode (`mouseFor`, `touchesFor`), the first-use hint's memory (`iris.viewer.hint`, try/catch); and the DOM over the 3D view: `NavPad` (zoom in and out with press-and-hold, Fit, Rotate / Move, "?") and `NavHint` (the card) | `distanceLimits`, `clampDistance`, `towards`, `stepGoal`, `holdGoal`, `easeDistance`, `wheelScale`, `navKey`, `mouseFor`, `touchesFor`, `hintSeen`, `markHintSeen`, `NavPad`, `NavHint`, `ZOOM_STEP`, `HOLD_RATE`, `EASE_MS`, `PAN_STEP`, `HINT_TEXT`, `HINT_KEY`, types `NavMode`, `Limits`, `NavKey` | `viewer/Viewer.ts` |
 | `viewer/cube.ts` | The view cube: a labelled cube in the 3D view's corner, click a face, edge or corner (26 views), drag to orbit, Home | `ViewCube`, `CUBE_PX` | `viewer/Viewer.ts` |
 | `viewer/drawing.ts` | A drawing view's orthographic camera, clip planes and crop (`DrawingView`), and the drawing style: paper fills, stencil caps for cut faces, the hidden pair, the composite shader that draws linework and the heavy cut outline | `DrawingView`, `DrawingStyle`, `farBehind`, `toIfc`, `CUT`, `CAP_LAYER`, `PAPER` | `viewer/Viewer.ts`, `viewer/annotate.ts` (types) |
 | `viewer/measure.ts` | Measuring's pure parts ([docs/measure.md](../measure.md)): where a plane cuts triangles and the cut joined into straight runs, clipping an edge to a view's planes, choosing the snap (end, midpoint, edge), the words and the line to copy | `cutSegments`, `mergeRuns`, `clipSegment`, `candidatesOf`, `pickSnap`, `measureText`, `copyLine`, `copyText`, types `Measurement`, `Candidates`, `SnapKind` | `viewer/Viewer.ts`, `MeasurePanel.tsx` |
@@ -220,6 +221,7 @@ Public methods unless marked private. `App` calls nearly all of them; `pilot.ts`
 | Style, selection and visibility | `setStyle(style)`, `setGreyContext(on)`, `setSelection(gid)`, `setInfo(classes, storeys)` (either may be null to keep what it had), `setFilters(filters)`, `setTemporary(t)`, getter `temporary`, `setRules(view)` and `isShown(gid)` (the filters' rules, [docs/filters.md](../filters.md); its test is built once and kept until the next `applyMode`), `ofLevel(name)` (a storey's elements from the datums, for the Properties card's level actions), `infoCounts()` (cached until the models or the info change), `ofClass(cls)`; private `filterTest`, `drawSelection` |
 | Previews | `preview(moves)`, `showOption(shape, mode, colour)`, `showOptions(shapes, mode)` |
 | Camera | `focusClash(ids, point, label, fly)`, `frameFix(meshes, pairs)`, `frame(ids)`, `frameEverywhere(ids)` (the 3D view and every unpinned drawing: a filter applied, [docs/filters.md](../filters.md)), `frameMeshes(meshes, tight)`, `fitAll(animate)`, `view(preset)`, `flyTo(position, target, animate)`, `orbit(on)`, `orbitAround(pivot, dx, dy)`, `setOrbitClash(on)`, callback `onUserCamera`; private `flyToZone`, `zoneCamera`, `zoneCameraFrom`, `viewDirection`, `flyToBox`, `adjustClipRange`, `sceneDiag`, `reach` |
+| Moving and zooming | `setNavMode(mode)` (field `navMode`), `zoomStep(dir)`, `zoomHold(dir \| null)`, `panBy(x, y, steps)`, `showHint(on)`; private `limits`, `takeView`, `wheel`, `wheelPoint`, `navStep` (one frame of an eased zoom or pan, from `frameTick`), `navKeyDown`, `spaceKey`, `focusPane`, `focusAt` (double-click), `firstHint` |
 | Navigation | `activeCamera()`, `setProjection(p)`, `pose()`, `applyPose(p)`, `back()`, `forward()`, getters `canBack`, `canForward`, `setHome(p)`, getter `homeView`, `home()`, `lookFrom(dir)`, callback `onChange` (history, Home, layout or hides changed); private `press` (pivot or grip), `turn` (cube drag), `syncOrtho` |
 | Panes and drawing views | `setDrawingsShow(show)`, `setLayout(layout)`, `maximise(i)`, getter `maximisedPane`, `setSplit(x, y)` (shares kept within 0.2–0.8), getter `splitShares`, `visiblePanes()`, `rect3d()`, `paneAt(x, y)`, `setPaneSpec(i, spec)`, `defaultSpec(kind)`, `setPinned(i, on)`, `fitPane(i)`, `paneToClash(i)`, getter `hasClash`, `defaultCrop()`, `setDatums(d)`, `setDrawingsFollow(on)`, `modelBox()`; fields `layout`, `panes`, `levels`, `datums`, `drawingsFollow`, `pane3d`; private `layoutPanes`, `configureViews`, `clashViews`, `renderDrawing`, `drawInto`, `render3d`, `annotatePane`, `dragHandle`, `lookHere`, `useDrawingVisibility`, `drawFrame` |
 | Section box and marker | `setSection(on, margin, box)`, getter `section`, `setMarker(point, label)`; private `boxAroundFocus`, `boxInView`, `buildGrips`, `placeGrips`, `gripAt`, `dragGrip` |
@@ -305,9 +307,9 @@ every style.
 
 ### Camera
 
-- **Controls:** `OrbitControls` with damping and `zoomToCursor` (the wheel zooms to what is under the pointer), on the
-  3D pane's own element (`pane3d`). Any controls `start` (drag, wheel, touch) and any `pointerdown` call
-  `onUserCamera`, which `App` wires to `pilot.takeOver()`.
+- **Controls:** `OrbitControls` with damping on the 3D pane's own element (`pane3d`) for drags and touch; the wheel is
+  the viewer's own (below, "Moving and zooming"). Any controls `start` (drag, touch), a wheel, a pad button, a key and
+  any `pointerdown` call `onUserCamera`, which `App` wires to `pilot.takeOver()`.
 - **Pivot** (`press`, capture phase, before the controls see it; not with Shift, Ctrl or Cmd, which pan). A press
   stops a flight under way first (the pilot frames each idea and glides to the clash before its slow turn), so the
   drag turns from where the camera is. What a left drag orbits round (`pivotFor`):
@@ -324,6 +326,35 @@ every style.
 - **View cube** (`cube.ts`): drawn last in the 3D pane's bottom right (104 px), with its own scene and camera turned
   like the main one. A click on a face, edge or corner calls `lookFrom(dir)` (26 directions round the current target,
   keeping the distance; straight down keeps north up); a drag orbits (`turn`); its Home button calls `home()`.
+- **Moving and zooming** (`navigate.ts`; owner, Nov 23: "user-friendly to move and zoom in / zoom out"):
+  - **The pad** (`NavPad`, in `pane3d` above the view cube, so `mountIn` carries it to the review queue): "?" (the hint
+    again), **Rotate / Move** (what a plain left drag and one finger do: `setNavMode`, `mouseFor`, `touchesFor`; Move
+    shows a hand), **+** and **−** (a press is one step, `ZOOM_STEP` 1.25, eased; held past 280 ms it zooms on steadily,
+    `HOLD_RATE`, until let go) and **Fit** (`fitAll`). Its presses never reach the controls or App's click and
+    double-click.
+  - **Eased zoom:** a zoom is a goal distance (`zoom`), reached in log distance with `EASE_MS` (90 ms) per frame
+    (`navStep` in `frameTick`), so it feels the same at 1 m and 100 m, never overshoots and never steps; presses add up.
+    + and − zoom about the target; **the wheel** (a capture listener on `pane3d` that stops the controls' own) about the
+    point under the pointer (a ghosts-included pick, kept for one gesture; else the pointer's ray at the target's
+    depth; orthographic: the target), camera and target scaled together about it so that point stays put on screen.
+    A trackpad pinch (Ctrl + wheel) is more sensitive; one event is at most about a third (`wheelScale`).
+  - **Limits** (`distanceLimits` from `sceneDiag`): near a thousandth of the scene (2 mm to 250 mm; the near plane at a
+    200th of the distance stays in front), far five times across (Fit frames at 1.1). Steps, holds and the wheel stop
+    there and never back the wrong way from beyond one (`towards`); the controls' `minDistance` and `maxDistance` are
+    not set, so flights and captures are as before. The press pivot does not slide nearer than the near limit.
+  - **Mouse:** left drag orbits as before (the selection, the clash, else the point under the pointer); right drag,
+    Shift + drag or **Space** + drag moves (`spaceKey`, while the pointer is over the view or it has the focus); in Move
+    mode a plain left drag moves and looks for no pivot. **Double-click** (`focusAt`) flies to look at the point under
+    the pointer, nearer when the element is small, never farther, within the limits; not while measuring or editing.
+    App's double-click still picks A then B.
+  - **Keys while the 3D view has the focus** (`pane3d` takes it on a press, `tabIndex` 0, a soft ring for the keyboard
+    only): + / = zoom in, − zoom out, the arrows move the view by `PAN_STEP` of the distance (Shift: three times),
+    eased like a zoom (`panLeft`). F and H stay App's (F: the selection, the clash, else Fit).
+  - **Touch:** one finger turns (moves in Move mode), two fingers move and pinch to zoom (the controls).
+  - **The first-use hint** (`NavHint`): the first time a browser shows models, a light card at the view's foot says
+    `HINT_TEXT`; ✕ puts it away, "?" shows it again; seen is kept in `iris.viewer.hint` (storage that throws: treated
+    as seen).
+  - `moving` is true while a zoom or a key's pan is under way, so thumbnails wait.
 - **Projection:** `setProjection("orthographic")` draws and picks with `ortho`, which `syncOrtho` keeps looking the
   same way as the perspective camera, its frame the size of the view at the target, set back past the model. The
   controls still move the perspective camera.
@@ -650,22 +681,25 @@ requirements), whose own Esc must not also leave the clash). The toolbar shows e
 |---|---|---|---|
 | 1 / 2 / 3 / 4 | View top / front / right / iso | V | Shaded |
 | H | Home (the saved Home, else fit the whole model) | X | X-ray |
-| F | Frame the selected element, else go to the clash (`focusNow`) | C | Context |
+| F | Frame the selected element, else go to the clash, else fit the whole model (`focusNow`) | C | Context |
 | S | Section box | I | Isolate |
 | E | Outlines | M | Measure (N: snap on or off while measuring) |
 | G | Next visual style | L | Connections |
 | O | Perspective / orthographic | Q | Layout: Single, Two, Quad (Two at most on a tablet; none on a phone) |
 | [ / ] | Back / forward through camera jumps | Esc | One thing at a time (`views.escStep`): the Edit tool's preview, target and face, then the tool; the measure, the image dialog, the selected element, then the clash; not while Iris works on it. It also clears the connection highlight. With a menu open it closes only the menu |
+| + / − (3D view focused) | Zoom in / out, eased (`navigate.navKey`) | Arrows (3D view focused) | Move the view (Shift: farther) |
 | P | The Edit tool (inside it: P push/pull, A align, T move, O void, K cut by shape, B split, R remove a section, J clip, D or Delete delete) | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / redo the newest kept edit (not while typing or in a dialog) |
 
 - **Mouse:** a single click selects the element and shows its properties card (with Set as A / Set as B and its view
   actions) or, in measure mode, adds a point; a double click picks A, then B (a third pick starts over at A); a drag of
-  more than 5 px is an orbit about the point under the pointer, never a pick; the wheel zooms to the cursor. In a
+  more than 5 px is an orbit about the point under the pointer, never a pick; right, Shift or Space + drag moves (a
+  plain drag in Move mode); the wheel zooms to the cursor, eased ("Moving and zooming", above); a double click also
+  flies to look at that point. In a
   drawing pane a drag pans, a handle drags, and a right click turns the 3D view there (Panes and drawing views, above).
 - **Touch** (`(pointer: coarse)`): a tap shows the properties card, whose Set as A / Set as B buttons pick (a toast
   says what to do next); a long press of 500 ms with the finger still (moving over 10 px cancels it) picks A then B,
-  with a short vibration; a drag must move 10 px to count as one; the context menu is suppressed. Orbit, pinch and
-  pan are `OrbitControls`' defaults.
+  with a short vibration; a drag must move 10 px to count as one; the context menu is suppressed. One finger orbits
+  (moves in Move mode), two fingers pan and pinch, through `OrbitControls`.
 - **Toolbar** (`ViewerToolbar.tsx`): on desktop and tablet a vertical icon rail of `IconButton`s in two kinds of group
   ([docs/measure.md](../measure.md), "The rail"). The 3D view's own: modes; visual style, with the greyed-context
   toggle; section box, outlines, connections; Home; a Camera popover (standard views, projection, back and forward, Set
