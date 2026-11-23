@@ -25,13 +25,13 @@ async function moduleUrl(path, css, deps = {}) {
     .replaceAll(`import("${name}")`, `import(${JSON.stringify(target)})`);
   return url(outputText);
 }
-const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css");
+const glassUrl = await compiled("../src/glassModel.ts");
+const holoUrl = await moduleUrl("../src/Holo.tsx", "holo.css", { "./glassModel": glassUrl });
 const holo = await import(holoUrl);
 const FLOW = ["Import", "Understand", "Detect", "Investigate", "Propose", "Validate", "Review", "Report"];
 /** HowIrisWorks stands in as one section that names the steps in order, so Home's order shows in its markup. */
 const howStub = url(`import { jsx } from ${JSON.stringify(import.meta.resolve("react/jsx-runtime"))};
 export function HowIrisWorks() { return jsx("section", { className: "hiw", children: "How Iris works: ${FLOW.join(", ")}" }); }`);
-const glassUrl = await compiled("../src/glassModel.ts");
 /** HeroGlass (three.js) never loads here: a lazy stand-in that never resolves, so the static render shows the still. */
 const heroStub = url("export default function HeroGlass() { return null; }; await new Promise(() => {});");
 const start = await import(await moduleUrl("../src/StartScreen.tsx", "home.css", { "./HowIrisWorks": howStub, "./Holo": holoUrl,
@@ -91,7 +91,7 @@ test("the hero: the principle in two lines beside the 3D glass aperture (its sti
   assert.doesNotMatch(css, /prefers-color-scheme|\bdark\b/i, "light only");
 });
 
-test("three start tiles: New project (dashed), the sample building, the sample drawings, each with a line", () => {
+test("three start tiles, styled alike: New project, the sample building, the sample drawings, each with a line", async () => {
   const html = markup({ onSample: noop, onSampleDrawings: noop });
   const order = ["new-project", "sample", "sample-drawings"].map((k) => html.indexOf(`data-start="${k}"`));
   assert.ok(order.every((i, n) => i > 0 && (n === 0 || i > order[n - 1])), `in order: ${order}`);
@@ -100,7 +100,12 @@ test("three start tiles: New project (dashed), the sample building, the sample d
   assert.match(made, /New project/);
   assert.match(made, /<span class="home-tile-line">[^<]+<\/span>/);
   assert.match(startButton(html, "sample"), /Try the sample building.*home-tile-line/);
-  assert.match(startButton(html, "sample-drawings"), /holo-edge.*Try the sample drawings.*home-tile-line/, "the AI one wears the holo edge");
+  assert.match(startButton(html, "sample-drawings"), /^<button type="button" class="home-tile" data-start="sample-drawings".*Try the sample drawings.*home-tile-line/,
+    "no tile wears a holo edge or a tint of its own");
+  assert.doesNotMatch(html, /holo-edge/);
+  const css = await readFile(new URL("../src/home.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /\.home-tile-new \{[^}]*(dashed|background)/, "New project is not dashed or tinted");
+  assert.match(css, /\.home-tile:hover:not\(:disabled\) \{[^}]*border-color/, "the highlight comes on hover only");
   assert.match(html, /<section class="home-tiles" aria-label="Start" style="--tiles:3">/);
   assert.match(markup({}), /style="--tiles:1"/, "no samples listed: New project alone");
   let made2 = 0;
@@ -232,6 +237,9 @@ test("the last session: Resume (primary) and Start fresh (ghost), with what was 
 test("the mark badge (empty states, loading, Home's quiet lines) and the still motion where there is no window", async () => {
   assert.equal(renderToStaticMarkup(h(holo.MarkBadge, { size: 72 })), '<span class="mark-badge" style="--mb:72px" aria-hidden="true"></span>');
   assert.match(renderToStaticMarkup(h(holo.EmptyState, { title: "No reports yet" })), /<span class="mark-badge empty-state-art" style="--mb:72px" aria-hidden="true"><\/span>/);
+  assert.match(renderToStaticMarkup(h(holo.EmptyState, { title: "No projects", glass: "aperture" })),
+    /<div class="empty-state "><img class="empty-state-art empty-state-glass" src="\/glass\/aperture\.webp" width="104" height="104" alt="" aria-hidden="true"\/>/,
+    "a main empty state may show one 3D glass still in place of the mark");
   assert.equal(holo.HoloRibbon, undefined, "no ribbon any more");
   assert.equal(holo.prefersReducedMotion(), true, "no window: still");
   assert.equal(renderToStaticMarkup(h(holo.TextReveal, { text: "Good morning, Ana", once: "t" })), "<span class=\"\">Good morning, Ana</span>");

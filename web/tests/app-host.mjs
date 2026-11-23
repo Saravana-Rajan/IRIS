@@ -43,7 +43,7 @@ export async function viewerModule(loader = "export const loadIfc=()=>null;") {
     "./measure": await compiled("../src/viewer/measure.ts", { three, "./origin": origin }),
     "./normals": normals, "./origin": origin,
     "./patch": await compiled("../src/viewer/patch.ts", { three, "./normals": normals, "./origin": origin }),
-    "./edit": await compiled("../src/viewer/edit.ts", { three }) }));
+    "./edit": await compiled("../src/viewer/edit.ts", { three }), "../webgl": await compiled("../src/webgl.ts", {}) }));
 }
 /** The first element in a tree that `predicate` accepts: through children, and through the app shell's slots that
  * hold elements (a top bar's `actions` and `search`, a page header's `status`). */
@@ -194,17 +194,20 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
     component(name) { return find(tree, (n) => n.type?.name === name); },
     find(predicate) { return find(tree, predicate); },
     input(id) { return find(tree, (n) => n.type === "input" && n.props.id === id); },
-    /** What the old menu held, now Settings (the sidebar's Settings): opened, and what it holds. */
+    /** Settings (the sidebar's Settings): opened, and what it holds. */
     menu() { find(tree, (n) => n.type?.name === "Sidebar").props.onSettings(); render();
       return find(tree, (n) => n.type?.name === "MenuSheet" && n.props.title === "Settings"); },
-    reportMenu() { return this.menu(); },
+    /** The workspace's own actions (models, checks, a Navisworks report: App's workMore), where the page shows them:
+     *  the Models step, or the top of the workspace's left panel. */
+    actions() { return find(tree, (n) => n.props?.["data-work-actions"] !== undefined); },
+    reportMenu() { return this.actions(); },
     fileInput(kind) { return find(tree, (n) => n.type === "input" && n.props.type === "file"
       && (kind === "folder" ? "webkitdirectory" in n.props : String(n.props.accept ?? "").includes(".xml"))); },
     chat(event) { find(tree, (n) => n.type?.name === "ChatPanel").props.onEvent(event); render(); },
     /** The server answered that a scene or report is gone (api.ts, X-Iris-Gone). */
     gone(g) { globalThis[key].gone?.(g); render(); },
-    open() { find(this.menu(), (n) => n.props?.id === "open").props.onClick(); render(); },
-    loadReport() { find(this.menu(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
+    open() { find(this.actions(), (n) => n.props?.id === "open").props.onClick(); render(); },
+    loadReport() { find(this.actions(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
     runTimers() { const entries = [...timers.values()]; timers.clear(); for (const fn of entries) fn(); render(); },
     unmount() { for (const cell of cells) cell?.cleanup?.(); delete globalThis[key]; },
   };

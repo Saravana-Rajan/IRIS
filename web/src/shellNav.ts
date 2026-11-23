@@ -109,3 +109,35 @@ export function isSearchKey(e: { key: string; ctrlKey?: boolean; metaKey?: boole
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") return true;
   return e.key === "/" && !e.ctrlKey && !e.metaKey && !inField(e.target);
 }
+
+/** The sheets the sidebar opens, each with an address of its own (`/settings`, `/help`): shown over the page they were
+ *  opened from, or over Home when the address is opened as it is. */
+export type SheetId = "settings" | "help";
+
+/** The sheet a path asks for, or null. */
+export function sheetOfPath(path: string): SheetId | null {
+  const m = /^\/(settings|help)\/?$/.exec((path ?? "").trim());
+  return m ? (m[1] as SheetId) : null;
+}
+
+/** The address a sheet was opened from, to go back to when it closes. */
+let sheetFrom: string | null = null;
+
+/** Put a sheet's address in the bar (push: Back closes it), or (null) go back, in place, to the address it was opened
+ *  from (else `fallback`). Switching from one sheet to the other keeps where the first was opened from. No-op without
+ *  a window. */
+export function showSheetPath(sheet: SheetId | null, push: boolean, fallback = "/home"): void {
+  if (typeof window === "undefined" || !window.history || !window.location) return;
+  const here = window.location.pathname, search = window.location.search ?? "";
+  const on = sheetOfPath(here);
+  if (sheet === null) {
+    if (on) window.history.replaceState(window.history.state, "", (sheetFrom ?? fallback) + search);
+    sheetFrom = null;
+    return;
+  }
+  if (!on) sheetFrom = here;
+  if (on === sheet) return;
+  const next = `/${sheet}${search}`;
+  if (push && !on) window.history.pushState(window.history.state, "", next);
+  else window.history.replaceState(window.history.state, "", next);
+}

@@ -146,7 +146,7 @@ export function StartScreen({
                 <span className="home-tile-line">A sample building's models, opened on their clash review. Nothing to upload.</span></span>
             </button>)}
           {onSampleDrawings && (
-            <button type="button" className="home-tile holo-edge" data-start="sample-drawings" disabled={anyBusy}
+            <button type="button" className="home-tile" data-start="sample-drawings" disabled={anyBusy}
               aria-busy={sampleDrawingsBusy || undefined} onClick={onSampleDrawings}>
               <span className="home-tile-icon" aria-hidden>{sampleDrawingsBusy ? <i className="spinner" /> : <FileText size={20} />}</span>
               <span className="home-tile-text"><span className="home-tile-title">Try the sample drawings</span>

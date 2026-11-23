@@ -55,7 +55,7 @@ test("a run keeps the work on the list; a late older list is ignored; Remove sho
     api: { detect: async () => answer, removeCheck: async (_sid, key) => { removed.push(key); return { report: left, checks: left.checks }; },
       detectTests: async () => ({ tests: [], teams: {}, elements: 2, rules: {} }) } });
   await host.settle();
-  find(host.menu(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
+  find(host.actions(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
   await host.settle();
   assert.equal(host.state.report.id, "r2");
   assert.equal(host.state.clash.id, "c2", "the selected clash stays");
@@ -64,7 +64,7 @@ test("a run keeps the work on the list; a late older list is ignored; Remove sho
   assert.equal(host.state.chatReport, "r1", "the chat goes on");
   // A list made before this one (another tab's run, a slow answer) changes nothing.
   answer = done(first, "models", first.checks);
-  find(host.menu(), (n) => n.type === "button" && hasText(n, "Run all 2 checks again")).props.onClick();
+  find(host.actions(), (n) => n.type === "button" && hasText(n, "Run all 2 checks again")).props.onClick();
   await host.settle();
   assert.equal(host.state.report.id, "r2");
   host.component("ReportList").props.picker.props.onRemove("filter:abc");
@@ -155,7 +155,7 @@ test("from an imported report, back to Iris's checks", async () => {
     initial: { sceneFiles: ["model.ifc"], report: imported, checks: both.checks },
     api: { checks: async () => ({ report_id: "r2", checks: both.checks }), report: async () => both } });
   await host.settle();
-  find(host.menu(), (n) => n.type === "button" && hasText(n, "Back to Iris's checks (2)")).props.onClick();
+  find(host.actions(), (n) => n.type === "button" && hasText(n, "Back to Iris's checks (2)")).props.onClick();
   await host.settle();
   assert.equal(host.state.report.id, "r2");
   assert.deepEqual(host.state.checks.map((c) => c.key), ["models", "filter:abc"]);
@@ -177,7 +177,7 @@ test("a verdict holds only for a clash that did not change; a titling run of an 
   titled.length = 0;
   host.state.triage = { c1: { verdict: "real_clash", source: "model" }, c2: { verdict: "real_clash", source: "model" } };
   host.render();
-  find(host.menu(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
+  find(host.actions(), (n) => n.type === "button" && hasText(n, "Check the open models")).props.onClick();
   await host.settle(); await host.settle();
   assert.equal(host.state.report.id, "r2");
   assert.deepEqual(Object.keys(host.state.triage), ["c1"], "the moved clash's verdict is dropped");

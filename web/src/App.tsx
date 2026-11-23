@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
+import { ArrowRight, Bot, Boxes, Brain, Building2, Check, ChevronRight, CircleCheck, ClipboardCheck, ClipboardPlus, Download, FileSpreadsheet, FileText, FolderOpen, Hand, Info, LayoutPanelLeft, List, LocateFixed, MessageSquare, Move, Navigation, Network, Plug, Plus, Radar, RotateCcw, Sparkles, Trash2, TriangleAlert, Upload, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ActivityLine, statusLine, type ActivityView, type Progress } from "./Activity";
 import { BuiltView, builtStep, cutText, type BuiltRun } from "./BuiltView";
@@ -50,7 +50,7 @@ import { DockHost, SlotHost, inSlot, usePanelSlots, type DockHandle } from "./do
 import { FiltersPanel, blankRule } from "./FiltersPanel";
 import { ElementCard, type CardActions } from "./ElementCard";
 import { EMPTY as NO_FILTERS, applied, complete, evaluate, legend, matching, migrate, prepare, shareable, withBy, zoomTarget, type FacetIndex, type FilterState, type Rule } from "./filters";
-import { CLASSIC_KEY, PANE, PANELS, isPanel, type PanelId } from "./dockLayout";
+import { CLASSIC_KEY, PANE, PANELS, isPanel, stepTitles, type PanelId } from "./dockLayout";
 import { runs, type Origin, type RunHandle, type RunKind } from "./runlog";
 import type { Peek } from "./workingsGraph";
 import { ImportPanel } from "./ImportPanel";
@@ -64,10 +64,10 @@ import { ReviewFixesEntry, ReviewQueue } from "./ReviewQueue";
 import { STATE_LABEL, decisionWords, stateOf, toDecision, type Decision, type DecisionKind, type ProposalItem } from "./proposalState";
 import { NewProjectDialog, PROJECT_FLOW, ProjectsHome } from "./ProjectsHome";
 import { ProjectOverview, SaveButton } from "./ProjectOverview";
-import { PROJECTS_PATH, currentPath, currentProjectRoute, legacyPath, projectPath, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
+import { PROJECTS_PATH, currentPath, currentProjectRoute, isWorkStep, legacyPath, projectPath, projectView, showPath, showProjectRoute, stepLabel, type ProjectRoute, type ProjectStep } from "./projectRoute";
 import { addReport, attachScene, createProject, forgetProject, getProject, listProjects, myProjectIds, openProject, patchProject, plural, pruneProjectIds, rememberProject, saveProject, toMs, type ActivityItem, type CoordCounts, type Project } from "./projectsApi";
 import { SearchBox, Sidebar, TopBar, type SearchHit } from "./AppShell";
-import { browserStorage, readRail, writeRail, type NavId } from "./shellNav";
+import { browserStorage, readRail, sheetOfPath, showSheetPath, writeRail, type NavId, type SheetId } from "./shellNav";
 import { PageHeader, type Crumb } from "./PageHeader";
 import { EmptyState } from "./Holo";
 import { CursorGlow } from "./CursorGlow";
@@ -77,6 +77,8 @@ import { demoOfFiles, openSampleDrawings, SAMPLE_DRAWINGS_BUSY } from "./sampleD
 import type * as THREE from "three";
 
 type Stats = { elements: number; triangles: number; parseMs: number };
+/** What a load "draws" with no 3D view (no WebGL): nothing, so the scene still opens for its clash list and reports. */
+const UNDRAWN: Stats = { elements: 0, triangles: 0, parseMs: 0 };
 /** Workings in the Activity panel (docs/workings.md): on or off, and the view the panel shows (Workings by default). */
 const WORKINGS_KEY = "iris.workings";
 type WorkingsSetting = { on: boolean; view: ActivityView };
@@ -351,8 +353,11 @@ export function App() {
   const pid = route?.view === "project" ? route.pid : null;
   const projStep: ProjectStep | null = route?.view === "project" ? route.step : null;
   /** Models, Coordination and Clash review happen in the workspace, under the step bar; the other steps are pages. */
-  const workStep = projStep === "models" || projStep === "coordination" || projStep === "clash";
+  const workStep = isWorkStep(projStep);
   const projectHere = project && project.id === pid ? project : null;
+  /** What the project's address shows (projectRoute.projectView): the workspace only for a project that is known; a
+   *  missing one's every step is the not-found page, and nothing opens for it. */
+  const projView = pid && projStep ? projectView(projStep, !!projectHere, !!projectError) : null;
   /** The models on screen are the project's (opened from it, or kept with it). */
   const projectOpen = !!projectHere && !!sceneId && projectHere.scene_id === sceneId;
   /** Where the page is when it is on no project's page: the open session (`/workspace`), else the first screen. */
@@ -369,6 +374,10 @@ export function App() {
   const [rails, setRails] = useState(() => ({ pages: readRail(browserStorage(), "pages"), workspace: readRail(browserStorage(), "workspace") }));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  /** Settings and Help, each at its address (`/settings`, `/help`, shellNav.ts) over the page it was opened from;
+   *  closing puts that page's address back. */
+  const openSheet = (sheet: SheetId) => { showSheetPath(sheet, true); setMenuOpen(sheet === "settings"); setHelpOpen(sheet === "help"); };
+  const closeSheet = () => { showSheetPath(null, false, homePath()); setMenuOpen(false); setHelpOpen(false); };
   const [newOpen, setNewOpen] = useState(false);
   const [creating, setCreating] = useState(false);   // New project's create call is out: the dialog waits
   const [createError, setCreateError] = useState<string | null>(null);
@@ -379,7 +388,11 @@ export function App() {
     const old = typeof window !== "undefined" && window.location ? legacyPath(window.location.hash ?? "") : null;
     if (old) showPath(old, false);
     else if (typeof window !== "undefined" && window.location && /^\/?(index\.html)?$/.test(currentPath())) showPath("/home", false);
-    const read = () => { setRoute(currentProjectRoute()); setHomeAsked(currentPath() === "/home"); setDrawerOpen(false); };
+    // `/settings` and `/help` open their sheet over the page (Home, opened as they are); Back or an edited address
+    // closes it, or opens it again over the page it was on.
+    const sheets = () => { const sheet = sheetOfPath(currentPath()); setMenuOpen(sheet === "settings"); setHelpOpen(sheet === "help"); return sheet; };
+    if (sheetOfPath(currentPath())) sheets();
+    const read = () => { if (sheets()) return; setRoute(currentProjectRoute()); setHomeAsked(currentPath() === "/home"); setDrawerOpen(false); };
     window.addEventListener("hashchange", read);
     window.addEventListener("popstate", read);
     return () => { window.removeEventListener("hashchange", read); window.removeEventListener("popstate", read); };
@@ -551,14 +564,24 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneId, contextProposal]);
 
+  // No WebGL in this browser (webgl.ts): the stage shows a note where the 3D view would be; the rest of Iris goes on.
+  const [noWebgl, setNoWebgl] = useState(false);
   useEffect(() => {
     if (!host.current) return;
-    const v = new Viewer(host.current);
+    let v: Viewer | null = null;
+    try {
+      v = new Viewer(host.current);
+    } catch (e) {
+      console.warn("Iris: the 3D view can't open", e);
+      setNoWebgl(true);
+    }
     viewer.current = v;
     pilot.current = new Pilot(() => viewer.current,
       (t) => frameFix({ kind: t.kind, moved: t.moved, preview: t.pieces }, sides.current), setPilotStatus);
-    v.onUserCamera = () => pilot.current?.takeOver();
-    v.onChange = viewsChanged;
+    if (v) {
+      v.onUserCamera = () => pilot.current?.takeOver();
+      v.onChange = viewsChanged;
+    }
     api.samples().then(({ files, demos: listed }) => {
       setSamples(files); setDemos(listed);
       // Default to the first demo's own set (its context files, a grid or a later revision, stay unticked), else the
@@ -573,7 +596,7 @@ export function App() {
     } catch { /* no fetch here (tests) */ }
     return () => {
       ++sceneEpoch.current; ++workspaceEpoch.current; ++previewRequest.current;
-      directContext.current?.retire(); pilot.current?.cancel(); chatOwner.current.invalidate(); v.dispose();
+      directContext.current?.retire(); pilot.current?.cancel(); chatOwner.current.invalidate(); v?.dispose();
     };
   }, []);
 
@@ -1498,7 +1521,8 @@ export function App() {
       const staged = early && same ? await early.catch(() => null) : null;
       if (sceneEpoch.current !== epoch) return;
       // An uploaded IFC is parsed from the visitor's own file; a STEP comes back converted, samples come from the server.
-      const bytes = staged ? [] : await Promise.all(files.map(async (_, i) => {
+      // With no 3D view (no WebGL) nothing is drawn, so nothing is fetched: the scene opens for its clashes all the same.
+      const bytes = staged || !viewer.current ? [] : await Promise.all(files.map(async (_, i) => {
         const local = upload ? localFile(source as File[], files, stepMap, i) : null;
         const got = local ? new Uint8Array(await local.arrayBuffer()) : await api.file(id, i);
         step({ fetched: load.fetched + 1, bytes: load.bytes + got.byteLength });
@@ -1507,9 +1531,9 @@ export function App() {
       if (sceneEpoch.current !== epoch) return;
       step({ step: "draw", ends: { ...load.ends, download: Date.now() - load.started } });
       handed = !!staged;   // the viewer shows it, or disposes it if this open is superseded
-      const stats = await viewer.current!.load(bytes, files, () => sceneEpoch.current === epoch,
+      const stats = await (viewer.current?.load(bytes, files, () => sceneEpoch.current === epoch,
         (drawn, elements) => { step({ drawn, elements }); if (upload) setImportRows((r) => applyDraw(r, drawnUpTo(files, drawn), false)); },
-        staged ? Promise.resolve(staged) : undefined);
+        staged ? Promise.resolve(staged) : undefined) ?? UNDRAWN);
       if (sceneEpoch.current !== epoch || !stats) return;
       if (upload) setImportRows((r) => applyDraw(r, drawnUpTo(files, files.length)));
       sceneRevision.current = revision ?? null;
@@ -1596,7 +1620,7 @@ export function App() {
           return local ? new Uint8Array(await local.arrayBuffer()) : api.file(sid, i);
         }));
         if (!live()) return false;
-        const drawn = await viewer.current!.add(bytes, added.added.map((i) => added.files[i]), live);
+        const drawn = await (viewer.current?.add(bytes, added.added.map((i) => added.files[i]), live) ?? UNDRAWN);
         if (!live() || !drawn) return false;
         adoptFiles(added, drawn);
       }
@@ -1810,7 +1834,7 @@ export function App() {
     if (!live()) return;
     const bytes = await Promise.all(info.files.map((_, i) => api.file(sid, i)));
     if (!live()) return;
-    const drawn = await viewer.current!.load(bytes, info.files, live);
+    const drawn = await (viewer.current?.load(bytes, info.files, live) ?? UNDRAWN);
     if (!live() || !drawn) return;
     setTool((t) => ({ ...t, hiddenModels: [] }));
     adoptFiles(info, drawn);
@@ -2839,7 +2863,7 @@ export function App() {
     for (const i of [...new Set([...kept.files, ...missed])].sort((x, y) => x - y)) {
       const bytes = await api.file(sid, i);
       if (!live()) return;
-      await viewer.current!.replace(i, bytes, live);
+      await viewer.current?.replace(i, bytes, live);
     }
     if (live()) { sceneRevision.current = kept.revision ?? null; setInfoRev((n) => n + 1); void refreshJournal(sid); }
   }
@@ -3600,14 +3624,15 @@ export function App() {
   // has it, and written (in place) as clashes are picked and left.
   const clashFromPath = useRef<string | null>(null);
   useEffect(() => {
-    if (route?.view !== "project" || route.step !== "clash" || !route.clash || !report) return;
+    // Only the project's own report: never the clash #n of another session's (or of a project that does not exist).
+    if (route?.view !== "project" || route.step !== "clash" || !route.clash || !report || !projectOpen) return;
     const key = `${report.id}#${route.clash}`;
     if (clashFromPath.current === key) return;
     const c = report.clashes.find((x) => x.number === route.clash);
     if (!c) return;
     clashFromPath.current = key;
     if (clash?.id !== c.id) selectClash(c);
-  }, [route, report?.id, matches]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [route, report?.id, matches, projectOpen]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (route?.view !== "project" || route.step !== "clash" || !projectOpen) return;
     const n = clash?.number;
@@ -3637,7 +3662,8 @@ export function App() {
   }, [projectOpen, journal, projectHere]);
   // Until a report or the models are open, the page is the landing: no panels, just what Iris is and the demo.
   // A project's workspace step with nothing open yet is a blank workspace (its import), never the landing.
-  const blankish = blank || (!!pid && workStep);
+  // A missing project's step is its not-found page, and one still being read its loading page: neither is a workspace.
+  const blankish = blank || projView === "workspace";
   const landing = !stats && !report && !blankish;
   // A blank project before anything opens: the drop zone has the whole stage (no sheet on a phone).
   const starting = blankish && !stats && !report;
@@ -3977,7 +4003,7 @@ export function App() {
   // The header's two menus, as popovers on a desktop and as sections of the menu on phones and tablets.
   const addable = sceneId && !gone?.scene ? addableSamples(samples, sceneFiles, stepFiles) : null;
   const addWait = addable ? modelsWait() : null;
-  const modelsMenu = (close: () => void) => (<>
+  const modelsMenu = (close: () => void, own = true) => (<>
     {addable && <>
       <p className="pop-title">Add to the open models</p>
       {addable.map((f) => (
@@ -4003,11 +4029,13 @@ export function App() {
     {!samples.length && <p className="hint">No models in samples/</p>}
     <button id="open" className="btn primary small" disabled={!picked.length || !!busy} onClick={() => { close(); open(); }}>
       <FolderOpen size={14} aria-hidden /> Open {picked.length} model{picked.length === 1 ? "" : "s"}</button>
-    <p className="pop-title">Or your own</p>
-    <button className="pop-item" disabled={!!busy} onClick={() => { close(); modelInput.current?.click(); }}>
-      <Upload size={14} aria-hidden /> Upload models (IFC or STEP)…</button>
-    <p className="hint">{uploadMax ? `Up to ${uploadMax} MB together.` : "Several files open together."} A STEP machine is converted to IFC to check; Export gives your STEP back
-      with the fixes.</p>
+    {own && <>
+      <p className="pop-title">Or your own</p>
+      <button className="pop-item" disabled={!!busy} onClick={() => { close(); modelInput.current?.click(); }}>
+        <Upload size={14} aria-hidden /> Upload models (IFC or STEP)…</button>
+      <p className="hint">{uploadMax ? `Up to ${uploadMax} MB together.` : "Several files open together."} A STEP machine is converted to IFC to check; Export gives your STEP back
+        with the fixes.</p>
+    </>}
   </>);
   const coordinateMenu = (close: () => void) => (<>
     <p className="pop-title">Coordinate the open models</p>
@@ -4039,6 +4067,17 @@ export function App() {
     <label className="pop-item check"><input type="checkbox" checked={workings.on} onChange={(e) => { close(); setWorkingsOn(e.target.checked); }} /> Workings in Activity</label>
     <label className="pop-item check"><input type="checkbox" checked={classic} onChange={(e) => { close(); setClassic(e.target.checked); }} /> Classic layout (fixed panels)</label>
   </>);
+  // The workspace's own actions (Settings held them once): sample models to open or add, your own files, checking the
+  // open models, a Navisworks clash report to import. A closed line under the Models step's import, and at the top of
+  // the workspace's left panel (open while nothing is open). Tests find it by `data-work-actions`.
+  const workMore = (label: string, opts: { models?: boolean; own?: boolean; open?: boolean } = {}) => (
+    <details className="work-more" data-work-actions open={opts.open}>
+      <summary>{label}</summary>
+      {opts.models !== false && <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
+        title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
+        {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => undefined, opts.own !== false)}</section>}
+      <section className="menu-section"><h3><Radar size={15} aria-hidden /> Coordinate</h3>{coordinateMenu(() => undefined)}</section>
+    </details>);
 
   // The selected element's card (ElementCard.tsx): what it is, where it sits, what to do with it, its links and everything
   // its model says. The classic card over the model and the dock's Properties panel both show it (docs/panels.md).
@@ -4135,6 +4174,7 @@ export function App() {
   const modelsStep = projectHere && (
     <div className="proj-work">
       {importPanel}
+      {workMore("Sample models and Navisworks reports", { own: false })}
       {!projectOpen && !projectBusy && (
         <div className="proj-work-note">
           {sceneId && stats ? <>
@@ -4186,7 +4226,7 @@ export function App() {
         onRename={(id, n) => renameProjectNow(id, n)} onRemove={removeProjectHere}
         onDemo={sampleSet.length ? () => void trySample() : undefined} />
     </div>)
-    : pid && (!workStep || !projectHere) ? (
+    : pid && projView !== "workspace" ? (
     <div className="proj-shell" role="region" aria-label="Project">
       {pageAlert}
       {projectHere ? (
@@ -4423,7 +4463,7 @@ export function App() {
       <Sidebar active={navActive} project={navProject} workspace={navWorkspace} rail={rail}
         drawer={compact ? (drawerOpen ? "open" : "closed") : undefined} onCloseDrawer={() => setDrawerOpen(false)}
         onNav={nav} hrefOf={navHref}
-        onHelp={() => { setDrawerOpen(false); setHelpOpen(true); }} onSettings={() => { setDrawerOpen(false); setMenuOpen(true); }} />
+        onHelp={() => { setDrawerOpen(false); openSheet("help"); }} onSettings={() => { setDrawerOpen(false); openSheet("settings"); }} />
       <div className="shell-main">
         <TopBar rail={rail} onToggle={toggleRail} compact={compact} onMenu={() => setDrawerOpen(true)}
           search={layout !== "phone" ? <SearchBox search={searchHits} placeholder={onPage ? "Search projects, clashes, elements" : "Search clashes, elements"} /> : undefined}
@@ -4443,6 +4483,8 @@ export function App() {
 
             {inSlot(slots.clashes, <aside className="pane left">
               {projStep === "models" && projectHere ? modelsStep : <>
+              {!pid ? workMore("Open models or a clash report", { open: !sceneId && !report })
+                : projStep === "coordination" && projectHere ? workMore("Check the models or import a clash report", { models: false }) : null}
               {importRows.length > 0 && !pid && importPanel}
               {report
                 ? <ReportList report={listReport ?? shownReport ?? report} naming={naming} matches={matches}
@@ -4503,7 +4545,14 @@ export function App() {
               onPointerDown={pressStart} onPointerMove={stageMove} onPointerUp={pressEnd} onPointerCancel={pressEnd}
               onPointerLeave={() => { if (hover.current.gid) clearHover(); if (tool.measure) viewer.current?.measureHover(null); }}
               onContextMenu={(e) => { if (coarse) e.preventDefault(); }}>
-              {stats && <ViewerToolbar compact={layout === "phone"} state={tool} models={modelNames} hasFocus={!!(a || b || selected)} views={viewsControls} split={rail3d()}
+              {/* No WebGL: a note where the 3D view would be, first so the stage's chips and cards sit over it. */}
+              {noWebgl && (stats || (!loading && (report || !blankish))) && (
+                <div className="no-webgl" role="status">
+                  <div className="no-webgl-card"><b>3D needs WebGL</b>
+                    <p>This browser or device has WebGL turned off, so the 3D view can't open. The clash list, drawings, reports
+                      and the rest of Iris still work.</p></div>
+                </div>)}
+              {stats && !noWebgl && <ViewerToolbar compact={layout === "phone"} state={tool} models={modelNames} hasFocus={!!(a || b || selected)} views={viewsControls} split={rail3d()}
                 onMode={(mode) => setTool((t) => ({ ...t, mode }))} onStyle={(style) => setTool((t) => ({ ...t, style }))} onToggle={toggle}
                 onView={(p) => viewer.current?.view(p)} onFit={() => viewer.current?.home()} onFocus={focusNow} onModel={setModelVisible} onShot={screenshot}
                 remove={sceneId && !gone?.scene ? { onRemove: askRemove, blocked: addWait } : undefined} />}
@@ -4580,7 +4629,7 @@ export function App() {
               {toast ? <div className="toast" role="status">{toast}</div> : kept && <KeptToast key={kept.n} text={kept.text} detail={kept.detail} />}
             </main>)}
 
-            {docked ? <div className="dock-area"><DockHost slots={slots} sizes={widths} tabs={dockTabs} onReady={(d) => { dock.current = d; }}
+            {docked ? <div className="dock-area"><DockHost slots={slots} sizes={widths} tabs={dockTabs} titles={stepTitles(projectHere ? projStep : null)} onReady={(d) => { dock.current = d; }}
               onGone={(d) => { if (dock.current === d) dock.current = null; }} onShown={setTabState} onTab={showPanel}
               onWindows={setPopouts} /></div> : <>
               <SlotHost slot={slots.clashes} />
@@ -4877,40 +4926,42 @@ export function App() {
                 </div>
               </SheetBar>
             )}
-            {/* Settings (the sidebar's): what the old menu held, in the order of the work: models, coordinate, this
-                session's outputs and requirements, the agent, the panels (docs/architecture/12-web-app.md, "The app shell"). */}
-            {menuOpen && <MenuSheet title="Settings" onClose={() => setMenuOpen(false)}>
-        <section className="menu-section"><h3>Your name for review decisions</h3>
-          <label className="field reviewer-field">Recorded with each accept, reject or request, and in the reports
-            <input value={reviewer} maxLength={120} placeholder="Your name (no sign-in)" autoComplete="name"
-              onChange={(e) => setReviewer(e.target.value)} /></label>
-        </section>
-              <section className="menu-section"><h3><Boxes size={15} aria-hidden /> Models{stats && <span className="mono why"
-                title={`${modelNames.join(", ")}: ${stats.elements} elements, ${Math.round(stats.triangles / 1000)}k triangles, parsed in ${(stats.parseMs / 1000).toFixed(1)} s`}>
-                {stats.elements.toLocaleString()} elements</span>}</h3>{modelsMenu(() => setMenuOpen(false))}</section>
-              <section className="menu-section"><h3><Radar size={15} aria-hidden /> Coordinate</h3>{coordinateMenu(() => setMenuOpen(false))}</section>
+            {/* Settings (the sidebar's, at /settings): who you are, this session's requirements and agent, the panels, and
+                Help. The workspace's own actions (models, checks, a Navisworks report) are in the workspace: the Models
+                step and the left panel (docs/architecture/12-web-app.md, "The app shell"). */}
+            {menuOpen && <MenuSheet title="Settings" onClose={closeSheet}>
+              <section className="menu-section"><h3>Your name for review decisions</h3>
+                <label className="field reviewer-field">Recorded with each accept, reject or request, and in the reports
+                  <input value={reviewer} maxLength={120} placeholder="Your name (no sign-in)" autoComplete="name"
+                    onChange={(e) => setReviewer(e.target.value)} /></label>
+              </section>
               {!landing && <section className="menu-section"><h3>This session</h3>
-                {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { setMenuOpen(false); setReqOpen(true); }}>
+                {sceneId && <button className="pop-item" data-tour="requirements" onClick={() => { closeSheet(); setReqOpen(true); }}>
                   <ClipboardCheck size={16} aria-hidden /> Requirements{reqLabel ? <span className="chip accent">{reqLabel}</span> : <span className="why">optional</span>}</button>}
-                {report && <button className="pop-item" data-tour="report" onClick={() => { setMenuOpen(false); setDocOpen(true); setDocReady(false); }}>
+                {/* A phone's header has no room for Report and Export: they are here (the desktop's and tablet's are in it). */}
+                {layout === "phone" && report && <button className="pop-item" data-tour="report" onClick={() => { closeSheet(); setDocOpen(true); setDocReady(false); }}>
                   <FileText size={16} aria-hidden /> Report: PDF and BCF</button>}
-                {sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={() => setMenuOpen(false)}>
+                {layout === "phone" && sceneId && !gone?.scene && <a className="pop-item" data-tour="export" href={api.exportUrl(sceneId)} onClick={closeSheet}>
                   <Download size={16} aria-hidden /> {stepFiles.length ? "Export STEP + IFC" : "Export IFC"}</a>}
-                <button className="pop-item" onClick={() => { setMenuOpen(false); setAgentOpen(true); }}>
+                <button className="pop-item" onClick={() => { closeSheet(); setAgentOpen(true); }}>
                   {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
               </section>}
-              {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(() => setMenuOpen(false))}</section>}
+              {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(closeSheet)}</section>}
+              <section className="menu-section"><h3>Help</h3>
+                <button className="pop-item" onClick={() => openSheet("help")}><Info size={16} aria-hidden /> How Iris works, and samples to try</button>
+                <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet.</p>
+              </section>
             </MenuSheet>}
-            {helpOpen && <MenuSheet title="Help" onClose={() => setHelpOpen(false)}>
+            {helpOpen && <MenuSheet title="Help" onClose={closeSheet}>
               <section className="menu-section"><h3>How Iris works</h3>
                 <p className="hint">AI proposes. Geometry proves. The engineer decides.</p>
                 <ol className="help-flow">{PROJECT_FLOW.map((f, i) => (
                   <li key={f.name}><span className="help-n mono">{i + 1}</span><span><b>{f.name}</b> <span className="why">{f.text}</span></span></li>))}</ol>
               </section>
               {(sampleSet.length > 0 || sampleDrawings) && <section className="menu-section"><h3>Try it</h3>
-                {sampleSet.length > 0 && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { setHelpOpen(false); void trySample(); }}>
+                {sampleSet.length > 0 && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { closeSheet(); void trySample(); }}>
                   <Building2 size={16} aria-hidden /> Try the sample building</button>}
-                {sampleDrawings && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { setHelpOpen(false); void trySampleDrawings(); }}>
+                {sampleDrawings && <button className="pop-item" disabled={!!busy || !!projectBusy} onClick={() => { closeSheet(); void trySampleDrawings(); }}>
                   <FileText size={16} aria-hidden /> Try the sample drawings</button>}
               </section>}
               <section className="menu-section"><h3>Good to know</h3>

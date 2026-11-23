@@ -190,3 +190,9 @@
   .sidebar, .sidebar.side-drawer, .sidebar.side-drawer.open, .side-scrim, .side-scrim.open, .side-item, .side-group-head, .side-icon,
   .side-chevron, .topbar-btn, .search-field { transition: none; }
 }
+
+/* Settings (App.tsx, the sidebar's sheet at /settings): the name field sits inside the sheet's gutter, the full width of
+   the sections' text, never at the sheet's edge. */
+.menu-panel .reviewer-field { margin: 0 6px; gap: 6px; line-height: 1.45; }
+.menu-panel .reviewer-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: 8px 10px; font-size: 13px; border-radius: var(--radius, 8px); }
+.menu-panel .reviewer-field input:focus-visible { outline: 2px solid var(--accent, #c026d3); outline-offset: 1px; }

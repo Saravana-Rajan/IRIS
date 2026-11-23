@@ -122,3 +122,20 @@ test("a plain click is the page's; a click meant for a new tab or window is the 
   assert.equal(r.ownClick({ button: 0 }), true);
   for (const e of [{ button: 1 }, { metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }]) assert.equal(r.ownClick(e), false);
 });
+
+test("a project's address shows the workspace only for a known project: a missing one's every step is the not-found page", () => {
+  assert.deepEqual(r.PROJECT_STEPS.filter((t) => r.isWorkStep(t.id)).map((t) => t.id), ["models", "coordination", "clash"]);
+  assert.equal(r.isWorkStep(null), false);
+  for (const { id } of r.PROJECT_STEPS) {
+    assert.equal(r.projectView(id, true, false), r.isWorkStep(id) ? "workspace" : "page", id);
+    assert.equal(r.projectView(id, false, true), "missing", `${id}: a missing project's step is not found, never the workspace`);
+    assert.equal(r.projectView(id, false, false), "loading", `${id}: read first`);
+  }
+  for (const path of ["/projects/doesnotexist123", "/projects/doesnotexist123/models", "/projects/doesnotexist123/coordination",
+    "/projects/doesnotexist123/drawings", "/projects/doesnotexist123/clashes", "/projects/doesnotexist123/clashes/5",
+    "/projects/doesnotexist123/reports", "/projects/doesnotexist123/activity", "/projects/doesnotexist123/nonsense"]) {
+    const route = r.parseProjectPath(path);
+    assert.equal(route.view, "project", path);
+    assert.equal(r.projectView(route.step, false, true), "missing", path);
+  }
+});

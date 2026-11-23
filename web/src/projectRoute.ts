@@ -123,3 +123,16 @@ export function showProjectRoute(route: ProjectRoute | null, push: boolean, fall
 export function ownClick(e: { button?: number; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean }): boolean {
   return !e.button && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 }
+
+/** Models, Coordination and Clash review happen in the workspace, under the step bar; the other steps are pages. */
+export const isWorkStep = (step: ProjectStep | null | undefined): boolean => step === "models" || step === "coordination" || step === "clash";
+
+/** What a project's address shows: once the project is known, its step (in the workspace for Models, Coordination and
+ *  Clash review, else its page); once the server said it has no such project (or could not be read), the not-found
+ *  page, whatever the step (`/projects/<id>/clashes/5` too); until then the loading page. Only a known project opens
+ *  the workspace or its models. */
+export type ProjectView = "workspace" | "page" | "missing" | "loading";
+export function projectView(step: ProjectStep, known: boolean, failed: boolean): ProjectView {
+  if (known) return isWorkStep(step) ? "workspace" : "page";
+  return failed ? "missing" : "loading";
+}

@@ -97,7 +97,7 @@ export interface DockHandle {
 }
 
 type Tabs = Partial<Record<PanelId, ReactNode>>;
-interface Context { slots: Slots; tabs: Tabs; onTab: (id: PanelId) => void }
+interface Context { slots: Slots; tabs: Tabs; titles?: Partial<Record<PanelId, string>>; onTab: (id: PanelId) => void }
 const DockContext = createContext<Context | null>(null);
 
 const ICONS: Record<PanelId, LucideIcon> = { model: Box, clashes: List, filters: ListFilter, clash: LocateFixed, plan: Network, chat: MessageSquare,
@@ -155,7 +155,7 @@ function Tab({ api, containerApi }: IDockviewPanelHeaderProps) {
   const where = group.api.location;
   const strip = where.type === "edge" && group.api.isCollapsed();
   const left = where.type === "edge" && where.position === "left";
-  const title = api.title ?? titleOf(id);
+  const title = ctx.titles?.[id] ?? api.title ?? titleOf(id);   // a name that follows the project step (stepTitles)
   // "Behind" is not the tab shown in its group (dockview's isActive also needs the group to have the focus).
   const short = (group.panels.length > 3 || (left && group.panels.length > 1)) && !api.isVisible && !strip;
   const click = (e: React.MouseEvent) => {
@@ -359,8 +359,10 @@ function menu({ panel, api }: GetTabContextMenuItemsParams) {
 }
 
 
-export function DockHost({ slots, sizes, tabs, onReady, onGone, onTab, onShown, onWindows }: {
+export function DockHost({ slots, sizes, tabs, titles, onReady, onGone, onTab, onShown, onWindows }: {
   slots: Slots; sizes: { left: number; right: number }; tabs: Tabs;
+  /** Tab names in place of the panels' own (dockLayout.stepTitles: the left panel is "Models" on the Models step). */
+  titles?: Partial<Record<PanelId, string>>;
   onReady: (dock: DockHandle) => void;
   /** This dock is gone: App lets go of its handle, unless a newer dock has given it another. */
   onGone: (dock: DockHandle) => void;
@@ -492,7 +494,7 @@ export function DockHost({ slots, sizes, tabs, onReady, onGone, onTab, onShown, 
   }
 
   return (
-    <DockContext.Provider value={{ slots, tabs, onTab }}>
+    <DockContext.Provider value={{ slots, tabs, titles, onTab }}>
       <DockviewReact className="dock-host" theme={THEME} components={COMPONENTS} defaultTabComponent={Tab}
         rightHeaderActionsComponent={Actions} onReady={ready} getTabContextMenuItems={menu}
         floatingGroupBounds="boundedWithinViewport" floatingGroupDragHandle="tabbar" />

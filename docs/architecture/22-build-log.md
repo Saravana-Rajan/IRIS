@@ -1218,3 +1218,12 @@ motion, freed on unmount; a square "↓" cue scrolls to the start tiles. Stills 
 aperture. Checked: `npm test` (new `tests/hero-glass.test.mjs`; `start-screen.test.mjs` updated), `tsc`, `vite build`,
 `test_docs_map.py`, and headless Chromium screenshots of `/home` at 1512×805 and 390×844 on the GPU against a local
 one-origin server (no Gemini call).
+
+**Nov 22 (2026-11-22), no WebGL no longer blanks the page** ([13](13-3d-viewer.md)). With WebGL turned off,
+`new THREE.WebGLRenderer()` threw in App's mount effect and the whole app rendered blank. `web/src/webgl.ts` adds
+`webglAvailable()` (a probe canvas, WebGL 2 else 1, its context given back at once) and `NoWebGL`; `Viewer`'s constructor
+throws `NoWebGL` before it makes anything when there is none, and wraps three's own failure the same way. `App` catches
+it, keeps `viewer` null (every call on it was already `?.` except the four loads, now `?.` with `UNDRAWN` stats), hides
+the 3D toolbar and shows "3D needs WebGL" in the stage (`.no-webgl`, workspace.css); models still open, without being
+fetched or drawn, for the clash list, drawings and reports. Checked: new `tests/webgl-guard.test.mjs` (the probe, and the
+real `Viewer` throwing `NoWebGL` on a stub page), `viewer-mount.test.mjs`, the full `npm test`, `tsc`, `test_docs_map.py`.
