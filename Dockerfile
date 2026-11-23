@@ -31,6 +31,14 @@ RUN apt-get update \
       libgl1 \
  && rm -rf /var/lib/apt/lists/*
 
+# The user the server runs as, made before anything is copied so every layer below lands already owned by it. A
+# `chown -R` at the end would copy the whole virtualenv (about a gigabyte) into a new layer on every build, and that
+# layer then had to be compressed, pushed and cached each time: most of a deploy's image time. The server writes
+# its default settings file and projects next to its code (/app/server), so that folder is the user's.
+RUN useradd --create-home --uid 10001 iris \
+ && mkdir -p /app/server /mnt/iris \
+ && chown iris /app/server /mnt/iris
+
 COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /uvx /usr/local/bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -41,19 +49,20 @@ ENV UV_COMPILE_BYTECODE=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app/server
-# Dependencies first (cached layer), then the code. The server has no build-system, so only deps are installed.
-COPY server/pyproject.toml server/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
-COPY server/iris ./iris
+# Dependencies first (cached layer: rebuilt only when pyproject.toml or uv.lock change), then the code. The server
+# has no build-system, so only deps are installed. --no-cache keeps uv's download cache out of the layer (it would
+# double its size); the chown runs in the same step, so the layer holds the virtualenv once.
+COPY --chown=10001:0 server/pyproject.toml server/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --no-cache \
+ && chown -R iris /app/server/.venv
 
-COPY --from=web /app/web/dist /app/web/dist
+# Least often changed first: the demo files, the built web app, then the server's code.
 # Filtered by .dockerignore to .ifc/.step/.stp/.json/.xml/.png/.jpg/.jpeg (the demo file types), plus the sample
 # PDF drawings (samples/drawings/*.pdf) and their saved readings (*.reading.json).
 COPY samples /app/samples
+COPY --from=web /app/web/dist /app/web/dist
+COPY --chown=10001:0 server/iris ./iris
 
-RUN useradd --create-home --uid 10001 iris \
- && mkdir -p /mnt/iris \
- && chown -R iris /app/server /mnt/iris
 USER iris
 
 ENV PATH="/app/server/.venv/bin:$PATH" \
