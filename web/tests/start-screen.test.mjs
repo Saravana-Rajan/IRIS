@@ -144,7 +144,7 @@ test("Watch the demo: the 3D video on the sample building's tile, the 2D on the 
   assert.match(html, /<section class="home-tiles"[^>]*><button type="button" class="home-tile home-tile-new"/, "New project is still a tile of its own");
   const full = html.match(/<button type="button" class="watch-demo watch-demo-thumb watch-demo-hero" data-video="full"[^>]*>.*?<\/button>/)?.[0];
   assert.ok(full, "the full demo in the hero, the larger chip with a small thumbnail (no holo edge: none on Home)");
-  assert.match(full, /<span class="watch-demo-poster" aria-hidden="true"><img src="\/demos\/iris-full-demo\.webp"/);
+  assert.match(full, /<span class="watch-demo-poster" aria-hidden="true"><img src="\/demos\/iris-full-demo\.webp\?v=20261123b"/);
   assert.ok(text(full).includes(`Watch the full demo · ${videos.full.duration}`));
   const hero = html.slice(html.indexOf('<div class="home-hero-text">'), html.indexOf('<div class="home-body">'));
   assert.ok(hero.indexOf('class="home-tagline"') < hero.indexOf('data-video="full"') && hero.indexOf('data-video="full"') < hero.indexOf('class="home-what"'),

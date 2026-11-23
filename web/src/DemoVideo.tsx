@@ -22,13 +22,17 @@ export interface DemoVideoInfo {
  * The demo videos (docs/architecture/19-demo-data.md, "Demo videos"): recorded from the sample with saved data (no live
  * AI calls), narrated, captioned. The durations are the assembled videos' lengths (timing.json of the demo-video build).
  */
+/** Bumped whenever the demo files change: the files keep their names and are cached for an hour (firebase.json),
+ *  so the query makes every browser fetch the new video, captions and poster. */
+export const DEMO_VERSION = "20261123b";
+
 export const DEMO_VIDEOS: Readonly<Record<DemoVideoId, DemoVideoInfo>> = {
   "3d": { id: "3d", title: "Fix clashes in your building models", duration: "1:32",
-    src: "/demos/iris-3d-demo.mp4", vtt: "/demos/iris-3d-demo.vtt", poster: "/demos/iris-3d-demo.webp" },
+    src: `/demos/iris-3d-demo.mp4?v=${DEMO_VERSION}`, vtt: `/demos/iris-3d-demo.vtt?v=${DEMO_VERSION}`, poster: `/demos/iris-3d-demo.webp?v=${DEMO_VERSION}` },
   "2d": { id: "2d", title: "Check drawings against the model", duration: "1:00",
-    src: "/demos/iris-2d-demo.mp4", vtt: "/demos/iris-2d-demo.vtt", poster: "/demos/iris-2d-demo.webp" },
+    src: `/demos/iris-2d-demo.mp4?v=${DEMO_VERSION}`, vtt: `/demos/iris-2d-demo.vtt?v=${DEMO_VERSION}`, poster: `/demos/iris-2d-demo.webp?v=${DEMO_VERSION}` },
   full: { id: "full", title: "Iris: does AI truly see?", duration: "2:19",
-    src: "/demos/iris-full-demo.mp4", vtt: "/demos/iris-full-demo.vtt", poster: "/demos/iris-full-demo.webp" },
+    src: `/demos/iris-full-demo.mp4?v=${DEMO_VERSION}`, vtt: `/demos/iris-full-demo.vtt?v=${DEMO_VERSION}`, poster: `/demos/iris-full-demo.webp?v=${DEMO_VERSION}` },
 };
 
 /** Home's "Watch the demos" cards, in order (the full demo first, featured): each card's title and one line. */

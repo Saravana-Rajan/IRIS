@@ -119,7 +119,7 @@ test("three demo videos, each an mp4 with English captions and a poster in /demo
     ["Fix clashes in your building models", "Check drawings against the model", "Iris: does AI truly see?"]);
   for (const [id, v] of Object.entries(V.DEMO_VIDEOS)) {
     assert.equal(v.id, id);
-    assert.deepEqual([v.src, v.vtt, v.poster], [`/demos/iris-${id}-demo.mp4`, `/demos/iris-${id}-demo.vtt`, `/demos/iris-${id}-demo.webp`]);
+    assert.deepEqual([v.src, v.vtt, v.poster], [`/demos/iris-${id}-demo.mp4?v=20261123b`, `/demos/iris-${id}-demo.vtt?v=20261123b`, `/demos/iris-${id}-demo.webp?v=20261123b`]);
     assert.match(v.duration, /^\d{1,2}:[0-5]\d$/, `${id}: m:ss`);
   }
 });
@@ -149,9 +149,9 @@ test("open: a modal dialog named by its title, Close, then the 16:9 video with i
   assert.match(html, /<button type="button" class="demo-video-close" aria-label="Close">/);
   const video = html.match(/<video[^>]*>/)?.[0];
   assert.ok(video, "the video, once open");
-  for (const attr of ['src="/demos/iris-2d-demo.mp4"', 'poster="/demos/iris-2d-demo.webp"', 'controls=""', 'playsInline=""', 'preload="none"'])
+  for (const attr of ['src="/demos/iris-2d-demo.mp4?v=20261123b"', 'poster="/demos/iris-2d-demo.webp?v=20261123b"', 'controls=""', 'playsInline=""', 'preload="none"'])
     assert.ok(video.includes(attr), attr);
-  assert.match(html, /<video[^>]*><track kind="captions" src="\/demos\/iris-2d-demo\.vtt" srcLang="en" label="English" default=""\/><\/video>/);
+  assert.match(html, /<video[^>]*><track kind="captions" src="\/demos\/iris-2d-demo\.vtt\?v=20261123b" srcLang="en" label="English" default=""\/><\/video>/);
   assert.ok(html.indexOf("demo-video-title") < html.indexOf("<video"), "the title above the video");
   assert.doesNotMatch(html, /couldn/, "no error before one");
 });
@@ -328,9 +328,9 @@ test("Home's Watch the demos: three video cards, the full demo first and feature
 test("the hero's chip: Watch the full demo with a small thumbnail of its poster, the length; it opens the video", () => {
   const tf = V.DEMO_VIDEOS.full.duration;
   const chip = renderToStaticMarkup(h(V.WatchDemoButton, { id: "full", label: "Watch the full demo", className: "watch-demo-hero", thumb: true }));
-  assert.match(chip, /^(<link rel="preload" as="image" href="\/demos\/iris-full-demo\.webp"\/>)?<button type="button" class="watch-demo watch-demo-thumb watch-demo-hero" data-video="full" aria-haspopup="dialog"/,
+  assert.match(chip, /^(<link rel="preload" as="image" href="\/demos\/iris-full-demo\.webp\?v=20261123b"\/>)?<button type="button" class="watch-demo watch-demo-thumb watch-demo-hero" data-video="full" aria-haspopup="dialog"/,
     "React may hint the thumbnail");
-  assert.ok(chip.includes('<span class="watch-demo-poster" aria-hidden="true"><img src="/demos/iris-full-demo.webp" alt="" width="64" height="36" decoding="async"/>'));
+  assert.ok(chip.includes('<span class="watch-demo-poster" aria-hidden="true"><img src="/demos/iris-full-demo.webp?v=20261123b" alt="" width="64" height="36" decoding="async"/>'));
   assert.equal(text(chip).trim(), `Watch the full demo · ${tf}`);
   assert.doesNotMatch(chip, /<video|\.mp4|\.vtt/);
   const host = mount(S.WatchDemoButton, { id: "full", thumb: true });
@@ -350,8 +350,8 @@ test("a demo card opens the lightbox with its own video and captions track; focu
     assert.deepEqual([video().props.id, video().props.open], [c.id, true], `${c.id}: opens its own video`);
     assert.equal(video().props.opener, button().props.ref, `${c.id}: focus goes back to the card`);
     const box = renderToStaticMarkup(h(V.DemoVideo, { id: c.id, open: true, onClose: noop }));
-    assert.ok(box.includes(`src="/demos/iris-${c.id}-demo.mp4"`), `${c.id}: its mp4`);
-    assert.match(box, new RegExp(`<track kind="captions" src="/demos/iris-${c.id}-demo\\.vtt" srcLang="en" label="English" default=""/>`), `${c.id}: its captions`);
+    assert.ok(box.includes(`src="/demos/iris-${c.id}-demo.mp4?v=20261123b"`), `${c.id}: its mp4`);
+    assert.match(box, new RegExp(`<track kind="captions" src="/demos/iris-${c.id}-demo\\.vtt\\?v=20261123b" srcLang="en" label="English" default=""/>`), `${c.id}: its captions`);
     video().props.onClose();
     host.render();
     assert.equal(video().props.open, false);
