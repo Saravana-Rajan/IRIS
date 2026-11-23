@@ -32,21 +32,34 @@ test("the owner's settings sit on their button's tip, not in a long chip in the 
   host.unmount();
 });
 
-test("Settings shows only the sections that apply: nothing open has no session or layout section", async () => {
-  const open = await appHost();
+test("Settings is lean: your name and Help in view, the rest in one closed Advanced section", async () => {
+  const open = await appHost({ layout: "desktop" });
   const sheet = open.menu();
-  assert.ok(hasText(sheet, "Your name for review decisions") && hasText(sheet, "This session") && hasText(sheet, "Panels and layout") && hasText(sheet, "Help"));
-  assert.equal(hasText(sheet, "Coordinate"), false, "the workspace's actions are in the workspace, not in Settings");
+  assert.ok(hasText(sheet, "Your name for review decisions") && hasText(sheet, "Help"));
+  assert.ok(find(sheet, (n) => n.type === "button" && hasText(n, "How Iris works, and samples to try")), "Help's way in");
+  assert.ok(hasText(sheet, "Projects are private to this browser by an unguessable id; there are no accounts yet."));
+  const advanced = find(sheet, (n) => n.props?.["data-settings"] === "advanced");
+  assert.ok(advanced && advanced.type === "details", "one Advanced disclosure");
+  assert.ok(!advanced.props.open, "closed by default");
+  assert.ok(find(advanced, (n) => n.props?.["data-tour"] === "requirements" && hasText(n, "Coordination requirements")), "requirements, in Advanced");
+  assert.ok(find(advanced, (n) => n.type === "button" && hasText(n, "Connect an agent")), "the agent link, in Advanced");
+  assert.ok(find(advanced, (n) => n.type === "button" && hasText(n, "Reset the layout")), "the layout reset, in Advanced");
+  assert.ok(find(advanced, (n) => n.props?.className === "menu-section owner-section"), "owner settings, in Advanced (hidden without an owner)");
+  for (const gone of ["Panels and layout", "Workings in Activity", "Classic layout", "This session", "Coordinate"]) {
+    assert.equal(hasText(sheet, gone), false, `no "${gone}" in Settings`);
+  }
+  for (const panel of ["Filters", "Properties", "Chat", "Edits"]) {
+    assert.equal(find(sheet, (n) => n.type === "button" && hasText(n, panel)), undefined, `no ${panel} panel item`);
+  }
   assert.equal(find(sheet, (n) => n.props?.id === "open"), undefined, "no Open models in Settings");
-  assert.ok(find(sheet, (n) => n.props?.["data-tour"] === "requirements"), "Requirements stays reachable");
-  assert.ok(find(sheet, (n) => n.type === "button" && hasText(n, "Connect an agent")), "and the agent");
   open.unmount();
   const empty = await appHost({ initial: { sceneId: null, a: null, b: null, stats: null, clash: null, report: null, matches: null } });
   const bare = empty.menu();
   assert.ok(hasText(bare, "Your name for review decisions") && hasText(bare, "Help"));
   assert.equal(hasText(bare, "Models") || hasText(bare, "Coordinate"), false, "no workspace actions");
-  assert.equal(hasText(bare, "This session"), false, "no session to act on");
-  assert.equal(hasText(bare, "Panels and layout"), false, "no panels to lay out");
+  const quiet = find(bare, (n) => n.props?.["data-settings"] === "advanced");
+  assert.equal(find(quiet, (n) => n.type === "button" && /requirements|Connect an agent|Reset the layout/.test(JSON.stringify(n.props?.children ?? ""))), undefined,
+    "nothing open: no session items in Advanced");
   empty.unmount();
 });
 

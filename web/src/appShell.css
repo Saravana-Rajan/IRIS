@@ -203,3 +203,20 @@
 .menu-panel .owner-row .hint { margin: 4px 0 0; }
 .menu-panel .owner-pop .pop-menu { left: 0; right: auto; }
 .menu-panel .owner-section:not(:has(.owner-pop > *)) { display: none; }
+
+/* Settings' one closed "Advanced" section (App.tsx, owner Nov 23): requirements, the agent link, the layout reset and the
+   owner's settings. A light disclosure with a chevron; hidden when it would hold nothing (no session and no owner). */
+.menu-panel .menu-advanced { margin: 6px 0 0; border: 1px solid var(--line); border-radius: var(--radius, 8px); background: var(--surface, #fff); }
+.menu-panel .menu-advanced > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none;
+  font-size: 13px; font-weight: 600; color: var(--ink-2, var(--ink)); border-radius: inherit; }
+.menu-panel .menu-advanced > summary::-webkit-details-marker { display: none; }
+.menu-panel .menu-advanced > summary::before { content: ""; flex: none; width: 6px; height: 6px; margin: 0 2px; border: solid var(--muted);
+  border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s ease; }
+.menu-panel .menu-advanced[open] > summary::before { transform: rotate(45deg); }
+.menu-panel .menu-advanced > summary:hover { background: var(--hover); }
+.menu-panel .menu-advanced > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.menu-panel .menu-advanced[open] { padding: 0 6px 8px; }
+.menu-panel .menu-advanced[open] > summary { margin: 0 -6px 6px; border-bottom: 1px solid var(--line-soft, var(--line)); border-radius: var(--radius, 8px) var(--radius, 8px) 0 0; }
+.menu-panel .menu-advanced > .owner-section { margin-top: 8px; }
+.menu-panel .menu-advanced:not(:has(.pop-item, .owner-pop > *)) { display: none; }
+@media (prefers-reduced-motion: reduce) { .menu-panel .menu-advanced > summary::before { transition: none; } }

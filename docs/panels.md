@@ -53,8 +53,10 @@ It is Iris's own work, with no code from other products.
   the floating panels while it is open.
 - **Put it back** (a button, and on the right-click menu) returns a floating, popped-out or moved panel to its side
   bar, in its place among the tabs.
-- **Close** is on the right-click menu. **Panels and layout** (in Settings, from the sidebar) shows any panel, closed
-  or not, resets the layout, and switches to the **Classic layout** (the fixed panes of before, `iris.dock.classic`).
+- **Close** is on the right-click menu. A closed panel comes back when the workspace asks for it (a clash
+  opens Clash, a selection Properties, the Filters button Filters); **Reset the layout** (Settings, Advanced) puts every
+  panel back. Settings no longer lists the panels or offers the **Classic layout** (the fixed panes of before,
+  `iris.dock.classic`); its switch shows there only while it is on, to come back (owner, Nov 23).
 - The layout is kept in this browser (`iris.dock.v2`, dockview's `toJSON`, saved a moment after each change and
   after a collapse). The old `iris.dock.v1` (Activity open) is no longer read, so the new default applies once. A layout that can't be Iris's (another version, a panel it doesn't have, the model anywhere but the
   middle) gives way to the default. Pop-out windows come back docked after a reload: a browser opens a window only on

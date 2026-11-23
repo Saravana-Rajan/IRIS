@@ -79,7 +79,7 @@ a mistyped or old link) shows the app's own Page not found page (`NotFound.tsx`)
 | `workingsGraph.ts` | A run's events as a graph to draw (lanes, columns, steps, edges, timeline bars), one builder per kind of run, as it stood at any moment | `graphOf`, `sec`, `Graph`, `Step`, `Edge`, `Lane`, `Part`, `Peek` | `Workings.tsx`, `App` (`Peek`) |
 | `runlog.ts` | The runs the page watched, for Workings: each run's events (meshes dropped, but a trial's pieces kept for the newest three proposals) with when they arrived, its origin (you, the chat, an agent over MCP, a tour replay); kinds: propose, plan, triage, built, detect, chat (a Chat panel turn); 12 kept, never letting a live one go | `runs`, `RunLog`, `lean`, `Run`, `RunHandle`, `RunKind`, `Origin`, `RUNS_KEPT`, `TRIALS_KEPT` | `App`, `Workings.tsx` |
 | `Agent.tsx` | "Connect an agent" dialog: token and server fields, client set-up snippets, time left, the agent's log | `AgentDialog`, `timeLeft`, `secondsLeft`, `AgentLogEntry` | `App` |
-| `AppMenu.tsx` | `MenuSheet`: a titled panel from the right with every action by name; Escape or the scrim closes it. App opens two from the sidebar (below, "The app shell"): **Settings** at `/settings` (your name for review decisions, This session, Panels and layout, Owner settings when the server has an owner, and a Help link; the workspace's own actions, sample models, your own files, checks and a Navisworks report, moved to the workspace: App's `workMore`, a closed line under the Models step's import and at the top of the workspace's left panel, `data-work-actions`) and **Help** at `/help` (the principle and the eight steps, the samples, good to know) | `MenuSheet` | `App` |
+| `AppMenu.tsx` | `MenuSheet`: a titled panel from the right with every action by name; Escape or the scrim closes it. App opens two from the sidebar (below, "The app shell"): **Settings** at `/settings`, lean (owner, Nov 23): your name for review decisions and Help ("How Iris works, and samples to try", the privacy note) in view, a phone's Report and Export, then one closed **Advanced** disclosure (`details[data-settings="advanced"]`: Coordination requirements, Connect an agent, Reset the layout, Owner settings when the server has an owner; hidden when it would hold nothing). No Panels list, no "Workings in Activity", no Classic layout switch (shown only while it is on, to come back): panels open from the workspace and Workings from the Activity bar; the workspace's own actions, sample models, your own files, checks and a Navisworks report, moved to the workspace: App's `workMore`, a closed line under the Models step's import and at the top of the workspace's left panel, `data-work-actions`) and **Help** at `/help` (the principle and the eight steps, the samples, good to know) | `MenuSheet` | `App` |
 | `Brand.tsx` | Iris's identity in the page: the **Aperture** mark (six holographic blades around an ink hexagonal pupil, drawn inline: `ApertureMark`, its paths `APERTURE_PUPIL` and `APERTURE_BLADES`; `working` opens and closes the blades, the workspace status line's "Iris is working" sign, still under reduced motion; `mono` in one colour), the lockup with "Iris" in live text (`Lockup`; `Wordmark` now draws it), the app icon (`AppIcon`: the mark on a white tile), the loading card while the first models open (`LoadCard`, with the glass ring still (`glassStill("ring")`, turning slowly) at its head, fed by `LoadProgress`; `serverLine` says the server may be waking after `WAKE_AFTER_MS`, `loadShare` is the bar's share) and the kept-fix toast (the mark beside the words). The older split-O (`IrisMark`) and `Notch` are still exported but App renders neither; `NotchStatus` is what the workspace's status line says while Iris works | `ApertureMark`, `APERTURE_PUPIL`, `APERTURE_BLADES`, `Lockup`, `Wordmark`, `IrisMark`, `AppIcon`, `Notch`, `NotchStatus`, `LoadCard`, `LoadProgress`, `serverLine`, `loadShare`, `WAKE_AFTER_MS`, `KeptToast` | `App`, `AppShell.tsx` (`ApertureMark`), `About.tsx` (`Wordmark`) |
 | `BuiltView.tsx` | Show it built's picture over Iris's view, the wipe dragged on the picture (its handle, each side named, the keys), "Lines from the model", the "Checked against the model" chip | `BuiltView`, `builtStep`, `cutText`, `wipeAt`, `BuiltRun` | `App`, `PlanPanel.tsx` |
 | `Chat.tsx` | "Chat with Iris": turns, tool steps, suggestions, the mic (hold to talk, hands-free, upload fallback); tells the page what was asked (`asked`) before each request, so Workings draws the turn | `ChatPanel`, `Turn`, `Step` | `App` |
@@ -306,10 +306,12 @@ the workspace and the pages in it.
   shimmer while an AI model works: a proposal, a plan, a wider fix, triage); else a quiet summary (N clashes · N fixed).
   It replaces the notch over the model and the floating status cards. Phones and tablets keep the in-view overlays
   instead (error, gone, pilot, busy).
-- **Settings** (the sidebar's): `MenuSheet title="Settings"`: first **Your name for review decisions** (the reviewer's
-  name, `iris.reviewer`), then what the old menu held: Models (open the samples, add,
-  upload), Coordinate (check, run all, back to Iris's checks, the Navisworks XML import), This session (Requirements,
-  Report, Export, Connect an agent; not on the landing), Panels and layout (desktop, not the landing).
+- **Settings** (the sidebar's): `MenuSheet title="Settings"`, lean (owner, Nov 23: "do we need this?"): **Your name
+  for review decisions** (the reviewer's name, `iris.reviewer`) and **Help** (How Iris works, and samples to try; the
+  privacy note) in view; on a phone, This session (Report, Export: its header has no room); then one closed
+  **Advanced** disclosure: Coordination requirements (a session open), Connect an agent and Reset the layout (desktop,
+  not the landing), Owner settings (only with an owner). The panels list, Workings in Activity and the Classic layout
+  switch are gone (the switch shows only while it is on); the workspace's actions live in the workspace (`workMore`).
 - **Help** (the sidebar's): `MenuSheet title="Help"`: the principle and the eight steps (`PROJECT_FLOW`), Try the
   sample building and Try the sample drawings (when the server has them), and good to know: projects are private to
   this browser by an unguessable id, your name (in Settings, or above the proposals) is recorded with each decision, "/" to
@@ -707,9 +709,8 @@ with a getter for the viewer, a framing function (`frameFix` on the trial's piec
   The workspace's actions sit in the top bar on both: the tablet's **Clashes** button, then Save and Report (not on a
   phone) and Export. Errors, the server letting go of the models, the agent driving the view and the busy line stay
   as overlays in the view.
-- `MenuSheet` is a panel from the right on every layout, and App opens two from the sidebar: **Settings** (the
-  Models, Coordinate, This session and Panels and layout sections; `modelsMenu`, `coordinateMenu` and `layoutMenu`
-  render them) and **Help** (below, "The app shell"). Escape or the scrim closes either.
+- `MenuSheet` is a panel from the right on every layout, and App opens two from the sidebar: **Settings** (your
+  name, Help, and the closed Advanced section; `layoutMenu` renders its Reset the layout) and **Help** (below, "The app shell"). Escape or the scrim closes either.
 - The tablet keeps the right pane and shows the list as a drawer (`listOpen`, the top bar's **Clashes**,
   `drawer-scrim`); in the shell the drawer starts under the top bar.
 
