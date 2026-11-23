@@ -1442,3 +1442,51 @@ captions was the browser's own control bar (a black gradient under them whenever
 light (`::-webkit-media-controls-enclosure` inverted and hue-turned back: a white haze with ink icons; the ⋮ menu stays
 white). The `.vtt` files are unchanged. Checked: `demoVideo.test.mjs` (the rules), and headless Chromium with the 3D
 demo paused at 2.5 s, a caption showing, at 1512 x 805 and 390 x 844 (white box, dark text, light bar), and the ⋮ menu.
+
+**Nov 23 (2026-11-23), reconnecting by itself after a restart, and no more "tried 0 ideas"** ([10](10-http-api-and-streams.md),
+[12](12-web-app.md)). Live: the owner had the sample building open in a project when Cloud Run restarted (a deploy;
+scale to zero does the same); open scenes live in memory, so the page's next calls (`propose/stream`, `measure`,
+`images`, `/api/scenes/<id>`) got 404s, and clash #119 read "Now: open the models to measure" and "No edit passed the
+geometry check. Iris tried 0 ideas … What this teaches: …" although the AI never ran. Three causes: (1) a restart
+forgets the registered requirements too, so with requirements in use every call's first answer was the 409
+`requirements_unknown`, and `api.ts` `send` read only that first answer for `X-Iris-Gone`, never the retry's 404, so
+the page was not told (now `tellGone` reads both); (2) the gone handler only showed a notice, and inside a project
+(`sceneUploaded`) it offered "Pick your files again", not the project's saved models; (3) `trackAgent` seeds an empty
+proposal, so a run that failed before any result ended as a proposal with no options and no attempts, which `NoFix`
+drew as "tried 0 ideas". Now: the page **reconnects by itself** once per loss (`reconnect`, `autoReopen`; never again
+within a minute, then the banner "The server restarted, so your open models were closed." with Reopen them): inside a
+project the project's own open (`openProjectScene`, its last saved state, checked again with its clash numbers), sample
+models by name, a lone report by its check or sample. The header says "Reconnecting your models… (the server
+restarted)" (`status-reconnect`). The clash on screen comes back by its pair, else its #N (`restoreClash`), and a
+proposal stopped by the restart says so with Try again. A proposal that stops before a result (no answer, gone, 5xx,
+no AI model) carries `error` and renders `ProposeFailed` with `plainError`'s words; `NoFix` is only for a run that
+tried ideas. `proposeStream` throws an `ApiError` with its status. Server: every scene- or report-scoped route answers
+its 404 with `X-Iris-Gone` before anything starts; the gaps were `context/stream` (a gone `report_id`), an upload whose
+scene went while the files came in, the keep routes and `offset/check` (body checks first), `export`, the clash view
+upload (PNG check first) and `requirements/preview`. Checked: `test_api.py` (a 40-route parametrized gone test, a held
+report with a gone scene, a gone `report_id` on the streams, the upload race), `gone.test.mjs` (the 409-then-404 retry,
+the sample reopened once then the banner, a project reconnect from a propose's 404 with the clash back and Try again,
+a failed reconnect not retried, a stopped propose's plain reason), the web suite, `tsc`, `vite build`, the server
+suite (the two local pango PDF failures aside) and `test_docs_map.py`; and headless Chromium on a local one-origin
+server with no Gemini credentials: the sample building in a project, clash #1 selected, the server process restarted,
+Propose fixes: "Reconnecting your models…", then the models and #1 back, measured, no "tried 0 ideas", "No fixes yet.
+The server restarted before Iris could propose fixes…" with Try again, which then said "No AI model is configured on
+this server".
+
+**Nov 23 (2026-11-23), a no-pass result that reads as an outcome, not a failure** ([12](12-web-app.md),
+[05](05-domain-model-and-state.md)). Live, clash #108 (a ground beam into pad footing B1, −150 mm): Gemini's
+understanding rightly called it an intentional bearing joint, yet the panel said "No edit passed the geometry check.
+Iris tried 6 ideas", listed six red "Failed validation ✕" cards each with an Accept button, and "What this teaches:
+Follow the advice below, then propose again". Now `NoFix` shows one calm card. When the triage verdict held for the
+clash is `by_design`, or the proposing model's own words say the overlap is meant (`proposalState.designedJoint`, a
+tight per-sentence reading that skips negations and hedges; no model call), it reads "Looks like a designed joint, not
+an error." with **Mark as intentional**: the clash is marked Reviewed (`review(…, "by_design")`, so it leaves the Open
+count) and a new `by_design` decision ("Marked as intentional", against the `as_designed` "Designed joint, no edit"
+option, with the clash key, #N, the reviewer and the reason) goes to the edit log (`journal.DECISIONS`), which
+Activity, the PDF and BCF show and a reopened project restores. Otherwise it reads "No safe move found: every idea Iris
+tried would hit something else", with "What decides it" only for real advice. Both offer Ask for a deep think, Propose
+again and Flag for the model's author. The refused ideas fold under "N ideas refused by the geometry check · Show"
+(closed by default) as neutral cards with no Accept and their evidence kept. Checked: `proposal-outcome.test.mjs`
+(seven cases: the reading, Mark as intentional posting the decision, the triage path, "No safe move found", the
+folded list, no Accept on a refused card, the decision's words), `proposal-state.test.mjs`, `test_decisions.py`, the
+web and server suites, `tsc` and `vite build`.

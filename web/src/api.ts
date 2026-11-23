@@ -92,6 +92,9 @@ export interface Proposal {
   usage?: Usage | null;  // its tokens, and what they cost for a model billed per token
   /** A second try on a larger model (docs/escalation.md): the first try's options and ideas are carried in. */
   escalated?: boolean;
+  /** The page's own: why the run stopped before a result (no answer, the models gone, a server or model failure), in
+   * plain words. Such a run tried nothing, so it never reads as "no edit passed". */
+  error?: string;
 }
 export interface Usage { model: string; calls: number; input_tokens: number; output_tokens: number; reasoning_tokens: number; usd: number }
 /** Show it built (server: built.make): Gemini Image's restyle of a fix's view, checked against the model. */
@@ -537,16 +540,21 @@ export function goneOf(r: Pick<Response, "status" | "headers">): Gone | null {
   return m ? { kind: m[1] as Gone["kind"], id: m[2] } : null;
 }
 
-/** fetch, registering the requirements again and retrying once when the server has forgotten them, and telling the
- *  page when a scene or report is gone. */
-async function send(url: string, init: RequestInit = {}): Promise<Response> {
-  const r = await apiFetch(url, init);
+/** Tell the page when an answer says a scene or report is gone. */
+async function tellGone(r: Response): Promise<Response> {
   const gone = goneOf(r);
   if (gone && goneHandler) goneHandler({ ...gone, detail: (await r.clone().json().catch(() => null))?.detail });
+  return r;
+}
+/** fetch, registering the requirements again and retrying once when the server has forgotten them, and telling the
+ *  page when a scene or report is gone. A restart forgets both: the first answer is the 409, and the 404 naming the
+ *  models comes on the retry, so the retry's answer is read for it too (Nov 23: it was not, and no reopen was offered). */
+async function send(url: string, init: RequestInit = {}): Promise<Response> {
+  const r = await tellGone(await apiFetch(url, init));
   if (r.status !== 409 || !requirementsId || !requirementsDoc) return r;
   const detail = (await r.clone().json().catch(() => null))?.detail;
   if (detail !== "requirements_unknown" || !(await reRegister())) return r;
-  return apiFetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), "X-Iris-Requirements": requirementsId! } });
+  return tellGone(await apiFetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), "X-Iris-Requirements": requirementsId! } }));
 }
 /** A JSON request read outside `api` (reviewQueue.prepareFixes' stream): the same headers (owner settings, the
  *  requirements in use) and the same requirements retry and gone handling as every call here. */
@@ -948,7 +956,9 @@ export const api = {
       method: "POST", headers: jsonHeaders(),
       body: JSON.stringify({ element_a, element_b, ...from, ...(escalate ? { escalate } : {}), ...(notes ? { notes } : {}) }),
     });
-    if (!r.ok || !r.body) throw new Error((await r.json().catch(() => null))?.detail ?? `Request failed (${r.status})`);
+    // A refusal before the stream (404: the models are gone, 429: the cap) keeps its status: the page tells a run
+    // that never started from one that tried ideas and found none.
+    if (!r.ok || !r.body) throw new ApiError((await r.json().catch(() => null))?.detail ?? `Request failed (${r.status})`, r.status);
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";

@@ -212,14 +212,16 @@ test("card: a validated fix shows its chip, rows and an enabled Accept", () => {
   assert.ok(["Accept", "Reject", "Modify"].every((t) => button(busy, t).props.disabled), "busy: nothing can be pressed");
 });
 
-test("card: Accept is disabled for every state but geometry-validated, whatever the caller claims", () => {
-  const cases = [[attempt, "failed_validation", "Failed validation ✕"], [recommendation, "unverified", "Unverified"],
-    [idea, "geometry_validated", "AI-proposed"]];
+test("card: Accept is disabled for every state but geometry-validated, whatever the caller claims; a refused one has none", () => {
+  const cases = [[recommendation, "unverified", "Unverified"], [idea, "geometry_validated", "AI-proposed"]];
   for (const [item, state, chip] of cases) {
     const tree = render({ item, state, names, onAccept() { throw new Error("must not accept"); } })();
     assert.ok(hasText(tree, chip), chip);
     assert.equal(button(tree, "Accept").props.disabled, true, chip);
   }
+  const refused = render({ item: attempt, state: "failed_validation", names, onAccept() { throw new Error("must not accept"); } })();
+  assert.ok(hasText(refused, "Failed validation ✕"));
+  assert.equal(button(refused, "Accept"), undefined, "refused by geometry: no Accept at all");
   const failed = render({ item: attempt, state: "failed_validation", names })();
   assert.ok(hasText(failed, "collision with IfcWall 'W-12' (-35 mm)"));
   assert.ok(hasText(failed, "Wall W-12, unknown-id"), "what it hit, by name");

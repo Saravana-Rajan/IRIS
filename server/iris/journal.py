@@ -33,7 +33,7 @@ import numpy as np
 SOURCES = ("you", "model", "agent", "fix", "plan", "wider")
 PICTURE_MAX_BYTES = 400_000   # one small picture per entry, as a data URL (the page takes it; the server has no GPU)
 DECISION_STATES = ("ai_proposed", "geometry_validated", "failed_validation", "unverified")
-DECISIONS = ("accepted", "rejected", "modified", "requested_another")
+DECISIONS = ("accepted", "rejected", "modified", "requested_another", "by_design")   # by_design: marked intentional
 
 
 class Fenced(RuntimeError):

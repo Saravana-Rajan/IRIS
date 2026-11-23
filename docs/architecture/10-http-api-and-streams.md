@@ -141,7 +141,7 @@ The origins are read on each request (cached per raw value) and one `CORSMiddlew
 | `Access-Control-Allow-Origin`, `Access-Control-Allow-Credentials: true`, `Vary: Origin` | response | `_CrossOrigin` | the browser | Split only, and only for an allowed origin: the origin itself, never `*`. A preflight also gets `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers` and `Access-Control-Max-Age: 3600`. |
 | `Access-Control-Expose-Headers: X-Iris-Gone, Content-Disposition` | response | `_CrossOrigin` | the browser | Split only: lets the page on the other origin read those two headers. |
 | `Content-Encoding: identity`, `Cache-Control: no-store, no-transform`, `X-Accel-Buffering: no` | response | `_ndjson` (`NDJSON_HEADERS`), and `_McpGate` adds the first | the edge | Keep streams flowing (below). |
-| `X-Iris-Gone` | response | `_gone` on the 404 of `_scene` and `_report` | `api.ts` `send` → `goneOf`, App's handler | What the server no longer holds: `scene:<id>` or `report:<id>` (a restart, a redeploy or eviction). Only an id the server could have made (hex) goes back. |
+| `X-Iris-Gone` | response | `_gone` on the 404 of `_scene` and `_report` | `api.ts` `send` → `goneOf`, App's handler | What the server no longer holds: `scene:<id>` or `report:<id>` (a restart, a redeploy, scale to zero or eviction), on every scene- or report-scoped route, streams before they start ("Errors and refusals"). Only an id the server could have made (hex) goes back. |
 | `Cache-Control: no-store` | response | `GET /api/scenes/{scene_id}/files/{index}` | the browser | The same URL serves the edited model after a kept fix. |
 | `Cache-Control: private, max-age=86400` | response | `GET /api/built/{name}` | the browser | A checked picture never changes for its key. |
 | `Content-Disposition: attachment` | response | `GET /api/documents/{doc_id}`, `GET /api/projects/{pid}/reports/{doc_id}`, `FileResponse(filename=…)` on export | the browser | The download's file name. |
@@ -171,6 +171,13 @@ is a 422 whose `detail` is a list, not a string.
 - **Caps are charged before work starts**, so a 429 is a plain HTTP reply even on a streaming route. A failure
   *after* a stream has started is an `error` event in the stream (`{"type": "error", "detail"}`; the document stream
   uses `message`, the upload stream adds `status`).
+- **A scene or report the server no longer holds** (a restart, a redeploy, scale to zero or eviction): every
+  scene- or report-scoped route, streams included, answers the plain 404 of `_scene` or `_report` with
+  `X-Iris-Gone: scene:<id>` or `report:<id>` before anything starts, never a 200 stream with an `error` event. The ids
+  in the path and a body's `report_id` are checked first, before the route's own checks of the body; a model upload
+  whose scene is let go while its files come in is deleted and answered the same way. A `scene_id` taken only as a
+  hint (triage, titles, teams, the document) is used when held and ignored when not. The page then reconnects by
+  itself: it reopens the project's saved models, or the sample, and else offers a banner ([12](12-web-app.md)).
 - **The owner** (cookie plus `no_caps`, the default) skips every visitor cap (`_take` returns `None` when
   `owner.no_caps()`) and is never refused by the escalation model's day budget, though the owner's spend still counts
   towards it (`spend.claim(exempt=True)`, [16](16-security-caps-and-cost.md)).
@@ -186,9 +193,9 @@ is a 422 whose `detail` is a list, not a string.
 - **`send(url, init)`** wraps `apiFetch`: on a 409 whose `detail` is `requirements_unknown`, it registers the file again
   (`reRegister`: `POST /api/requirements` with the saved document, no requirements header) and retries the request
   once with the new id. On a 404 with `X-Iris-Gone` (`goneOf`) it calls the page's handler (`setGoneHandler`)
-  with the kind, the id and the server's words, then returns the reply as usual: App shows one notice that offers to
-  open the models again ([12](12-web-app.md), "When the server lets go of the models"). `saveView` goes through `send`
-  too.
+  with the kind, the id and the server's words, then returns the reply as usual: App reopens the models by itself
+  (the project's saved models, or the sample), else shows one notice that offers to open them again
+  ([12](12-web-app.md), "When the server lets go of the models"). `saveView` goes through `send` too.
 - **`call<T>(path)`** sends JSON with `jsonHeaders()` (both headers above) and throws `ApiError(detail, status)` on
   any non-2xx; components read `e.status` where it matters (a 404 on any agent-link call drops the link; a 409 or 404
   on a wider-fix accept marks the proposal stale).
@@ -322,7 +329,7 @@ no reader).
 | `POST` | `/api/scenes/{scene_id}/edits/undo` | Undoes the newest kept edit (`Workspace.undo_edit`): its transactions rolled back on each file, boxes and edited files put back, the revision moved forward; returns the patch (what it made in `removed`) and each of the entry's clashes measured again (`clash_states`: the page opens or marks fixed from that, whoever kept the entry) | `EditStep {entry?}` | `{entry, files, changed, removed, clash_states, can_undo, can_redo, undo, redo}` plus the patch | free; 409 when another edit came after it outside the log, a wider fix replaced the models (or models were added or removed since a wider fix), `entry` changed a model since removed (`model_removed`: undo passes over it), or `entry` is not the newest |
 | `POST` | `/api/scenes/{scene_id}/edits/redo` | Redoes the last undone edit (`Workspace.redo_edit`) | `EditStep {entry?}` | as undo | free; 409 when the model changed since it was undone, or `entry` changed a model since removed |
 | `POST` | `/api/scenes/{scene_id}/edits/{entry_id}/picture` | A picture of a kept edit, taken by the page right after it (`Journal.attach_picture`): the report's "After the edits" | `EditPicture {png}` (a `data:image/` URL, at most 400 kB) | `{ok}` | free; 404 unknown entry, 400 not a picture or too big |
-| `POST` | `/api/scenes/{scene_id}/decisions` | Records a reviewer's decision about a proposal (`Journal.add_decision`, [05](05-domain-model-and-state.md)): kept in memory with the scene, saved only with a project | a Decision `{clash_id, clash_key, number?, option: {title, kind, moved, delta_m?, rationale?}, state, decision, reason?, reviewer?, check?}`; `state` one of `ai_proposed`, `geometry_validated`, `failed_validation`, `unverified`; `decision` one of `accepted`, `rejected`, `modified`, `requested_another` | `{decision, decisions}` | free; 404 unknown scene, 422 a bad field |
+| `POST` | `/api/scenes/{scene_id}/decisions` | Records a reviewer's decision about a proposal (`Journal.add_decision`, [05](05-domain-model-and-state.md)): kept in memory with the scene, saved only with a project | a Decision `{clash_id, clash_key, number?, option: {title, kind, moved, delta_m?, rationale?}, state, decision, reason?, reviewer?, check?}`; `state` one of `ai_proposed`, `geometry_validated`, `failed_validation`, `unverified`; `decision` one of `accepted`, `rejected`, `modified`, `requested_another`, `by_design` (a clash marked intentional) | `{decision, decisions}` | free; 404 unknown scene, 422 a bad field |
 
 "The patch" is `Workspace.patch`: `{scene_id, revision_before, revision, layout, meshes, history}`, which lets the
 page update its model in place (`applyToViewer`, [07](07-fixes-and-edits.md), [13](13-3d-viewer.md)). `history`'s file

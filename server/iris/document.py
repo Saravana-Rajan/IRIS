@@ -468,7 +468,7 @@ def changes_html(changes: list[dict], numbers: dict[str, int]) -> str:
 STATE_LABEL = {"ai_proposed": "AI-proposed", "geometry_validated": "Geometry-validated",
                "failed_validation": "Failed validation", "unverified": "Unverified"}
 DECISION_LABEL = {"accepted": "Accepted", "rejected": "Rejected", "modified": "Modified",
-                  "requested_another": "Requested another"}
+                  "requested_another": "Requested another", "by_design": "Marked as intentional"}
 EVIDENCE_LABEL = {
     "kept": "Geometry-validated at keep",              # the edit log's check at keep passed (check.verified)
     "kept_earlier": "Geometry-validated at keep (earlier session)",   # the same, from a reopened project's history

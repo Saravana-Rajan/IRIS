@@ -129,7 +129,7 @@ test("a reload resumes the list of kept checks on the check it showed; a list th
   } finally { delete globalThis.localStorage; }
 });
 
-test("a list the server let go of while the models are held is made again, with no check run", async () => {
+test("a list the server let go of while the models are held is made again by itself, with no check run", async () => {
   const first = list("r1", 1, [MODELS, DUCTS], [BOTH, ONLY_MODELS]);
   const again = list("r5", 5, [MODELS, DUCTS], [BOTH, ONLY_MODELS]);
   const ran = [];
@@ -140,10 +140,9 @@ test("a list the server let go of while the models are held is made again, with 
       detect: async () => { ran.push(1); return done(again, "models", again.checks); } } });
   await host.settle();
   host.gone({ kind: "report", id: "r1", detail: "Clash report not loaded. Open it again." });
-  assert.ok(host.button("Open it again"));
-  host.button("Open it again").props.onClick();
-  await host.settle();
+  await host.settle();   // the models are asked after first (held), then the list is made again: no button needed
   assert.equal(host.state.report.id, "r5");
+  assert.equal(host.button("Open it again"), undefined);
   assert.deepEqual(ran, [], "no detection run is spent");
   host.unmount();
 });

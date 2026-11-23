@@ -51,6 +51,10 @@ export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept
   };
   const cancel = () => { setRejecting(false); setWhy(""); };
   const done = decided ? decisionWords(decided) : null;
+  // A refused idea is evidence, not a choice: no Accept at all (nor on an attempt nobody can accept), only its reasons.
+  const refused = d.state === "failed_validation";
+  const canAccept = !refused && (!!onAccept || !("passed" in item));
+  const actions = canAccept || !!onReject || !!onModify || !!onAnother || !!onShowBeforeAfter;
 
   return (
     <article className={`pcard ${CHIP[d.state]}${aiOnly ? " holo-edge" : ""}`} data-state={d.state} aria-label={`${d.title}: ${STATE_LABEL[d.state]}`}>
@@ -105,11 +109,11 @@ export function ProposalCard({ item, state, names, requiredClearanceMm, onAccept
           <button type="submit" className="btn small" disabled={!reason || busy}><X size={13} aria-hidden /> Reject</button>
           <button type="button" className="btn small ghost" onClick={cancel}>Cancel</button>
         </form>
-      ) : (
+      ) : actions && (
         <div className="pcard-actions">
-          <button type="button" className="btn small primary" data-tour={acceptTour} disabled={!valid || busy || !onAccept} onClick={() => onAccept?.()}
+          {canAccept && <button type="button" className="btn small primary" data-tour={acceptTour} disabled={!valid || busy || !onAccept} onClick={() => onAccept?.()}
             data-tip={valid ? "Geometry checks it again before it is kept" : "Only a geometry-validated fix can be accepted"}>
-            <Check size={13} aria-hidden /> Accept</button>
+            <Check size={13} aria-hidden /> Accept</button>}
           {onReject && <button type="button" className="btn small" disabled={busy} onClick={() => setRejecting(true)}
             data-tip="Set it aside, with a reason"><X size={13} aria-hidden /> Reject</button>}
           {onModify && <button type="button" className="btn small" disabled={busy} onClick={() => onModify()}

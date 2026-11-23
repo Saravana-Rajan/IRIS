@@ -58,7 +58,7 @@ async function appHost() {
   globalThis.__irisAppApi = { proposeStream: () => new Promise((resolve) => requests.push(resolve)),
     contextStream: (_sid, objective, onEvent) => new Promise((resolve) => contextRequests.push({ objective, onEvent, resolve })) };
   const react = url("export const useState=(...a)=>globalThis.__irisAppHooks.useState(...a),useRef=(...a)=>globalThis.__irisAppHooks.useRef(...a),useMemo=(...a)=>globalThis.__irisAppHooks.useMemo(...a),useEffect=()=>{};");
-  const api = url("export const api={proposeStream:(...a)=>globalThis.__irisAppApi.proposeStream(...a),contextStream:(...a)=>globalThis.__irisAppApi.contextStream(...a),exportUrl:()=>'/export',journalCsvUrl:()=>'/edits.csv',journal:async()=>({entries:[],can_undo:false,can_redo:false,undo:null,redo:null}),models:async()=>({triage:{model:'m'}})}; export class ApiError extends Error{} export const setRequirements=()=>{}; export const setGoneHandler=()=>{}; export const apiUrl=(p)=>p; export const wsUrl=(p)=>p; export const apiFetch=(p,i)=>globalThis.fetch(p,i);");
+  const api = url("export const api={proposeStream:(...a)=>globalThis.__irisAppApi.proposeStream(...a),contextStream:(...a)=>globalThis.__irisAppApi.contextStream(...a),exportUrl:()=>'/export',journalCsvUrl:()=>'/edits.csv',journal:async()=>({entries:[],can_undo:false,can_redo:false,undo:null,redo:null}),models:async()=>({triage:{model:'m'}})}; export class ApiError extends Error{} export const setRequirements=()=>{}; export const setGoneHandler=()=>{}; export const apiUrl=(p)=>p; export const wsUrl=(p)=>p; export const apiFetch=(p,i)=>globalThis.fetch(p,i); export const apiSend=(p,i)=>globalThis.fetch(p,i);");
   const ownership = await compiled("../src/chatRequest.ts", {});
   const kinds = await compiled("../src/fixKinds.ts", {});
   const uploads = await compiled("../src/uploads.ts", {});
@@ -79,6 +79,8 @@ async function appHost() {
     "./drawingsApi": await compiled("../src/drawingsApi.ts", { "./api": api }),
     "./sampleDrawings": await compiled("../src/sampleDrawings.ts", {}), "./shellNav": await compiled("../src/shellNav.ts", {}),
     "./projectsApi": await compiled("../src/projectsApi.ts", { "./api": api }) };
+  dependencies["./reviewQueueModel"] = await compiled("../src/reviewQueueModel.ts", { "./api": api,
+    "./coordination": dependencies["./coordination"], "./proposalState": dependencies["./proposalState"] });
   for (const name of ["./Activity", "./Chat", "./ReportDoc", "./Owner", "./Tour", "./About", "./Agent", "./ClashPanel", "./PlanPanel", "./Insights", "./Triage", "./Detect", "./ReportList", "./noClash", "./ui", "./pilot", "./viewer/Viewer", "./ViewerToolbar", "./Requirements", "./ProjectStart", "./reqFile", "./layout", "./Sheet", "./AppMenu", "./BuiltView", "./ViewPanes", "./dock", "./MeasurePanel", "./Properties", "./FiltersPanel", "./ElementCard", "./Brand", "./EditPanel", "./EditTool", "./editIcons",
     "./DrawingsPanel", "./StartScreen", "./ImportPanel", "./ModelSummaryPanel", "./CoordinationOverview", "./ClashHeader", "./ProposalCard", "./ReviewQueue", "./ProjectsHome", "./ProjectOverview", "./AppShell", "./PageHeader", "./Holo", "./CursorGlow", "./NotFound", "./DemosPage"]) dependencies[name] = mocks;
   const { App } = await import(await compiled("../src/App.tsx", dependencies, true));

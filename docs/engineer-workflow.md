@@ -69,7 +69,7 @@ type Decision = {
   clash_id: string; clash_key: string; number?: number;
   option: { title: string; kind: string; moved: string[]; delta_m?: [number, number, number] | null; rationale?: string };
   state: "ai_proposed" | "geometry_validated" | "failed_validation" | "unverified";
-  decision: "accepted" | "rejected" | "modified" | "requested_another";
+  decision: "accepted" | "rejected" | "modified" | "requested_another" | "by_design";   // by_design: marked intentional
   reason?: string; reviewer?: string; at: number;
   check?: { verified: boolean; min_clearance_m?: number | null; checked_against?: number | null; reason?: string };
   entry?: string; session?: string;   // set by a keep: the edit-log entry and the scene (session) that kept it
