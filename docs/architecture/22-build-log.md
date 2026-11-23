@@ -1467,4 +1467,8 @@ deploys both. CI on the branch (`ci.yml`): 2:39 and 2:11 (runs 45123249870 and 4
 45122442429); the `server` job 1:41 and 2:08 against 4:06 (pytest 1:18 and 1:25 against 3:09). The first run after the
 `uv.lock` change also saved a new uv cache (1:00 in VisionBench's post step), once. `deploy/changed-parts.sh` lists
 the changed paths before reading them, so a failing `git diff` fails the job instead of reading as nothing changed.
-`deploy.yml` runs only on `main`, so it was checked by `actionlint` and review, not run.
+The Dockerfile, built locally (arm64, the web stage stubbed) before and after: the image 1,211 MB against 511 MB, the
+dependency layer 2.91 GB against 1.5 GB (uv's cache is out of it), and the 1.5 GB `chown` layer gone; `stat` shows the
+same owners in both (`iris` on `/app/server`, its venv, code and lock files, and `/mnt/iris`; root on `/app/samples`
+and `/app/web/dist`), and `iris` can write its settings file and projects folder in `/app/server`. `deploy.yml` runs
+only on `main`, so it was checked by `actionlint` and review, not run.
