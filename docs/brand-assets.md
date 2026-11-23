@@ -25,7 +25,8 @@ shows it.
 | `svg/app-icon.svg`, `svg/app-icon-maskable.svg` | App icons; the maskable one keeps the mark inside the safe area |
 | `svg/safari-pinned-tab.svg` | Single-colour pinned-tab icon |
 | `svg/spinner.svg` | The loading spinner (used as a CSS mask) |
-| `svg/og.svg` | The social card source |
+| `social/og.html` | The link-preview card (1200×630): the glass Aperture, "Iris", the tagline and "Built by Techjays"; rendered to `web/public/brand/og.png` |
+| `svg/og.svg` | The earlier social card (split-O), for reference |
 | `tokens/iris-colours.json`, `tokens/iris-tokens.css` | The colours above as JSON and CSS custom properties |
 
 "Light" and "dark" name the background the file is meant for.
@@ -42,7 +43,9 @@ shows it.
   nothing advances on a timer, and no animation stands in for a geometry result.
 - **Icons:** `web/public/favicon.svg` and `web/public/brand/` (`favicon.svg`, `favicon-32.png`, `favicon.ico`, the Apple
   touch icon, the Android and maskable icons rendered from the mark, the pinned tab, the manifest); theme colour white.
-  `og.png` still shows the earlier mark.
+- **Link preview:** `web/public/brand/og.png` (1200×630), rendered from `social/og.html`: white, the glass Aperture
+  still, "Iris", "AI proposes. Geometry proves. The engineer decides." and "Built by Techjays". `web/index.html`'s
+  `og:` and `twitter:` tags point to it by its full address.
 - **Report:** the PDF cover carries the Aperture lockup (`document.LOCKUP`).
 - Reduced motion stills the spinner.
 

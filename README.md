@@ -364,25 +364,25 @@ one-time setup is `deploy/github-setup.sh`, and `deploy/deploy.sh` still deploys
 
 See it live at <https://iris-techjays.web.app>.
 
-<!-- screenshot: home → docs/media/home.png (first screen: open a sample project)
-![Iris: the first screen](docs/media/home.png)
--->
+**Home:** start a project, or try the sample building or its drawings.
 
-<!-- screenshot: clash-review → docs/media/clash-review.png (clash list and 3D viewer, Northbank)
-![Clash review in 3D](docs/media/clash-review.png)
--->
+![Iris Home: the tagline beside the glass Aperture, and the three ways to start](docs/media/home.webp)
 
-<!-- screenshot: review-queue → docs/media/review-queue.png (verified fix beside the Before / After view)
-![The review queue: a verified fix, before and after](docs/media/review-queue.png)
--->
+**Clash review:** the sample building with clash #1 (supply air main × transfer girder) selected in 3D.
 
-<!-- screenshot: drawings → docs/media/drawings.png (the 2D drawing reader: confirmed items and mismatches)
-![The 2D drawing reader](docs/media/drawings.png)
--->
+![Clash review: clash #1 selected in the 3D viewer, with the clash list and its details](docs/media/clash-review.webp)
 
-<!-- screenshot: visionbench → docs/media/visionbench-report.png (the VisionBench report: categories and controls)
-![The VisionBench report](docs/media/visionbench-report.png)
--->
+**Review queue:** on #1, the geometry-verified fix "Offset duct up 400 mm", before and after together ("Both").
+
+![The review queue on clash #1: the verified offset fix beside the Before / After view](docs/media/review-queue.webp)
+
+**Drawings:** the sample PDF sheet read by AI and checked against the model: four mismatches.
+
+![The drawing reader's Mismatches tab: four mismatches between the sheet and the model](docs/media/drawings.webp)
+
+**VisionBench:** `gemini-3.8-flash`, 7 seeds: accuracy per job with pictures, and the picture controls.
+
+![The VisionBench report: accuracy per job and the picture controls](docs/media/visionbench.webp)
 
 ## Team
 

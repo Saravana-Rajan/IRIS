@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- The link preview (og:image, twitter:image): render at 1200x630, device scale 1, after fonts load, to
+     web/public/brand/og.png (headless Chromium, e.g. Playwright page.screenshot). The glass still is the hero's
+     web/public/hero/aperture.webp; the mark is the Aperture (web/src/Brand.tsx). -->
+<html lang="en"><head><meta charset="utf-8">
+<title>Iris link preview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root { --ink: #1a1a1a; --muted: #5e5e66; --accent: #b07af2; --pink: #ff5cd6; --accent-ink: #b0269a;
+    --holo: linear-gradient(120deg, #8f9bff 0%, #b07af2 40%, #ff5cd6 75%, #7dd3fc 100%); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; background: #fff; }
+  body { font-family: "IBM Plex Sans", system-ui, sans-serif; color: var(--ink); position: relative; overflow: hidden; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(70px); }
+  .g1 { width: 560px; height: 560px; right: -60px; top: 20px; background: radial-gradient(circle, rgba(255,92,214,.22), rgba(176,122,242,.16) 45%, transparent 70%); }
+  .g2 { width: 420px; height: 420px; right: 260px; bottom: -220px; background: radial-gradient(circle, rgba(143,155,255,.16), transparent 70%); }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: var(--holo); }
+  .text { position: absolute; left: 84px; top: 0; bottom: 8px; width: 640px; display: flex; flex-direction: column; justify-content: center; }
+  .brand { display: flex; align-items: center; gap: 22px; }
+  .brand svg { width: 92px; height: 92px; }
+  h1 { font-size: 132px; font-weight: 600; letter-spacing: -4px; line-height: 1; }
+  .tag { margin-top: 34px; font-size: 44px; line-height: 1.16; font-weight: 500; letter-spacing: -.6px; }
+  .tag span { display: block; }
+  .tag .hl { background: linear-gradient(100deg, #b0269a, #8a4fe0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .by { margin-top: 38px; display: inline-flex; align-items: center; gap: 10px; font-size: 24px; color: var(--muted); }
+  .by b { color: var(--ink); font-weight: 600; }
+  .by i { width: 10px; height: 10px; border-radius: 50%; background: var(--holo); display: inline-block; }
+  .art { mix-blend-mode: multiply; position: absolute; right: 56px; top: 42px; height: 546px; }
+</style></head>
+<body>
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <img class="art" src="../../../../web/public/hero/aperture.webp" alt="">
+  <div class="text">
+    <div class="brand">
+      <svg viewBox="0 0 100 100"><defs><linearGradient id="h" gradientUnits="userSpaceOnUse" x1="9.54" y1="26.64" x2="90.46" y2="73.36"><stop offset="0" stop-color="#8f9bff"/><stop offset=".4" stop-color="#b07af2"/><stop offset=".75" stop-color="#ff5cd6"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient></defs><path fill="#1a1a1a" d="M42.29 36.65L42.83 36.6L42.51 37.03L46.49 36.73L46.81 36.32A73.9 73.9 0 0 1 57.71 36.65L58.02 37.09L57.49 37.03L59.73 40.33L60.26 40.4A73.9 73.9 0 0 1 65.41 50L65.19 50.49L64.97 50L63.25 53.59L63.44 54.08A73.9 73.9 0 0 1 57.71 63.35L57.17 63.4L57.49 62.97L53.51 63.27L53.19 63.68A73.9 73.9 0 0 1 42.29 63.35L41.98 62.91L42.51 62.97L40.27 59.67L39.74 59.6A73.9 73.9 0 0 1 34.59 50L34.81 49.51L35.03 50L36.75 46.41L36.56 45.92A73.9 73.9 0 0 1 42.29 36.65Z"/><path fill="url(#h)" d="M46.49 36.73A70.5 70.5 0 0 1 76.62 14.34A44.5 44.5 0 0 1 94.47 51.63A73.5 73.5 0 0 0 46.49 36.73ZM59.73 40.33A70.5 70.5 0 0 1 94.19 55.22A44.5 44.5 0 0 1 70.82 89.33A73.5 73.5 0 0 0 59.73 40.33ZM63.25 53.59A70.5 70.5 0 0 1 67.58 90.88A44.5 44.5 0 0 1 26.35 87.7A73.5 73.5 0 0 0 63.25 53.59ZM53.51 63.27A70.5 70.5 0 0 1 23.38 85.66A44.5 44.5 0 0 1 5.53 48.37A73.5 73.5 0 0 0 53.51 63.27ZM40.27 59.67A70.5 70.5 0 0 1 5.81 44.78A44.5 44.5 0 0 1 29.18 10.67A73.5 73.5 0 0 0 40.27 59.67ZM36.75 46.41A70.5 70.5 0 0 1 32.42 9.12A44.5 44.5 0 0 1 73.65 12.3A73.5 73.5 0 0 0 36.75 46.41Z"/></svg>
+      <h1>Iris</h1>
+    </div>
+    <p class="tag"><span>AI proposes.</span><span>Geometry proves.</span><span class="hl">The engineer decides.</span></p>
+    <p class="by"><i></i>Built by <b>Techjays</b></p>
+  </div>
+  <div class="bar"></div>
+</body></html>

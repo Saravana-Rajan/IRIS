@@ -1312,3 +1312,16 @@ longer shadows its viewer-call log. Checked: `npm test` (566), `tsc`, `vite buil
 `test_web_pages.py`, and headless Chromium (GPU) screenshots of Home, the clash row hover, Models, Coordination,
 Activity, Settings, the unknown project and no-WebGL at 1512×805 and 390×844 on a local one-origin server with no
 Gemini key.
+
+**Nov 23 (2026-11-23), README screenshots and a new link preview** ([12](12-web-app.md)). The README's Screenshots
+section shows the final app in `docs/media/` (WebP, 2400×1500, each under 230 KB): `home.webp` (the Home hero with the
+glass Aperture), `clash-review.webp` (the sample building, clash #1 selected), `review-queue.webp` (Prepare fixes, the
+queue on #1 in Both with the verified "Offset duct up 400 mm through girder opening"), `drawings.webp` (Try the sample
+drawings, the Mismatches tab's four) and `visionbench.webp` (the gemini-3.8-flash 7-seed report's own headline and
+controls charts, other sections hidden). The link preview `web/public/brand/og.png` (1200×630) still showed the earlier
+split-O and the old tagline; it is now rendered from `assets/brand/iris/social/og.html`: white, the glass Aperture still,
+the mark and "Iris", "AI proposes. Geometry proves. The engineer decides." and "Built by Techjays", pink and lavender
+accents. `web/index.html` gains `og:type`, `og:url`, `og:description`, the image's full address, size and alt text,
+and the `twitter:` card tags; `og:title` carries the current tagline. The other `web/public/brand/` icons already had
+the Aperture. Checked: headless Chromium (GPU) on a local one-origin server with no Gemini key (saved sample data),
+each image looked at; `npm test`, `npm run build`, `test_docs_map.py`.

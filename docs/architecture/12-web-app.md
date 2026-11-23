@@ -1027,7 +1027,8 @@ IndexedDB is used.
 - **Brand assets:** [`assets/brand/iris/`](../../assets/brand/iris/) holds the direction-05 library (vector
   masters, exports, icons, motion). The app does not import it: `Brand.tsx` carries the wordmark and symbol paths, and
   `web/public/brand/` holds copies of the icons it serves (favicon `.ico`, Apple touch, Android and maskable icons,
-  `site.webmanifest`, the Safari pinned tab, `og.png` from `social/og-light.png`, and `iris-spinner.svg`, the optical
+  `site.webmanifest`, the Safari pinned tab, `og.png`, the link preview that `index.html`'s `og:` and `twitter:` tags name, rendered from
+  `social/og.html`, and `iris-spinner.svg`, the optical
   micro symbol that `.spinner` uses as a mask). `web/public/favicon.svg` is the kit's adaptive favicon. Motion follows
   the kit's semantics: Orbit only while work runs, Settle only after the server kept a fix (`markFixed`), Reveal once
   in the boot splash; reduced motion stills all three. Design and commands: [docs/brand-assets.md](../brand-assets.md).
