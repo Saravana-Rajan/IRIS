@@ -4320,7 +4320,7 @@ export function App() {
   const homePage = showHome && (
     <div className="proj-shell home-shell" role="region" aria-label="Home">
       {pageAlert}
-      <StartScreen name={reviewer} onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
+      <StartScreen onNewProject={() => setNewOpen(true)} onProjects={goProjects} projectsHref={PROJECTS_PATH}
         onSample={sampleSet.length ? () => void trySample() : undefined} sampleBusy={!!projectBusy && projectBusy !== SAMPLE_DRAWINGS_BUSY}
         onSampleDrawings={sampleDrawings ? () => void trySampleDrawings() : undefined} sampleDrawingsBusy={projectBusy === SAMPLE_DRAWINGS_BUSY}
         onSampleStep={sampleSet.length ? (st) => void trySample(st) : undefined}

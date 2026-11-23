@@ -62,13 +62,17 @@ const plainClick = () => { const e = { button: 0, prevented: false, preventDefau
 const P = (id, name, fields = {}) => projectOf({ id, name, updated: (NOW - 12 * 60000) / 1000, ...fields });
 const kinds = (n) => Array.from({ length: n }, (_, i) => ({ name: `m${i}.ifc`, kind: "IFC", size: 1, sha256: "0" }));
 
-test("the greeting: the time of day and the reviewer's name, or 'there' without one", () => {
+test("the greeting: the time of day only, never the reviewer's name", () => {
   const at = (h) => new Date(2026, 10, 22, h, 5).getTime();
   assert.deepEqual([at(5), at(11), at(12), at(17), at(18), at(23), at(2)].map(start.greetingFor),
     ["Good morning", "Good morning", "Good afternoon", "Good afternoon", "Good evening", "Good evening", "Good evening"]);
-  assert.match(markup({ name: "Priya", now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning, Priya<\/span><\/p>/);
-  assert.match(markup({ name: "  " }), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/);
-  assert.match(markup({}), /<p class="home-greeting">.*?Good afternoon, there.*?<\/p>/, "no name at all");
+  assert.match(markup({ now: at(9) }), /<p class="home-greeting"><span[^>]*>Good morning<\/span><\/p>/);
+  assert.match(markup({}), /<p class="home-greeting"><span[^>]*>Good afternoon<\/span><\/p>/);
+  assert.match(markup({ now: at(20) }), /<p class="home-greeting"><span[^>]*>Good evening<\/span><\/p>/);
+  // A name typed for review decisions (QA once showed "Good morning, QA Engineer") never reaches the greeting.
+  const html = markup({ name: "QA Engineer" });
+  assert.ok(!html.includes("QA Engineer") && !html.includes(", there"), "no name and no 'there'");
+  assert.match(html, /<h1 class="home-tagline">/, "the tagline stays");
 });
 
 test("the hero: the principle in two lines beside the 3D glass aperture (its still until three loads), the cue down", async () => {

@@ -58,12 +58,10 @@ function ProjectStatus({ p }: { p: Project }) {
  * them. It scrolls inside its container. Props only; nothing here calls the server.
  */
 export function StartScreen({
-  name = "", now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
+  now = Date.now(), onNewProject, onProjects, projectsHref = "/projects",
   onSample, sampleBusy = false, onSampleDrawings, sampleDrawingsBusy = false, onSampleStep,
   recent = [], recentLoading = false, onOpenProject, projectHref = projectPath, resume,
 }: {
-  /** The reviewer's name (localStorage `iris.reviewer`); the greeting says "there" without one. */
-  name?: string;
   /** The clock (ms) for the greeting's time of day; tests pass a fixed one. */
   now?: number;
   /** The dashed "New project" tile (and "Create one" when there are no projects yet). */
@@ -90,8 +88,9 @@ export function StartScreen({
   /** This browser's last session, still on the server. */
   resume?: Resume;
 }) {
-  const who = name.trim() || "there";
-  const hello = `${greetingFor(now)}, ${who}`;
+  // Just the time of day: the reviewer name (`iris.reviewer`) is what decisions are signed with, often a test name,
+  // never a greeting (owner, 23 Nov).
+  const hello = greetingFor(now);
   const helloMs = 90 * hello.split(/\s+/).length + 120;
   const shown = recent.slice(0, RECENT_MAX);
   const anyBusy = sampleBusy || sampleDrawingsBusy;
