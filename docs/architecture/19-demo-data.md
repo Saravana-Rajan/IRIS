@@ -532,7 +532,7 @@ full demo** under the hero's tagline (the `full` video). `DEMO_VIDEOS` names the
 |---|---|---|---|---|
 | `3d` | `iris-3d-demo.mp4`, `.vtt`, `.webp` | Fix clashes in your building models | The sample building's clash review: the check, a clash's pictures, fixes proposed by AI and verified by geometry, reviewed in 3D before and after, and kept | 2:35 |
 | `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 1:51 |
-| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 4:18 |
+| `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 4:19 |
 
 They are to be recorded from the sample building with its saved data: the saved checks, the saved drawing readings and
 the saved prepared proposals ("Saved checks", "Saved readings" and "Saved AI proposals for the sample", above), so no

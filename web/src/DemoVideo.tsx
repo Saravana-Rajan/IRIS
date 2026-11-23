@@ -27,7 +27,7 @@ export const DEMO_VIDEOS: Readonly<Record<DemoVideoId, DemoVideoInfo>> = {
     src: "/demos/iris-3d-demo.mp4", vtt: "/demos/iris-3d-demo.vtt", poster: "/demos/iris-3d-demo.webp" },
   "2d": { id: "2d", title: "Check drawings against the model", duration: "1:51",
     src: "/demos/iris-2d-demo.mp4", vtt: "/demos/iris-2d-demo.vtt", poster: "/demos/iris-2d-demo.webp" },
-  full: { id: "full", title: "Iris: does AI truly see?", duration: "4:18",
+  full: { id: "full", title: "Iris: does AI truly see?", duration: "4:19",
     src: "/demos/iris-full-demo.mp4", vtt: "/demos/iris-full-demo.vtt", poster: "/demos/iris-full-demo.webp" },
 };
 
