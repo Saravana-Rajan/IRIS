@@ -767,7 +767,7 @@ export function Legend() {
       {(["confirmed", "ai_only", "text_only"] as const).map((st) => (
         <li key={st}><i className={`dwg-swatch ${statusStyle(st).cls}`} aria-hidden />{statusStyle(st).label}</li>
       ))}
-      <li><i className="dwg-swatch mk-differs" aria-hidden />Differs from the model</li>
+      <li className="dwg-legend-mk"><i className="dwg-swatch mk-differs" aria-hidden />Differs from the model</li>
       <li><i className="dwg-swatch mk-missing" aria-hidden />Missing</li>
     </ul>
   );

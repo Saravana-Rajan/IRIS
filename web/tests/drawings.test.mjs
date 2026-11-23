@@ -224,8 +224,8 @@ test("each status maps to its line and colour in the proof grammar, and the styl
   assert.match(rule(".dwg-badge.st-ai"), /border-style: dashed/);
   assert.match(rule(".dwg-badge.st-text"), /border-style: dotted/);
   assert.match(rule(".dwg-rule-step.decided"), /background: var\(--accent\)/, "the engineer's step is navy, filled");
-  assert.match(rule(".dwg-mis.mk-missing"), /stroke: var\(--d-failed\)/);
-  assert.match(rule(".dwg-mis.mk-differs"), /stroke: var\(--warn\)/);
+  assert.match(rule(".dwg-mis.mk-differs"), /stroke: var\(--d-failed\)/, "differs from the model: red");
+  assert.match(rule(".dwg-mis.mk-missing"), /stroke: var\(--warn\)/, "missing on one side: amber");
   for (const { cls } of Object.values(d.STATUS_STYLE)) for (const part of ["dwg-box", "dwg-badge", "dwg-swatch"]) assert.ok(css.includes(`.${part}.${cls}`), `${part}.${cls}`);
   for (const { cls } of Object.values(d.MISMATCH_STYLE)) for (const part of ["dwg-badge", "dwg-mis", "dwg-mk"]) assert.ok(css.includes(`.${part}.${cls}`), `${part}.${cls}`);
   assert.equal(d.statusStyle("bogus").cls, "st-ai", "an unknown status is shown as needing a check, never as confirmed");

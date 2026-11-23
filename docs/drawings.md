@@ -162,3 +162,10 @@ until **Read with AI** is clicked, since a live reading costs.
 the page image's pixels (an A1 sheet rendered for reading opened at "6 %"). The zoom buttons and the key sit in one row
 under the sheet, never over it; on a phone the stage takes the sheet's shape (`--dwg-sheet-ar`), so the fitted sheet
 fills it. The read button, the saved note and the reading line each keep their own line above the sheet.
+
+**Colours (white and pink).** The page is white; the selected readings tab is the pink accent (`--accent-ink` word,
+`--pink` underline, its count on `--accent-soft`), the others grey until hovered. A mismatch is **red when the drawing
+differs from the model** (size or type, `mk-differs`) and **amber when an element is missing** on one side
+(`mk-missing`): the same two colours on the sheet's highlight, the list's edge and badge, and the key. The key under
+the sheet lists the reading statuses (confirmed, AI-read, text only) on one row and "Differs from the model" and
+"Missing" on the next.

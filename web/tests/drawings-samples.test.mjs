@@ -284,3 +284,21 @@ test("phone and desktop: the read button keeps its line, the note sits on its ow
   assert.match(html, /style="--dwg-sheet-ar:2000 \/ 1400"/);
   assert.match(html, /<div class="dwg-foot"><ul class="dwg-legend"[^]*<div class="dwg-tools" role="toolbar" aria-label="Zoom">/);
 });
+
+test("white and pink: the selected tab in the pink accent, red for differs, amber for missing, the key in that order", () => {
+  const rule = (sel) => { const m = new RegExp(`${sel.replace(/[.()>:"=[\]]/g, "\\$&")} \\{([^}]*)\\}`).exec(css); assert.ok(m, sel); return m[1]; };
+  assert.match(rule(".dwg-tabs"), /background: var\(--surface\)/, "white tabs");
+  const on = rule('.dwg-tabs [role="tab"][aria-selected="true"]');
+  assert.match(on, /color: var\(--accent-ink\)/);
+  assert.match(on, /border-bottom-color: var\(--pink, var\(--accent\)\)/);
+  for (const part of ["dwg-mis", "dwg-badge", "dwg-mk", "dwg-swatch"]) {
+    assert.match(rule(`.${part}.mk-differs`), /var\(--d-failed\)/, `${part}: differs is red`);
+    assert.match(rule(`.${part}.mk-missing`), /var\(--warn\)/, `${part}: missing is amber`);
+  }
+  assert.match(rule(".dwg-mm.mk-differs"), /var\(--d-failed\)/);
+  assert.match(rule(".dwg-mm.mk-missing"), /var\(--warn\)/);
+  const key = text(renderToStaticMarkup(ui.Legend()));
+  assert.match(key, /Confirmed.*AI-read.*Differs from the model Missing/);
+  assert.match(renderToStaticMarkup(ui.Legend()), /<li class="dwg-legend-mk"><i class="dwg-swatch mk-differs"/);
+  assert.match(rule(".dwg-legend::after"), /order: 1; flex-basis: 100%/, "the mismatches on a row of their own");
+});
