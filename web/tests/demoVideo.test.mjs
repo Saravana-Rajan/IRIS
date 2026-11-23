@@ -354,6 +354,22 @@ test("the demo cards' styles: Home's one row of three equal columns, a sideways 
   assert.match(rule(".home-kicker"), /text-transform: uppercase/);
 });
 
+test("the lightbox's captions are light: a white box with ink text in Plex, never the browser's black box; the control bar light too", async () => {
+  const css = await readFile(new URL("../src/demoVideo.css", import.meta.url), "utf8");
+  const cue = css.match(/\.demo-video video::cue \{([^}]*)\}/)?.[1];
+  assert.ok(cue, "the rule reaches the lightbox's <video> (dialog.demo-video)");
+  assert.match(cue, /background-color: rgba\(255, 255, 255, \.9\d?\)/, "a white box");
+  assert.match(cue, /color: #1a1a1a/, "ink text");
+  assert.match(cue, /font-family: "IBM Plex Sans"/);
+  assert.match(cue, /text-shadow: none/);
+  assert.doesNotMatch(cue, /border-radius|padding/, "::cue takes neither");
+  assert.match(css, /\.demo-video video::-webkit-media-text-track-display-backdrop \{ background-color: transparent; \}/, "Safari's window behind the cue cleared");
+  assert.match(css, /\.demo-video video::-webkit-media-controls-enclosure \{ filter: invert\(1\) hue-rotate\(180deg\); \}/,
+    "the native control bar's black band turned light");
+  const box = renderToStaticMarkup(h(V.DemoVideo, { id: "3d", open: true, onClose: noop }));
+  assert.match(box, /^<dialog class="demo-video"/, "the dialog carries the class the rules use");
+});
+
 test("the hero's chip: Watch the full demo with a small thumbnail of its poster, the length; it opens the video", () => {
   const tf = V.DEMO_VIDEOS.full.duration;
   const chip = renderToStaticMarkup(h(V.WatchDemoButton, { id: "full", label: "Watch the full demo", className: "watch-demo-hero", thumb: true }));
