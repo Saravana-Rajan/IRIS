@@ -495,5 +495,5 @@ flowchart TB
   `layout.ts`, the phone sheet's tabs or `follow()`.
 - New measured headline numbers on the landing or the demo cards.
 - A change to the coordination round in a project: a step, what a step shows, a proposal state, a decision kind,
-  App mounting the engineer-workflow pages, or a "not yet" (2D PDF drawings, accounts) becoming built
+  App mounting the engineer-workflow pages, or a "not yet" (DWG and DXF drawings, accounts) becoming built
   ([docs/engineer-workflow.md](../engineer-workflow.md)).

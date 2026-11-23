@@ -158,11 +158,14 @@ Sections, top to bottom (`server/iris_bench/report.py`):
 |---|---|
 | FAKE MODEL banner | Present only for `fake:` runs: ignore every number below it |
 | Accuracy with pictures | Per model, accuracy per job and over all jobs, with 95% bootstrap CI whiskers |
+| Scores by category | Accuracy for each of the eight categories, with 95% bootstrap CIs, and the same per mode |
+| Sounds reasonable vs geometrically correct | Calibration (mean confidence against accuracy, ECE, Brier, overconfidence), accuracy per confidence bucket, the confidently wrong rate (confidence of at least 0.8 and wrong) per category, and plausible-but-wrong answers (the reason names the right elements or opening, the geometry says no) |
 | Controls | Accuracy over all jobs per mode, and a paired table: control minus pictures on the same questions. A model that uses the picture drops on `no_image` and `swapped`; `pictures_text` shows how much stated measurements help |
 | Cost-weighted score | Errors weighted by what they would cost on a job (illustrative weights, not measured: `false_clear` and `approved_bad_fix` 5 ... `false_alarm` 1). Score = 1 - total cost / (items x max weight) |
 | J3 partial credit | Direction right, distance within +-max(25 mm, 15%) of the minimal passing move, right opening |
 | Where accuracy drops | The worst challenge slices against the overall figure: occlusion, density, gap_mm, overlap_mm, visible_px, view, style |
 | Error taxonomy | Counts per job and error type (false clear, false alarm, approved bad fix, too small, hits a new element, wrong direction, wrong element, ...) |
+| Benchmark integrity | `iris-bench verify`: truth frozen before any model call, truth code isolated, prompts clean, reference answers re-derived from `scene.json`, answer balance and chance baselines |
 | Sample items | Right and wrong answers per job: the pictures, the reply and the checker's reason |
 
 Reading rules:
@@ -170,7 +173,8 @@ Reading rules:
 - Overlapping confidence intervals: no claim either way.
 - `swapped` close to `pictures`: that job is not being answered from the pictures.
 - `no_image` close to `pictures`: the question is answerable from priors or wording; flag the job.
-- A per-category table (the eight categories) and calibration / confidently-wrong figures are **in progress**.
+- A high confidently-wrong rate means the model's confidence is no guide to whether the geometry holds: read the
+  calibration table before trusting a confident answer.
 
 ## Tests
 
