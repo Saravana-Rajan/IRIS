@@ -534,14 +534,16 @@ full demo** under the hero's tagline (the `full` video). `DEMO_VIDEOS` names the
 | `2d` | `iris-2d-demo.mp4`, `.vtt`, `.webp` | Check drawings against the model | The sample PDF drawings read by AI (the saved readings), checked against the PDF's own text, then compared with the 3D model's elements to list the mismatches | 1:51 |
 | `full` | `iris-full-demo.mp4`, `.vtt`, `.webp` | Iris: does AI truly see? | The hackathon submission video: the problem, both of the above in short, then Iris VisionBench (Track 2): synthetic scenes, geometry-only answers, Gemini 3.8 Flash's results | 4:19 |
 
-They are to be recorded from the sample building with its saved data: the saved checks, the saved drawing readings and
-the saved prepared proposals ("Saved checks", "Saved readings" and "Saved AI proposals for the sample", above), so no
-live Gemini call happens in them. The narration is Gemini TTS (text-to-speech); the captions are WebVTT (`.vtt`,
-English, on by default); the posters are `.webp` stills. Neither a video nor its poster is fetched until its lightbox
-opens. The durations are the narrated timeline's lengths (the narration is fixed; only the screen recording reruns).
-
-Until the files are committed, opening a video shows "The video couldn't load." in its frame. When they land, check
-each duration in `DEMO_VIDEOS` against the file.
+They were recorded on 2026-11-23 from this app (808329d's final UI with the lightbox) in headless Chromium on the real
+GPU, against a local one-origin server with every Gemini credential empty and the model client replaced by one that
+refuses, so only the sample's saved data plays: the saved check, the saved drawing readings and the saved prepared
+proposals ("Saved checks", "Saved readings" and "Saved AI proposals for the sample", above); no live Gemini call
+happens in them. The narration is Gemini TTS (`gemini-3.8-flash-tts` on Vertex AI, voice Achird); the captions are
+WebVTT (`.vtt`, English, on by default; the downloadable copies have them burned in); the posters are `.webp` stills.
+VisionBench's charts in the full demo come from the run `gemini-3.8-flash-7` (58% with pictures, 36% with none, 14%
+with the wrong one, 90% with the measurements as text; mean confidence 96%, ECE 0.385). Neither a video nor its
+poster is fetched until its lightbox opens. `DEMO_VIDEOS`' durations are the files' lengths in whole seconds, rounded
+down as the video controls show them. A missing or broken file shows "The video couldn't load." in its frame.
 
 ### Landing clips
 

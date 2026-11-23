@@ -1342,3 +1342,24 @@ Chromium against `vite preview` at 1440×900 and 390×844 with the API and a tes
 twelve Tab and Shift+Tab presses stay inside, captions showing, Escape closes from Close, the video and inside its
 controls, focus back on the Watch button, a 404 shows the error line, the scrim closes it, no sideways scroll, no
 overlap with the tiles' text.
+
+**Nov 23 (2026-11-23), the demo videos recorded** ([12](12-web-app.md), [19](19-demo-data.md)). 808329d (UI ready) is
+merged into `feature/demo-videos` (a579025): 808329d's Home (the glass aperture hero, the two-line tagline, How Iris
+works, three tiles alike) keeps the lightbox's Watch buttons; the hero's Watch the full demo lost its holo edge, as
+nothing on Home wears one now. The three narrated videos are recorded from that code and committed in
+`web/public/demos/`: `iris-3d-demo` (2:35, Fix clashes in your building models), `iris-2d-demo` (1:51, Check
+drawings against the model) and `iris-full-demo` (4:19, the hackathon submission: the problem, Iris, the 3D flow, the
+2D flow, Iris VisionBench, "AI proposes. Geometry proves. The engineer decides.", Built by Techjays and the URL), each
+an `.mp4` (H.264 + AAC, faststart, no burned captions: 22.3, 20.4 and 22.0 MB; the 3D and full ones at 1280×720 to stay under 24 MB, the 2D at 1920×1080), a WebVTT `.vtt` and a `.webp` poster. Recording:
+headless Chromium on the real GPU, a virtual 30 fps timeline, against a local one-origin server of this branch with
+`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` set empty (so `.env` can't
+fill them), `GEMINI_MODEL=gemini-3.8-flash` and the model client replaced by one that refuses: the saved check (464
+clashes), the saved drawing readings (119 of 123 confirmed; the planted sheet's 4 mismatches) and the saved fixes (8
+of 8 ready, #1 the duct up 400 mm) replay; the page's automatic title and patterns calls were refused (none reached
+Gemini), and the browser fetched nothing outside the app's origin but the Plex fonts, from a local cache. Narration:
+Gemini TTS (`gemini-3.8-flash-tts` on Vertex AI, voice Achird), $0.24 for every line, audition and check. Two
+lines follow the final UI: the 2D read line (the sample sheets open already read; the button says Replay the
+reading) and the compare line (both sample sheets are compared at once, so the clean sheet's result is shown on the
+sheet: no mismatch marks). `DEMO_VIDEOS`' durations are the files' lengths, rounded down as the video controls show
+them (2:35, 1:51, 4:19). Checked: `npm test` (591 passing), `tsc` and `vite build`, and frames of each video at every
+narrated line.
