@@ -5,8 +5,8 @@
 > `.github/workflows/ci.yml` and `deploy.yml`'s smoke test · **Checked against code:** re-branded 2026-11-11; CI,
 > `test_origins.py`, the voice relay's origin test, the 2D drawing test files, `evals/save_drawing_readings.py` and
 > `test_saved_checks.py` checked 2026-11-22; review queue 2026-11-22 (`test_prepare.py`, `evals/prepare_saved.py`,
-> `viewer-mount.test.mjs`, the server count); demo videos 2026-11-22 (`demoVideo.test.mjs`, `start-screen.test.mjs`) ·
-> **Deeper detail:** [evals/README.md](../../evals/README.md) (the eval log)
+> `viewer-mount.test.mjs`, the server count); demo videos 2026-11-22 (`demoVideo.test.mjs`, `start-screen.test.mjs`);
+> CI parallel server tests 2026-11-23 · **Deeper detail:** [evals/README.md](../../evals/README.md) (the eval log)
 
 Iris's promise is that no fix reaches a person unverified, so the project checks itself at five levels: fast server
 tests on synthetic IFC models with scripted stand-ins for the AI models; web tests that run the real TypeScript
@@ -35,12 +35,17 @@ change.
 ```bash
 cd server
 uv run pytest -q                         # the whole suite (1,367 tests collected at d91f0e8)
+uv run pytest -q -n auto --dist loadfile # the same, one worker per CPU (what CI runs, with --ignore=tests/bench)
 uv run pytest -q tests/test_route.py     # one file
 uv run pytest -q -k penetration          # by name
 ```
 
 - `server/pyproject.toml` sets `testpaths = ["tests"]` and `pythonpath = ["."]`, so run from `server/`; pytest is in
   the `dev` dependency group.
+- `-n` needs nothing else: pytest-xdist is in the `dev` group too. `--dist loadfile` keeps each test file whole on one
+  worker, so a module's fixtures stay together; each test has its own `tmp_path` and settings file (`conftest.py`), so
+  the workers share nothing. Without `tests/bench` on a 10-core Mac: 230 s serial, 51 to 74 s with `-n 4`. CI's
+  `server` job: 3:41 before (pytest 3:08), 1:41 after (pytest 1:18).
 - `AGENTS.md` names the Windows venv interpreter, `server/.venv/Scripts/python.exe` (on Linux and macOS it is
   `server/.venv/bin/python`), and says to run tests from `server` with `..` paths adjusted. `uv run pytest -q` is the
   supported way everywhere.
@@ -475,19 +480,23 @@ to port 8000), or build the web app and let the server serve `web/dist` on one p
 `.github/workflows/ci.yml` (named CI) runs the tests on GitHub's machines. It runs on every pull request, on a push
 to any branch except `main`, when another workflow calls it (`workflow_call`), and by hand (`workflow_dispatch`). A
 push to `main` runs it through `deploy.yml` instead, so the tests do not run twice. A newer run of the same pull
-request cancels the older one. Every action is pinned to a commit SHA.
+request cancels the older one, and a newer push to `main` cancels the older push's tests; pushes to other branches
+queue. Every action is pinned to a commit SHA.
 
 | Job | Machine | What it runs |
 |---|---|---|
-| `server` | ubuntu-24.04, 30 min | apt installs `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz0b`, `libharfbuzz-subset0`, `fonts-dejavu-core` and `libgl1` (what the Dockerfile installs), so WeasyPrint's PDF tests and OpenCASCADE's STEP tests pass; `astral-sh/setup-uv` with Python 3.13, cached on `server/uv.lock`; `uv sync --frozen`; `uv run pytest -q --ignore=tests/bench` |
+| `server` | ubuntu-24.04, 30 min | apt installs `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz0b`, `libharfbuzz-subset0`, `fonts-dejavu-core` and `libgl1` (what the Dockerfile installs), so WeasyPrint's PDF tests and OpenCASCADE's STEP tests pass; `astral-sh/setup-uv` with Python 3.13, cached on `server/uv.lock`; `uv sync --frozen`; `uv run pytest -q -n auto --dist loadfile --ignore=tests/bench` (pytest-xdist: one worker per CPU, 4 on GitHub's runners, each test file whole on one worker) |
 | `web` | ubuntu-24.04, 20 min | Node 22 with the npm cache; `npm ci` (its postinstall copies web-ifc's wasm), `npm test`, `npm run build` |
 | `bench` | ubuntu-24.04, 30 min | VisionBench, only when `server/tests/bench` exists: the same system libraries; when `bench/render` exists, `npm ci` there and `npx playwright install --with-deps chromium` (without the renderer the render tests skip); then `uv sync --frozen` and `uv run pytest -q tests/bench` |
 
-**On `main`:** `.github/workflows/deploy.yml` (named Deploy) runs on every push to `main` and by hand. Its job `ci`
-reuses `ci.yml`; its job `deploy` needs `ci`, so nothing deploys unless all three jobs pass. After both deploys its
-smoke test checks the two ends: the web app's page on Firebase Hosting answers 200, `GET /api/health` on Cloud Run
-reports this commit (`IRIS_VERSION`), and a CORS preflight to `/api/owner/unlock` from the Firebase origin gets
-`Access-Control-Allow-Origin` back. A failed check fails the run. The deploy itself is in
+**On `main`:** `.github/workflows/deploy.yml` (named Deploy) runs on every push to `main` and by hand. Its job
+`changes` runs `deploy/changed-parts.sh` to say which parts changed since the last successful Deploy run (a manual run
+ships both). Its job `ci` reuses `ci.yml`; at the same time its job `image` builds and pushes the server image tagged
+with the commit. The release job `deploy` needs `changes`, `ci` and `image`, runs only when every test passed, and
+ships only the changed parts. Its smoke test then checks the two ends: the web app's page on Firebase Hosting answers
+200, `GET /api/health` on Cloud Run answers (and reports this commit, `IRIS_VERSION`, when this run deployed the
+server), and a CORS preflight to `/api/owner/unlock` from the Firebase origin gets `Access-Control-Allow-Origin` back.
+A failed check fails the run. The deploy itself, and which paths count as which part, are in
 [17](17-deployment-and-operations.md).
 
 CI calls no model: evals and the product checks in a browser are not in it.

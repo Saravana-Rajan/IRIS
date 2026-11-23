@@ -1442,3 +1442,28 @@ captions was the browser's own control bar (a black gradient under them whenever
 light (`::-webkit-media-controls-enclosure` inverted and hue-turned back: a white haze with ink icons; the ⋮ menu stays
 white). The `.vtt` files are unchanged. Checked: `demoVideo.test.mjs` (the rules), and headless Chromium with the 3D
 demo paused at 2.5 s, a caption showing, at 1512 x 805 and 390 x 844 (white box, dark text, light bar), and the ⋮ menu.
+
+**Nov 23 (2026-11-23), faster deploys** ([17](17-deployment-and-operations.md), [18](18-testing-and-evals.md)). A
+push to `main` took about 8.5 min to go live (Deploy run 45120578003): the server tests took 3:41 (pytest 3:08 of
+it), then the deploy job took 4:41 and only started after the tests. Its image step took 2:40, most of it a `chown -R`
+layer at the end of the Dockerfile that copied the whole virtualenv (about 1 GB) into a new layer on every build: 42 s
+export, 41 s push, 41 s cache write. What changed (71d0db8): the server tests run on pytest-xdist (`pytest-xdist>=3.8.0`
+in `server/pyproject.toml`'s dev group; `ci.yml` runs `uv run pytest -q -n auto --dist loadfile --ignore=tests/bench`):
+one worker per CPU, 4 on GitHub's runners, each test file whole on one worker so a module's fixtures stay together;
+every test already has its own `tmp_path` and settings file (`conftest.py`), so they run in parallel safely.
+`ci.yml`'s concurrency now cancels the older run on a newer push to `main` (through `deploy.yml`), as it did for pull
+requests; branch pushes still queue. `deploy.yml` gained a `changes` job (`deploy/changed-parts.sh` compares the push
+with the last successful Deploy run: web-only changes skip the image and Cloud Run, server-only changes skip Firebase,
+docs-only changes deploy nothing, unknown paths deploy both; a manual run deploys both) and an `image` job that builds
+and pushes the image tagged with the commit while the tests run. The release job `deploy` needs `changes`, `ci` and
+`image` and runs only when every test passed. The smoke test still checks the page, the CORS preflight, and that
+`/api/health` reports this commit when this run deployed the server (a web-only release checks that it answers). The
+Dockerfile makes the `iris` user first and chowns the virtualenv in the step that installs it, so the `chown -R` layer
+is gone. Checked: the server suite without `tests/bench` on a 10-core Mac took 230 s serial, then 74 s and 51 s with
+`-n 4 --dist loadfile`; the same 1,189 passed each time, with the same 2 local-only failures (the PDF tests in
+`test_document.py`: this Mac lacks Pango for WeasyPrint, which CI installs), nothing flaky. `actionlint` is clean on
+both workflows. `deploy/changed-parts.sh` on recent commits: f711e56 web-only, 3ede641 docs-only, an unknown base
+deploys both. CI on the branch (`ci.yml`, run 45123249870): 2:39 against 4:09 before (run 45122442429), the `server`
+job 1:41 against 4:06 (pytest 1:18 against 3:09); the first run after the `uv.lock` change also saved a new uv cache
+(1:00 in VisionBench's post step), once. `deploy.yml` runs only on `main`, so it was checked by `actionlint` and
+review, not run.

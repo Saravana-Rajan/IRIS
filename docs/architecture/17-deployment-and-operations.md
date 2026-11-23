@@ -1,13 +1,14 @@
 # 17 · Deployment and operations
 
 > **Covers:** `Dockerfile`, `.dockerignore`, `cloudbuild.yaml`, `deploy/deploy.sh`, `deploy/setup.sh`,
-> `deploy/github-setup.sh`, `deploy/env.yaml`, `deploy/.gcloudignore`, `deploy/README.md`,
+> `deploy/github-setup.sh`, `deploy/env.yaml`, `deploy/changed-parts.sh`, `deploy/.gcloudignore`, `deploy/README.md`,
 > `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `firebase.json`, `.firebaserc`,
 > `server/iris/origins.py`, `server/iris/app.py` (static files, `/`, `/api/health`, CORS, streams, exports),
 > `server/iris/settings.py` (the settings file), `server/iris/projects.py` (the projects folder),
 > `server/iris/service.py` (eviction), `.env.example`, `.gitignore`,
 > `README.md` ("Run locally", "Deploy"), `samples/README.md`, `web/vite.config.ts`, `web/scripts/copy-wasm.mjs`.
-> **Checked against code:** 2026-11-22 (the deploy files, CI/CD, the projects folder, what `samples/` puts in the
+> **Checked against code:** 2026-11-23 (the faster pipeline: the image beside the tests, only changed parts deploy,
+> the Dockerfile's layer order); 2026-11-22 (the deploy files, CI/CD, the projects folder, what `samples/` puts in the
 > **Checked against code:** 2026-11-22 (the Cloud Run deploy files, the projects folder, the saved checks in the
 > image).
 > **Deeper design:** [docs/uploads.md](../uploads.md) (memory and uploads), [docs/mcp.md](../mcp.md),
@@ -88,12 +89,12 @@ The image is built in two stages.
 | `python:3.13-slim-bookworm AS app` | the base | the server needs Python 3.13 (`requires-python = ">=3.13"`) |
 | `apt-get install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core` | Pango, HarfBuzz and a font | WeasyPrint uses them to lay out and render the PDF report (`document.py`) |
 | `apt-get install libgl1` | the GL library and X11 | OpenCASCADE's Python bindings (`cadquery-ocp`, used by `step.py` for STEP models) link them |
-| `uv sync --frozen --no-dev --no-install-project` in `/app/server` | the server's locked Python dependencies | they come from `server/pyproject.toml` and `server/uv.lock` ([02](02-system-architecture.md#technology-stack)). The venv is `/app/server/.venv`. |
-| `COPY server/iris` | the server package | its prompts (`domain_packs/*.md`) come with it |
+| `useradd --uid 10001 iris`, then `/app/server` and `/mnt/iris` given to it | the user the server runs as, made before anything is copied | every later layer lands already owned by it. The server writes its default settings file and projects folder in `/app/server` (`settings.py`, `projects.py`). A `chown -R` at the end used to copy the whole virtualenv (about a gigabyte) into a new layer on every build, which then had to be compressed, pushed and cached: most of the pipeline's image time. |
+| `uv sync --frozen --no-dev --no-install-project --no-cache` in `/app/server`, then `chown -R iris .venv` in the same step | the server's locked Python dependencies | they come from `server/pyproject.toml` and `server/uv.lock` ([02](02-system-architecture.md#technology-stack)). The venv is `/app/server/.venv`. The layer is rebuilt only when those two files change; `--no-cache` keeps uv's download cache out of it, and the chown in the same step keeps one copy. |
+| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg`, and `samples/drawings/*.pdf` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, `samples/step-cache`, `samples/saved-checks`, and the sample PDF drawings with their answer keys and saved readings (`*.reading.json`, replayed instead of a model call: [docs/drawings.md](../drawings.md)). The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. The saved checks hold what the Northbank files measure, so their first check builds no geometry, cold or warm ([06](06-geometry-and-detection.md)). Copied before the web app and the code, which change more often. |
 | `COPY --from=web /app/web/dist /app/web/dist` | the built web app | `app.WEB_DIST` resolves to `/app/web/dist`, so it is mounted at `/`, except in split mode (below), where it stays unused |
-| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg`, and `samples/drawings/*.pdf` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, `samples/step-cache`, and the sample PDF drawings with their answer keys and saved readings (`*.reading.json`, replayed instead of a model call: [docs/drawings.md](../drawings.md)). The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. |
-| `COPY samples /app/samples` | only `.ifc`, `.step`, `.stp`, `.json`, `.xml`, `.png`, `.jpg`, `.jpeg` (filtered by `.dockerignore`) | the demo models, sample clash reports with their images, `samples/step-cache` and `samples/saved-checks`. The cache holds a converted STEP's IFC and manifest, so the first visitor after a restart does not wait for the part classes. The saved checks hold what the Northbank files measure, so their first check builds no geometry, cold or warm ([06](06-geometry-and-detection.md)). |
-| `USER iris` (uid 10001) | not root | `/app/server` and `/mnt/iris` belong to it |
+| `COPY --chown=10001:0 server/iris` | the server package, last (it changes most) | its prompts (`domain_packs/*.md`) come with it |
+| `USER iris` (uid 10001) | not root | `/app/server` (with its venv, code and lock files) and `/mnt/iris` belong to it; `/app/samples` and `/app/web/dist` stay root's, read-only to it |
 | `CMD uvicorn iris.app:app --host 0.0.0.0 --port $PORT --workers 1` | one process | all state is in this process's memory (below) |
 
 The image's layout matches the repo's: `/app/server/iris`, `/app/web/dist` and `/app/samples`. The server finds
@@ -231,52 +232,106 @@ Two workflows in `.github/workflows/` test every change and deploy main. Every a
 |---|---|---|
 | a pull request | `ci.yml` (CI) | the jobs `server`, `web` and `bench`. A newer push to the pull request cancels the older run. |
 | a push to any branch except main | `ci.yml` | the same three jobs |
-| a push to main, or `gh workflow run deploy.yml --ref main` | `deploy.yml` (Deploy) | `ci.yml` through `workflow_call`, then the `deploy` job if every test passed |
+| a push to main, or `gh workflow run deploy.yml --ref main` | `deploy.yml` (Deploy) | `changes`, `ci.yml` through `workflow_call` and `image` at the same time, then the `deploy` job if every test passed, for the parts that changed |
 
 `ci.yml`'s jobs, on `ubuntu-24.04`:
 
 - **`server`**: the system libraries the `Dockerfile` installs (so the WeasyPrint PDF tests pass), uv with Python
-  3.13 (cache keyed on `server/uv.lock`), `uv sync --frozen`, then `uv run pytest -q --ignore=tests/bench`;
+  3.13 (cache keyed on `server/uv.lock`), `uv sync --frozen`, then `uv run pytest -q -n auto --dist loadfile
+  --ignore=tests/bench` (pytest-xdist, one worker per CPU: [18](18-testing-and-evals.md));
 - **`web`**: Node 22 with the npm cache, `npm ci`, `npm test`, `npm run build`;
 - **`bench`**: only when `server/tests/bench` exists. It installs the renderer in `bench/render` (`npm ci`,
   `npx playwright install --with-deps chromium`) when that folder has a `package-lock.json`, then runs
   `uv run pytest -q tests/bench`.
 
-`deploy.yml`'s `deploy` job runs only on `refs/heads/main`, with `id-token: write`. Its steps, in order:
+`deploy.yml` has four jobs. `changes`, `ci` and `image` start together; `deploy` (the release) waits for all three.
+`image` and `deploy` run only on `refs/heads/main`, with `id-token: write`.
 
 ```mermaid
 flowchart TD
-  tests["ci.yml: server, web, bench"] -->|"all pass"| vars["Check the repository variables"]
+  push["Push to main"] --> changes["changes: deploy/changed-parts.sh against the last successful deploy"]
+  push --> tests["ci: ci.yml (server, web, bench)"]
+  changes -->|"server changed"| image["image: docker buildx with the GitHub Actions cache, push REGION-docker.pkg.dev/PROJECT/iris/iris:commit-sha"]
+  changes -->|"nothing to ship (docs only)"| none["No release"]
   tests -->|"a test fails"| stop["Nothing deployed"]
-  vars --> auth["google-github-actions/auth v3.0.0: Workload Identity Federation as iris-deploy"]
-  auth --> image["docker buildx on the runner: push REGION-docker.pkg.dev/PROJECT/iris/iris:commit-sha"]
-  image --> run["deploy/deploy.sh with IMAGE: Cloud Run iris-api, split mode"]
-  run --> web["npm run build with VITE_API_BASE = the Cloud Run URL, check the bundle has it"]
+  tests -->|"all pass"| deploy["deploy: variables, Workload Identity Federation as iris-deploy"]
+  image --> deploy
+  deploy -->|"server changed"| run["deploy/deploy.sh with IMAGE: Cloud Run iris-api, split mode"]
+  run --> api["The API's URL: API_URL, the deploy's, or the running service's"]
+  deploy -->|"web only"| api
+  api -->|"web changed"| web["npm run build with VITE_API_BASE, check the bundle has it"]
   web --> fh["firebase-tools 15.35.0: deploy --only hosting:web"]
-  fh --> smoke["Smoke test: the page, /api/health version, CORS preflight"]
-  smoke --> summary["Job summary: web URL, API URL, image"]
+  fh --> smoke["Smoke test: the page, /api/health, CORS preflight"]
+  api -->|"server only"| smoke
+  smoke --> summary["Job summary: what shipped, the URLs, the image"]
 ```
 
-1. **Variables.** `GCP_PROJECT_ID`, `WIF_PROVIDER` and `DEPLOY_SA` must be set, or the job fails and points at
-   `deploy/github-setup.sh`. `GCP_REGION` defaults to `asia-south1` and `FIREBASE_SITE` to `iris-techjays`.
-2. **Sign-in.** GitHub's OIDC token is exchanged through Workload Identity Federation for the deploy service account.
-   No JSON key exists anywhere. The provider's attribute condition admits only this repository's main branch (and its
-   repository id, when `github-setup.sh` could read it), which is why the job does not run on other refs.
-3. **Image.** `docker buildx` builds the root `Dockerfile` with the GitHub Actions cache and pushes one image per
-   commit, tagged with its SHA, without provenance or SBOM manifests. Cloud Build is not used.
-4. **Cloud Run.** `deploy/deploy.sh` runs with `IMAGE`, `IRIS_PUBLIC_URL`, `IRIS_ALLOWED_ORIGINS`, `BUCKET`,
-   `GEMINI_API_KEY_SECRET=""` and `IRIS_VERSION=<commit sha>`, and hands the service URL on through
-   `$GITHUB_OUTPUT`.
-5. **Web build.** `VITE_API_BASE` is the Cloud Run URL, or the `API_URL` repository variable for a custom domain. The
-   step fails if the bundle does not contain it.
-6. **Firebase Hosting.** The job writes `.firebaserc` from the variables, then releases `web/dist` to the site with the
-   message `iris <short sha>`, using the same Workload Identity credentials.
-7. **Smoke test.** The page at `https://SITE.web.app` answers. `GET /api/health` reports this commit (a cold start may
-   take a few seconds, so it retries). A preflight from the Firebase origin to `/api/owner/unlock` gets
-   `Access-Control-Allow-Origin` back.
-8. **Summary.** The URLs and the image go to the job summary, even when a step failed.
+1. **What changed (`changes`).** The job asks the Actions API for the last successful run of `deploy.yml` on main
+   and runs `deploy/changed-parts.sh <its commit> <this commit>` on a blobless clone of the history. That run
+   shipped, or kept unchanged, both parts as of its commit, so the diff covers every commit not yet deployed,
+   including those of cancelled or failed runs. The script sorts each changed path:
+   - **none**: `docs/`, `bench/`, `evals/`, `assets/`, `spikes/`, `server/tests/`, `web/tests/`,
+     `server/iris_bench/`, the root `*.md` files, `.gitignore`, `.gitattributes`, `.env.example`. None reaches the
+     image (`.dockerignore` and the `Dockerfile`'s copies) or `web/dist`. The tests still run on every push, so the
+     docs map test (`test_docs_map.py`, which reads `docs/` and `web/src/`) still guards a docs change.
+   - **web**: `web/`, `firebase.json`, `.firebaserc`. The image also holds `web/dist`, but in split mode the
+     service never serves it, so a web-only change keeps the running revision.
+   - **server**: `server/`, `samples/`, `deploy/`, `Dockerfile`, `.dockerignore`, `cloudbuild.yaml`.
+   - **both**: `.github/` and any path not listed. No earlier success, a commit it cannot find, or one that is not an
+     ancestor (a rewritten main) also deploys both, and so does every manual run (`workflow_dispatch`).
+2. **Tests (`ci`).** `ci.yml`, all three jobs, on every push, whatever changed.
+3. **Image (`image`).** Only when the server changed. After the variables check and the same Workload Identity
+   sign-in, `docker buildx` builds the root `Dockerfile` with the GitHub Actions cache (`type=gha,mode=max`) and pushes
+   one image per commit, tagged with its SHA, without provenance or SBOM manifests, while the tests run. Pushing it
+   deploys nothing. Cloud Build is not used. The `Dockerfile` puts the apt packages, the locked Python dependencies
+   and the web app's `npm ci` before the code, so a code change rebuilds only the code's layers.
+4. **Release (`deploy`).** It runs only if `changes` and every test passed, the image (when the server changed) was
+   pushed, and something is to ship. It checks the variables: `GCP_PROJECT_ID`, `WIF_PROVIDER` and `DEPLOY_SA` must
+   be set, or it fails and points at `deploy/github-setup.sh`. `GCP_REGION` defaults to `asia-south1` and
+   `FIREBASE_SITE` to `iris-techjays`. Sign-in: GitHub's OIDC token is exchanged through Workload Identity
+   Federation for the deploy service account. No JSON key exists anywhere. The provider's attribute condition admits
+   only this repository's main branch (and its repository id, when `github-setup.sh` could read it), which is why
+   these jobs do not run on other refs.
+5. **Cloud Run** (server changed). `deploy/deploy.sh` runs with `IMAGE` (the tag the `image` job pushed),
+   `IRIS_PUBLIC_URL`, `IRIS_ALLOWED_ORIGINS`, `BUCKET`, `GEMINI_API_KEY_SECRET=""` and `IRIS_VERSION=<commit sha>`,
+   and hands the service URL on through `$GITHUB_OUTPUT`. Every flag is the script's own (gen2, the bucket volume,
+   at most one instance, `--cpu-boost`, …).
+6. **The API's URL.** The `API_URL` repository variable for a custom domain, else the URL the deploy step printed,
+   else the running service's (`gcloud run services describe`), for a web-only release.
+7. **Web build** (web changed). `VITE_API_BASE` is that URL. The step fails if the bundle does not contain it.
+8. **Firebase Hosting** (web changed). The job writes `.firebaserc` from the variables, then releases `web/dist` to
+   the site with the message `iris <short sha>`, using the same Workload Identity credentials.
+9. **Smoke test.** The page at `https://SITE.web.app` answers. `GET /api/health` answers, and reports this commit
+   when this run deployed the server (a cold start may take a few seconds, so it retries). A preflight from the
+   Firebase origin to `/api/owner/unlock` gets `Access-Control-Allow-Origin` back.
+10. **Summary.** What shipped, the URLs and the image go to the job summary, even when a step failed.
 
-Deploys share the concurrency group `deploy-<ref>`. A running deploy is never cancelled; a newer push waits.
+**Cancelling.** There is no run-wide concurrency group. A newer push to main cancels an older run that is still
+testing (`ci.yml`'s group `ci-Deploy-refs/heads/main` cancels in progress on main) or building its image (the
+`image` job's group `deploy-image-<ref>`), so the latest commit deploys first. A release that has started is never
+cancelled: the `deploy` job's group `deploy-release-<ref>` queues the newer release behind it, and a third push
+replaces the one waiting. Nothing half-done can stick:
+
+- a cancelled run deployed nothing, and it never becomes the next run's base, so whatever it would have shipped ships
+  with the next deploy;
+- each deploy is atomic on its own: Cloud Run serves the old revision until the new one is ready, and Firebase
+  switches releases at once;
+- a release that fails between Cloud Run and Firebase (or is cancelled by hand there) leaves the new API with the
+  old page until the next successful run, which, diffing from the last success, ships both again;
+- an image pushed by a cancelled or failed run is never deployed by it; the cleanup policy removes it with the rest.
+
+Two things the diff cannot see: a changed repository variable (`API_URL`, `BUCKET`, `MIN_INSTANCES`, …) and a deploy by
+hand with `deploy/deploy.sh`. After either, run `gh workflow run deploy.yml --ref main`, which ships both. Re-running
+an old run's failed jobs after a newer run succeeded would deploy the older commit, as it always would have: run the
+newest instead.
+
+**Timings.** Before (Deploy run 45120578003, a full deploy): about 8.5 min. The tests took 3:41 (the server's), and
+only then the one deploy job ran for 4:41: the image 2:40, Cloud Run 0:44, the web build 0:21, Firebase 0:23. Most of
+the image step was the `chown -R` layer (42 s compressing it, 41 s pushing it, 41 s writing it to the cache). Now the
+server tests run in parallel (the job 1:41, pytest 1:18, on the branch), the image builds beside them, and the release
+starts when the slowest of the two ends. Expected, from the measured steps: about 3 min for a web-only change (tests,
+then sign-in, web build and Firebase: about 1 min), about 4 min for a full deploy (tests or image, then Cloud Run, web
+build and Firebase: about 2 min), and a docs-only push deploys nothing.
 
 The one-time setup is `deploy/github-setup.sh`: the runtime (through `deploy/setup.sh`), the deploy service account
 `iris-deploy` and its roles, the identity pool `github-actions` and its provider `iris-github`, Firebase and the
@@ -346,7 +401,7 @@ sets the commit SHA, and its smoke test checks that the live revision reports it
 ```mermaid
 flowchart TD
   once["Once: deploy/github-setup.sh (setup.sh, deploy service account, identity pool, Firebase site, repository variables)"] --> push["Push to main, or gh workflow run deploy.yml --ref main"]
-  push --> pipeline["deploy.yml: tests, image, Cloud Run, web build, Firebase, smoke test"]
+  push --> pipeline["deploy.yml: tests beside the image, then Cloud Run and Firebase (what changed), smoke test"]
   pipeline --> check["Open the web app, open Northbank, propose once"]
   hand["By hand: deploy/setup.sh once, then deploy/deploy.sh (Cloud Build, one origin)"] --> check
   check --> stream["Stream test with Accept-Encoding gzip, deflate, br, zstd"]
@@ -390,9 +445,9 @@ flowchart TD
    The image builds the web app itself, so there is no `npm run build` step before deploying. Pipeline images are
    built from git, so they never contain the two gitignored folders.
 4. **Deploy.** Push to main, or run `gh workflow run deploy.yml --ref main`. The pipeline (above) tests, builds,
-   deploys both parts and checks them. To deploy by hand instead, run
-   `GOOGLE_CLOUD_PROJECT=gemini-enterprise-475109 deploy/deploy.sh`. Add `REGION=…` (default `asia-south1`) and
-   `BUCKET=…` if you need them. The script does the following:
+   deploys the parts that changed since the last successful deploy and checks them; a manual run deploys both. To
+   deploy by hand instead, run `GOOGLE_CLOUD_PROJECT=gemini-enterprise-475109 deploy/deploy.sh`. Add `REGION=…`
+   (default `asia-south1`) and `BUCKET=…` if you need them. The script does the following:
    - runs `gcloud builds submit --config cloudbuild.yaml`, which builds and pushes
      `REGION-docker.pkg.dev/PROJECT/iris/iris:<sha>-<timestamp>` and `:latest` (skipped when `IMAGE` is set);
    - runs `gcloud run deploy iris-api` with the settings above, in one origin unless `IRIS_ALLOWED_ORIGINS` is set;
@@ -572,6 +627,7 @@ each step's log and the job summary.
 | Northbank's first check says "Building geometry for n elements" and takes far longer than a few seconds | its saved check missed: `samples/saved-checks/` is stale (the samples, detection's measure, box making or IfcOpenShell changed), has no linux-x86_64 entry, or is not in the image; or the probe measured differently (the log says "saved checks: this machine measures the saved check's probe differently") | regenerate it (`uv run python -m iris.saved_checks --docker` from `server/`), commit, push |
 | The deploy job fails with "Repository variables missing" | `deploy/github-setup.sh` has not run, or `gh` could not set the variables | run it, or set the variables it printed |
 | The deploy job fails at "Sign in to Google Cloud" | the identity pool or its binding is new and still propagating, or the run is not on main (the attribute condition admits only main) | wait a few minutes and run it again, on main |
+| A push to main left the server or the web app as it was | `deploy/changed-parts.sh` sorted the change as the other part or as none (the job `What to deploy` lists each path and its part), or only a repository variable changed | `gh workflow run deploy.yml --ref main` ships both; fix the script's list if a path is sorted wrongly |
 | The smoke test says `/api/health` does not report this commit | the traffic is pinned to an older revision after a rollback, or the new revision did not become ready | `gcloud run services update-traffic iris-api --region REGION --to-latest`, and read the deploy step's log |
 | The smoke test says Cloud Run does not allow the Firebase origin, or the browser shows CORS errors | the page's origin is not in `IRIS_ALLOWED_ORIGINS`: a deploy by hand replaced the env vars, or a custom domain lacks `WEB_URL` or `EXTRA_ORIGINS` | push again, or set the repository variable and push |
 | The server stops at start with "IRIS_ALLOWED_ORIGINS: … is not an origin" | an entry has a path, a `*` or a typo | list bare origins, `https://host[:port]`, comma-separated |
@@ -591,7 +647,8 @@ each step's log and the job summary.
 - Any change to the `Dockerfile`, `.dockerignore`, `cloudbuild.yaml` or `deploy/`. That includes a system package,
   a dependency step, an env var or its value, a directory added, a secret, a container setting, the entry point, or
   the service name.
-- Any change to `.github/workflows/` (a trigger, a job, a step, an action, a repository variable), to `firebase.json`
+- Any change to `.github/workflows/` (a trigger, a job, a step, an action, a repository variable, a concurrency
+  group), to which part a path deploys (`deploy/changed-parts.sh`), to `firebase.json`
   or `.firebaserc`, or to what `deploy/github-setup.sh` creates (a role, the identity pool's condition, the Hosting
   site).
 - A change to split mode: `server/iris/origins.py`, the CORS middleware, the owner cookie's attributes, the voice
