@@ -4174,7 +4174,7 @@ export function App() {
   const modelsStep = projectHere && (
     <div className="proj-work">
       {importPanel}
-      {workMore("Sample models and Navisworks reports", { own: false })}
+      {workMore("Samples and Navisworks reports", { own: false })}
       {!projectOpen && !projectBusy && (
         <div className="proj-work-note">
           {sceneId && stats ? <>
@@ -4477,7 +4477,7 @@ export function App() {
             {inSlot(slots.clashes, <aside className="pane left">
               {projStep === "models" && projectHere ? modelsStep : <>
               {!pid ? workMore("Open models or a clash report", { open: !sceneId && !report })
-                : projStep === "coordination" && projectHere ? workMore("Check the models or import a clash report", { models: false }) : null}
+                : projStep === "coordination" && projectHere ? workMore("Checks and clash reports", { models: false }) : null}
               {importRows.length > 0 && !pid && importPanel}
               {report
                 ? <ReportList report={listReport ?? shownReport ?? report} naming={naming} matches={matches}
