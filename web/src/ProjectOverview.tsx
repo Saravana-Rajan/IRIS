@@ -154,7 +154,7 @@ export function ProjectOverview({ project, step, onStep, counts, reports, activi
 
           {step === "reports" && (
             <ReportsCard pid={project.id} reports={reports}
-              empty={<EmptyState compact title="No reports yet"
+              empty={<EmptyState compact glass="pill" title="No reports yet"
                 line="PDF and BCF reports made from the clash review are listed here."
                 action={hasModels && <button type="button" className="btn primary" onClick={onOpenWorkspace}>
                   Open workspace <ArrowRight size={15} aria-hidden /></button>} />}

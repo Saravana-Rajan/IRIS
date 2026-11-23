@@ -199,15 +199,15 @@ export async function appHost({ initial = {}, api: overrides = {}, effects = tru
       return find(tree, (n) => n.type?.name === "MenuSheet" && n.props.title === "Settings"); },
     /** The workspace's own actions (models, checks, a Navisworks report: App's workMore), where the page shows them:
      *  the Models step, or the top of the workspace's left panel. */
-    actions() { return find(tree, (n) => n.props?.["data-work-actions"] !== undefined); },
-    reportMenu() { return this.actions(); },
+    workActions() { return find(tree, (n) => n.props?.["data-work-actions"] !== undefined); },
+    reportMenu() { return this.workActions(); },
     fileInput(kind) { return find(tree, (n) => n.type === "input" && n.props.type === "file"
       && (kind === "folder" ? "webkitdirectory" in n.props : String(n.props.accept ?? "").includes(".xml"))); },
     chat(event) { find(tree, (n) => n.type?.name === "ChatPanel").props.onEvent(event); render(); },
     /** The server answered that a scene or report is gone (api.ts, X-Iris-Gone). */
     gone(g) { globalThis[key].gone?.(g); render(); },
-    open() { find(this.actions(), (n) => n.props?.id === "open").props.onClick(); render(); },
-    loadReport() { find(this.actions(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
+    open() { find(this.workActions(), (n) => n.props?.id === "open").props.onClick(); render(); },
+    loadReport() { find(this.workActions(), (n) => n.type === "button" && hasText(n, "sample")).props.onClick(); render(); },
     runTimers() { const entries = [...timers.values()]; timers.clear(); for (const fn of entries) fn(); render(); },
     unmount() { for (const cell of cells) cell?.cleanup?.(); delete globalThis[key]; },
   };

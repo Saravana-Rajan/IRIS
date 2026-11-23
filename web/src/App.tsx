@@ -4233,6 +4233,7 @@ export function App() {
         <ProjectOverview project={projectHere} step={projStep ?? "overview"} onStep={(st) => goStep(st)} onProjects={goProjects}
           stepHref={(st) => projectPath(projectHere.id, st)} projectsHref={PROJECTS_PATH}
           counts={liveCounts} reports={projectHere.reports} activity={projectActivity}
+          decisions={projectOpen ? decisionsList : null}
           onImport={() => goStep("models")} saving={projectBusy === "Saving…"}
           onOpenWorkspace={() => { if (!projectOpen && projectHere.files.length) void openProjectScene(projectHere); goStep(projectHere.files.length ? "coordination" : "models"); }}
           onSave={() => { if (projectOpen) return saveProjectNow(); setError("Open the project's models first: nothing of it is open to save."); return false; }}>
@@ -4269,24 +4270,6 @@ export function App() {
                 ? "Open the workspace and run the clash tests first: a report is built from the open clash list."
                 : "Import the models and run the clash tests first."}</p>}
             </section>)}
-          {projStep === "activity" && (
-            <section className="proj-card" aria-label="Decisions">
-              <div className="proj-card-head"><h2>Decisions{decisionsList.length > 0 && <span className="proj-count">{decisionsList.length}</span>}</h2></div>
-              {projectOpen && decisionsList.length ? (
-                <table className="proj-mini">
-                  <thead><tr><th scope="col">When</th><th scope="col">Clash</th><th scope="col">Proposal</th><th scope="col">State</th>
-                    <th scope="col">Decision</th><th scope="col">Reviewer</th><th scope="col">Why</th></tr></thead>
-                  <tbody>{[...decisionsList].reverse().map((d, k) => {
-                    const w = decisionWords({ ...d, at: toMs(d.at) });
-                    return <tr key={k}><td title={w.iso}>{w.when}</td><td className="mono">{d.number ? `#${d.number}` : d.clash_id}</td>
-                      <td className="proj-file" title={d.option.title}>{d.option.title}</td><td>{STATE_LABEL[d.state] ?? d.state}</td>
-                      <td>{w.verb}</td><td>{d.reviewer || "not recorded"}</td><td>{d.reason ?? ""}</td></tr>;
-                  })}</tbody>
-                </table>
-              ) : <p className="proj-text proj-empty-line">{projectOpen
-                ? "No decisions yet. Accepting, rejecting, modifying or asking for another proposal records one here, with the reviewer and why."
-                : "Open the workspace to read the decisions: a saved project's decisions come back with its models."}</p>}
-            </section>)}
           {projStep === "activity" && projectOpen && journal && journal.entries.length > 0 && (
             <section className="proj-card" aria-label="Edit log">
               <div className="proj-card-head"><h2>Edit log<span className="proj-count">{journal.entries.length}</span></h2></div>
@@ -4297,11 +4280,20 @@ export function App() {
         </ProjectOverview>
       ) : (
         <div className="proj-page"><div className="proj-scroll"><div className="proj-body">
-          <p className="proj-eyebrow">Project</p>
-          {projectError
-            ? <div className="proj-alert" role="alert">{projectError}</div>
-            : <div className="proj-loading" aria-live="polite"><span className="spinner" aria-hidden /> Loading the project…</div>}
-          <div><button type="button" className="btn small" onClick={goProjects}>All projects</button></div>
+          {/* A missing project (any step: `/projects/<id>/clashes/5` too) is a calm empty page with one glass still and
+              the way back, never the workspace's import; one still being read, a loading line. */}
+          {projectError ? (
+            <div role="alert">
+              <EmptyState className="proj-missing" glass="ring"
+                title={projectError.startsWith("No project") ? "No project with this address" : "Could not read the project"}
+                line={projectError.startsWith("No project") ? "It may have been removed, or the link is from another server." : projectError}
+                action={<button type="button" className="btn primary" onClick={goProjects}>All projects</button>} />
+            </div>
+          ) : <>
+            <p className="proj-eyebrow">Project</p>
+            <div className="proj-loading" aria-live="polite"><span className="spinner" aria-hidden /> Loading the project…</div>
+            <div><button type="button" className="btn small" onClick={goProjects}>All projects</button></div>
+          </>}
         </div></div></div>)}
     </div>) : null;
 
@@ -4442,7 +4434,8 @@ export function App() {
   // workspace, with Save and Report beside it).
   const projectFiles = projectHere?.files.length ?? 0;
   const topActions = (<>
-    {ownerPop}
+    {/* Owner settings live in Settings while it is open (one of them at a time: each asks the server who you are) */}
+    {!menuOpen && ownerPop}
     {homePage || route?.view === "projects"
       ? <button type="button" className="btn primary" data-shell="new-project" onClick={() => setNewOpen(true)}><Plus size={16} aria-hidden /> New project</button>
       : projectPage && projectHere
@@ -4947,6 +4940,12 @@ export function App() {
                   {agentLink ? <><Bot size={16} aria-hidden /> Agent connected · {timeLeft(agentLink, now)} left</> : <><Plug size={16} aria-hidden /> Connect an agent</>}</button>
               </section>}
               {!compact && !landing && <section className="menu-section"><h3><LayoutPanelLeft size={15} aria-hidden /> Panels and layout</h3>{layoutMenu(closeSheet)}</section>}
+              {/* The server owner's settings (Owner.tsx): unlocked with the owner token; nothing shows where the server has
+                  no owner (the section hides itself, appShell.css) */}
+              <section className="menu-section owner-section"><h3>Owner settings</h3>
+                <div className="owner-row">{ownerPop}<p className="hint">Reasoning effort, second tries and the demo caps, for
+                  you or for everyone. For the server's owner only.</p></div>
+              </section>
               <section className="menu-section"><h3>Help</h3>
                 <button className="pop-item" onClick={() => openSheet("help")}><Info size={16} aria-hidden /> How Iris works, and samples to try</button>
                 <p className="hint">Projects are private to this browser by an unguessable id; there are no accounts yet.</p>

@@ -52,7 +52,7 @@ test("Settings shows only the sections that apply: nothing open has no session o
 
 test("the workspace's actions moved out of Settings into the workspace: open, upload, check, import a report", async () => {
   const empty = await appHost({ initial: { sceneId: null, a: null, b: null, stats: null, clash: null, report: null, matches: null } });
-  const where = empty.actions();
+  const where = empty.workActions();
   assert.ok(where, "at the top of the workspace's left panel");
   assert.equal(where.props.open, true, "open while nothing is open");
   assert.ok(find(where, (n) => n.props?.id === "open"), "Open the sample models");
@@ -61,6 +61,6 @@ test("the workspace's actions moved out of Settings into the workspace: open, up
   assert.ok(find(where, (n) => n.type === "button" && hasText(n, "Upload XML files")), "a Navisworks report");
   empty.unmount();
   const open = await appHost();
-  assert.equal(open.actions().props.open, false, "a closed line once models are open");
+  assert.equal(open.workActions().props.open, false, "a closed line once models are open");
   open.unmount();
 });

@@ -142,8 +142,10 @@ test("every step of a project that is not there is the not-found page: no worksp
     {
       const host = await appHost({ path, initial, projects: { getProject: async () => { throw new Error("404 Not Found"); } } });
       await host.settle(); await host.settle();
-      assert.ok(host.find((n) => n.props?.className === "proj-alert"), `${path}: the not-found line`);
-      assert.ok(host.find((n) => n.type === "button" && hasText(n, "All projects")), `${path}: and the way back`);
+      const missing = host.find((n) => n.type?.name === "EmptyState" && n.props.className === "proj-missing");
+      assert.ok(missing, `${path}: the not-found page`);
+      assert.equal(missing.props.glass, "ring", `${path}: with its one glass still`);
+      assert.ok(missing.props.action?.type === "button" && hasText(missing.props.action, "All projects"), `${path}: and the way back`);
       assert.equal(host.component("ProjectStart"), undefined, `${path}: never the workspace's import`);
       assert.deepEqual(host.projects.calls.filter((x) => x[0] === "open"), [], `${path}: nothing opens for it`);
       assert.equal(host.state.clash, null, `${path}: the open report's clash #5 is not picked`);
